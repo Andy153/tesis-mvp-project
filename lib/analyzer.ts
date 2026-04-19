@@ -7,7 +7,6 @@ import type {
   Span,
   Thumbnail,
 } from './types';
-// @ts-expect-error — JS data module with large inline objects
 import { TRAZA_NOMENCLADOR_FULL, TRAZA_PROC_KEYWORDS } from './nomenclador.js';
 
 type NomenclatorEntry = { desc: string; specialty?: string };

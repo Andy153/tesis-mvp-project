@@ -1,16 +1,41 @@
-// Trazá — Errors view (pestaña consolidada de errores detectados)
+'use client';
 
-function ErrorsView({ files, onOpenFile }) {
-  const [filter, setFilter] = React.useState('all');
+import { useState } from 'react';
+import { Icon } from './Icon';
+import type { FileEntry, Severity } from '@/lib/types';
 
-  // Aplanar findings de todos los archivos analizados
-  const allErrors = [];
+type FilterKey = 'all' | 'error' | 'warn';
+
+interface Props {
+  files: FileEntry[];
+  onOpenFile: (id: string) => void;
+}
+
+interface FlatError {
+  severity: Severity;
+  title: string;
+  body: string;
+  action?: string;
+  fileId: string;
+  fileName: string;
+  fileDate: string;
+  prepaga: string;
+  codigo: string | null;
+}
+
+export function ErrorsView({ files, onOpenFile }: Props) {
+  const [filter, setFilter] = useState<FilterKey>('all');
+
+  const allErrors: FlatError[] = [];
   for (const f of files) {
     if (!f.analysis) continue;
     for (const finding of f.analysis.findings) {
-      if (finding.severity === 'ok') continue; // solo mostramos problemas
+      if (finding.severity === 'ok') continue;
       allErrors.push({
-        ...finding,
+        severity: finding.severity,
+        title: finding.title,
+        body: finding.body,
+        action: finding.action,
         fileId: f.id,
         fileName: f.name,
         fileDate: f.addedAt,
@@ -22,22 +47,24 @@ function ErrorsView({ files, onOpenFile }) {
 
   const counts = {
     all: allErrors.length,
-    error: allErrors.filter(e => e.severity === 'error').length,
-    warn: allErrors.filter(e => e.severity === 'warn').length,
+    error: allErrors.filter((e) => e.severity === 'error').length,
+    warn: allErrors.filter((e) => e.severity === 'warn').length,
   };
 
-  const filtered = filter === 'all' ? allErrors : allErrors.filter(e => e.severity === filter);
+  const filtered = filter === 'all' ? allErrors : allErrors.filter((e) => e.severity === filter);
 
-  // Totales por archivo
-  const filesAnalyzed = files.filter(f => f.analysis).length;
-  const filesWithErrors = files.filter(f => f.analysis?.overall === 'error').length;
+  const filesAnalyzed = files.filter((f) => f.analysis).length;
+  const filesWithErrors = files.filter((f) => f.analysis?.overall === 'error').length;
 
   return (
     <div>
       <div className="page-head">
         <div>
           <h1 className="page-title">Errores detectados</h1>
-          <p className="page-subtitle">Historial consolidado de todos los errores encontrados en tus documentos. Corregilos antes de presentar para evitar rechazos.</p>
+          <p className="page-subtitle">
+            Historial consolidado de todos los errores encontrados en tus documentos. Corregilos antes de
+            presentar para evitar rechazos.
+          </p>
         </div>
       </div>
 
@@ -61,20 +88,31 @@ function ErrorsView({ files, onOpenFile }) {
       </div>
 
       <div className="errors-toolbar">
-        <div className={`filter-chip ${filter==='all' ? 'active' : ''}`} onClick={() => setFilter('all')}>
+        <div
+          className={`filter-chip ${filter === 'all' ? 'active' : ''}`}
+          onClick={() => setFilter('all')}
+        >
           Todos <span className="count">{counts.all}</span>
         </div>
-        <div className={`filter-chip ${filter==='error' ? 'active' : ''}`} onClick={() => setFilter('error')}>
+        <div
+          className={`filter-chip ${filter === 'error' ? 'active' : ''}`}
+          onClick={() => setFilter('error')}
+        >
           Errores <span className="count">{counts.error}</span>
         </div>
-        <div className={`filter-chip ${filter==='warn' ? 'active' : ''}`} onClick={() => setFilter('warn')}>
+        <div
+          className={`filter-chip ${filter === 'warn' ? 'active' : ''}`}
+          onClick={() => setFilter('warn')}
+        >
           Advertencias <span className="count">{counts.warn}</span>
         </div>
       </div>
 
       {filtered.length === 0 ? (
         <div className="panel empty">
-          <div className="empty-icon"><window.Icon name="empty" size={48} /></div>
+          <div className="empty-icon">
+            <Icon name="empty" size={48} />
+          </div>
           <div className="empty-title">
             {allErrors.length === 0 ? 'Todavía no analizaste documentos' : 'Sin resultados para este filtro'}
           </div>
@@ -94,16 +132,31 @@ function ErrorsView({ files, onOpenFile }) {
                 <th style={{ width: 200 }}>Archivo</th>
                 <th style={{ width: 130 }}>Prepaga</th>
                 <th style={{ width: 100 }}>Código</th>
-                <th style={{ width: 100 }}></th>
+                <th style={{ width: 100 }} />
               </tr>
             </thead>
             <tbody>
               {filtered.map((e, i) => (
                 <tr key={i}>
                   <td>
-                    {e.severity === 'error' && <span className="badge badge-error"><span className="badge-dot"></span>Error</span>}
-                    {e.severity === 'warn' && <span className="badge badge-warn"><span className="badge-dot"></span>Warn</span>}
-                    {e.severity === 'info' && <span className="badge badge-neutral"><span className="badge-dot"></span>Manual</span>}
+                    {e.severity === 'error' && (
+                      <span className="badge badge-error">
+                        <span className="badge-dot" />
+                        Error
+                      </span>
+                    )}
+                    {e.severity === 'warn' && (
+                      <span className="badge badge-warn">
+                        <span className="badge-dot" />
+                        Warn
+                      </span>
+                    )}
+                    {e.severity === 'info' && (
+                      <span className="badge badge-neutral">
+                        <span className="badge-dot" />
+                        Manual
+                      </span>
+                    )}
                   </td>
                   <td>
                     <div className="err-msg">{e.title}</div>
@@ -114,7 +167,13 @@ function ErrorsView({ files, onOpenFile }) {
                     <div className="err-hint">{new Date(e.fileDate).toLocaleDateString('es-AR')}</div>
                   </td>
                   <td>{e.prepaga}</td>
-                  <td>{e.codigo ? <code style={{fontFamily:'var(--font-mono)', fontSize:11.5}}>{e.codigo}</code> : <span style={{color:'var(--text-soft)'}}>—</span>}</td>
+                  <td>
+                    {e.codigo ? (
+                      <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5 }}>{e.codigo}</code>
+                    ) : (
+                      <span style={{ color: 'var(--text-soft)' }}>—</span>
+                    )}
+                  </td>
                   <td>
                     <button className="btn btn-sm btn-ghost" onClick={() => onOpenFile(e.fileId)}>
                       Ver archivo
@@ -129,5 +188,3 @@ function ErrorsView({ files, onOpenFile }) {
     </div>
   );
 }
-
-window.ErrorsView = ErrorsView;

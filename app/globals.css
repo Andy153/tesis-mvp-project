@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-inter), -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-mono: var(--font-mono), ui-monospace, Menlo, monospace;
+  --font-serif: var(--font-serif), Georgia, serif;
+
+  --color-background: #FAFAF7;
+  --color-foreground: #1A1A17;
+  --color-card: #FFFFFF;
+  --color-card-foreground: #1A1A17;
+  --color-popover: #FFFFFF;
+  --color-popover-foreground: #1A1A17;
+  --color-primary: #2D5F4E;
+  --color-primary-foreground: #FFFFFF;
+  --color-secondary: #F3F3EE;
+  --color-secondary-foreground: #1A1A17;
+  --color-muted: #F3F3EE;
+  --color-muted-foreground: #6B6A62;
+  --color-accent: #E8EFEB;
+  --color-accent-foreground: #1B3C30;
+  --color-destructive: #A63333;
+  --color-destructive-foreground: #FFFFFF;
+  --color-border: #E6E5DE;
+  --color-input: #E6E5DE;
+  --color-ring: #2D5F4E;
+  --radius: 10px;
+}
+
+:root {
+  /* Custom tokens for direct use */
+  --text-soft: #96948A;
+  --border-strong: #D6D4CB;
+  --warn: #B8740A;
+  --warn-soft: #FBF1DF;
+  --error: #A63333;
+  --error-soft: #F8E4E0;
+  --ok: #2D6A4F;
+  --ok-soft: #E0EDE5;
+}
+
+* {
+  border-color: var(--color-border);
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Spinner animation */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  display: inline-block;
+}

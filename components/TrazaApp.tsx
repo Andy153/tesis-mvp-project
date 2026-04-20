@@ -1,16 +1,32 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Sidebar } from './Sidebar';
 import { UploadView } from './UploadView';
 import { ErrorsView } from './ErrorsView';
+import { CalendarView } from './CalendarView';
 import type { AuthState, FileEntry } from '@/lib/types';
+import { loadHistory, saveHistory } from '@/lib/history';
 
 export default function TrazaApp() {
   const [active, setActive] = useState<string>('upload');
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [authStates, setAuthStates] = useState<Record<string, AuthState | undefined>>({});
+
+  useEffect(() => {
+    const loaded = loadHistory();
+    if (loaded.files.length > 0) {
+      setFiles(loaded.files as FileEntry[]);
+    }
+    if (loaded.authStates && Object.keys(loaded.authStates).length > 0) {
+      setAuthStates(loaded.authStates as Record<string, AuthState | undefined>);
+    }
+  }, []);
+
+  useEffect(() => {
+    saveHistory(files, authStates);
+  }, [files, authStates]);
 
   function upsertFile(entry: FileEntry) {
     setFiles((prev) => {
@@ -81,6 +97,9 @@ export default function TrazaApp() {
             onAuthUpload={handleAuthUpload}
             onAuthReset={handleAuthReset}
           />
+        )}
+        {active === 'calendar' && (
+          <CalendarView files={files} authStates={authStates} onOpenParte={openFile} />
         )}
         {active === 'errors' && <ErrorsView files={files} onOpenFile={openFile} />}
       </main>

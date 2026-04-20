@@ -2,7 +2,7 @@
 
 import { Icon, type IconName } from './Icon';
 
-type TabId = 'upload' | 'errors' | 'dashboard' | 'alerts' | 'projection' | 'settings';
+type TabId = 'upload' | 'calendar' | 'errors' | 'dashboard' | 'alerts' | 'projection' | 'settings';
 
 interface SidebarProps {
   active: string;
@@ -22,6 +22,7 @@ interface Item {
 export function Sidebar({ active, setActive, errorCount }: SidebarProps) {
   const items: Item[] = [
     { id: 'upload', label: 'Cargar documentos', icon: 'upload', section: 'work' },
+    { id: 'calendar', label: 'Calendario', icon: 'calendar', section: 'work' },
     { id: 'errors', label: 'Errores detectados', icon: 'alert', section: 'work', badge: errorCount },
     { id: 'dashboard', label: 'Dashboard', icon: 'dashboard', section: 'soon', disabled: true },
     { id: 'alerts', label: 'Alertas', icon: 'bell', section: 'soon', disabled: true },

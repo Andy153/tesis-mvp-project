@@ -38,6 +38,7 @@ export function UploadView({
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   async function handleFiles(fileList: File[]) {
+    const batchId = 'b_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
     for (const file of fileList) {
       const id = 'f_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
       const entry: FileEntry = {
@@ -46,6 +47,7 @@ export function UploadView({
         size: file.size,
         type: file.type,
         addedAt: new Date().toISOString(),
+        batchId,
         status: 'analyzing',
         progress: 0,
         progressMessage: 'Iniciando...',

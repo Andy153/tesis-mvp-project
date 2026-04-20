@@ -104,6 +104,7 @@ export interface FileEntry {
   size: number;
   type: string;
   addedAt: string;
+  batchId?: string;
   status: 'analyzing' | 'analyzed' | 'error';
   progress?: number;
   progressMessage?: string;

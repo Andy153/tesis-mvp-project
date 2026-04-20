@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# Env / local
+.env
+.env*.local
+
+# OS / editor
+.DS_Store
+*.log
+npm-debug.log*
+
+# TypeScript
+*.tsbuildinfo
+
+# Vercel
+.vercel
+
+# Test / coverage
+coverage/
+
+# Prototipo legacy + PDFs de prueba (no versionar; pesan y no aportan al build)
+TRAZA APP/uploads/

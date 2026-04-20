@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter, Instrument_Serif, JetBrains_Mono } from 'next/font/google';
+import { Inter, JetBrains_Mono, Space_Grotesk } from 'next/font/google';
 import './globals.css';
 
 const inter = Inter({
@@ -9,10 +9,10 @@ const inter = Inter({
   display: 'swap',
 });
 
-const instrumentSerif = Instrument_Serif({
+const display = Space_Grotesk({
   subsets: ['latin'],
-  weight: ['400'],
-  variable: '--font-instrument-serif',
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-display',
   display: 'swap',
 });
 
@@ -39,7 +39,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="es"
-      className={`${inter.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable}`}
+      className={`${inter.variable} ${display.variable} ${jetbrainsMono.variable}`}
     >
       <body>{children}</body>
     </html>

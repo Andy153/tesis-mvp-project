@@ -105,6 +105,10 @@ export interface FileEntry {
   type: string;
   addedAt: string;
   batchId?: string;
+  manualChecks?: {
+    patient?: boolean;
+    procedure?: boolean;
+  };
   status: 'analyzing' | 'analyzed' | 'error';
   progress?: number;
   progressMessage?: string;

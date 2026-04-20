@@ -74,6 +74,7 @@ export function saveHistory(files: FileEntry[], authStates: Record<string, AuthS
           type: f.type,
           addedAt: f.addedAt,
           batchId: f.batchId,
+          manualChecks: f.manualChecks,
           status: f.status,
           analysis: f.analysis ? minifyAnalysis(f.analysis) : undefined,
           method: f.method,

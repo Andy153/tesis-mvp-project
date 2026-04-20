@@ -637,7 +637,6 @@ function AnalysisDetail({ file, onUpsert }: { file: FileEntry; onUpsert: (entry:
   const [activeFindingIdx, setActiveFindingIdx] = useState<number | null>(null);
   const [selections, setSelections] = useState<Record<string, { idx: number; code: string; desc: string }>>({});
   const [manualOpen, setManualOpen] = useState(false);
-  const [manualStep, setManualStep] = useState(0);
   const analysis = file.analysis!;
   const thumbnails = file.thumbnails || [];
 
@@ -693,38 +692,54 @@ function AnalysisDetail({ file, onUpsert }: { file: FileEntry; onUpsert: (entry:
     return qs;
   }, [structured?.paciente, analysis.detected.procedureGuess, analysis.detected.codes]);
 
-  function applyManualResult(qId: 'patient' | 'procedure', ok: boolean) {
-    if (ok) {
-      // If user confirms, we don't add any extra error (assume OK).
-      return;
-    }
-    const q = questions.find((x) => x.id === qId);
-    if (!q) return;
+  function recomputeWithManual(nextChecks: FileEntry['manualChecks']) {
+    const baseFindings = analysis.findings.filter(
+      (f) => f.code !== 'MANUAL_PATIENT_MISMATCH' && f.code !== 'MANUAL_PROCEDURE_MISMATCH',
+    );
 
-    // We store the manual mismatch as a normal "finding" so it shows everywhere (errores, calendario).
-    const manualCode = qId === 'patient' ? 'MANUAL_PATIENT_MISMATCH' : 'MANUAL_PROCEDURE_MISMATCH';
-    const already = analysis.findings.some((f) => f.code === manualCode);
-    if (already) return;
+    const out: Finding[] = [...baseFindings];
 
-    const nextFindings: Finding[] = [
-      {
+    const patientQ = questions.find((q) => q.id === 'patient');
+    const procQ = questions.find((q) => q.id === 'procedure');
+
+    if (nextChecks?.patient === false && patientQ) {
+      out.unshift({
         severity: 'error',
-        code: manualCode,
-        title: q.errorTitle,
-        body: q.errorBody,
+        code: 'MANUAL_PATIENT_MISMATCH',
+        title: patientQ.errorTitle,
+        body: patientQ.errorBody,
         action: 'Corregir el documento o volver a generar el parte con los datos correctos.',
-      },
-      ...analysis.findings,
-    ];
+      });
+    }
+    if (nextChecks?.procedure === false && procQ) {
+      out.unshift({
+        severity: 'error',
+        code: 'MANUAL_PROCEDURE_MISMATCH',
+        title: procQ.errorTitle,
+        body: procQ.errorBody,
+        action: 'Corregir el documento o volver a generar el parte con los datos correctos.',
+      });
+    }
+
     const summary = {
-      ok: nextFindings.filter((f) => f.severity === 'ok').length,
-      warn: nextFindings.filter((f) => f.severity === 'warn').length,
-      error: nextFindings.filter((f) => f.severity === 'error').length,
+      ok: out.filter((f) => f.severity === 'ok').length,
+      warn: out.filter((f) => f.severity === 'warn').length,
+      error: out.filter((f) => f.severity === 'error').length,
     };
     const overall: 'error' | 'warn' | 'ok' = summary.error > 0 ? 'error' : summary.warn > 0 ? 'warn' : 'ok';
 
-    // Update the file entry in the parent list via the existing upsert.
-    onUpsert({ ...file, analysis: { ...analysis, findings: nextFindings, summary, overall } });
+    onUpsert({ ...file, manualChecks: nextChecks, analysis: { ...analysis, findings: out, summary, overall } });
+  }
+
+  function setManual(qId: 'patient' | 'procedure', v: boolean | undefined) {
+    const nextChecks: FileEntry['manualChecks'] = {
+      ...(file.manualChecks || {}),
+      [qId]: v,
+    };
+    // keep object small (remove undefined keys)
+    if (nextChecks.patient === undefined) delete nextChecks.patient;
+    if (nextChecks.procedure === undefined) delete nextChecks.procedure;
+    recomputeWithManual(Object.keys(nextChecks).length ? nextChecks : undefined);
   }
 
   return (
@@ -766,7 +781,6 @@ function AnalysisDetail({ file, onUpsert }: { file: FileEntry; onUpsert: (entry:
               type="button"
               className="btn btn-sm btn-ghost"
               onClick={() => {
-                setManualStep(0);
                 setManualOpen(true);
               }}
               disabled={questions.length === 0}
@@ -873,39 +887,43 @@ function AnalysisDetail({ file, onUpsert }: { file: FileEntry; onUpsert: (entry:
 
             <div className="modal-body">
               <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>
-                Si respondés <b>No</b>, se marcará como <b>error</b>. Si no hacés esta revisión, se asume que está OK.
+                Si respondés <b>No</b>, se marcará como <b>error</b>. Podés cambiar la respuesta o <b>desmarcar</b> si te
+                equivocaste. Si no hacés esta revisión, se asume que está OK.
               </div>
 
-              <div className="q-card">
-                <div className="q-title">{questions[manualStep].title}</div>
-                <div className="q-detail">{questions[manualStep].detail}</div>
-                <div className="q-actions">
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={() => {
-                      applyManualResult(questions[manualStep].id, true);
-                      if (manualStep < questions.length - 1) setManualStep((s) => s + 1);
-                      else setManualOpen(false);
-                    }}
-                  >
-                    Sí
-                  </button>
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={() => {
-                      applyManualResult(questions[manualStep].id, false);
-                      if (manualStep < questions.length - 1) setManualStep((s) => s + 1);
-                      else setManualOpen(false);
-                    }}
-                  >
-                    No
-                  </button>
-                </div>
-                <div className="q-progress">
-                  Pregunta {manualStep + 1} de {questions.length}
-                </div>
+              {questions.map((q) => {
+                const current = file.manualChecks?.[q.id];
+                return (
+                  <div key={q.id} className="q-card">
+                    <div className="q-title">{q.title}</div>
+                    <div className="q-detail">{q.detail}</div>
+                    <div className="q-actions">
+                      <button
+                        type="button"
+                        className={`btn ${current === true ? 'btn-primary' : ''}`}
+                        onClick={() => setManual(q.id, true)}
+                      >
+                        Sí
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn ${current === false ? 'btn-primary' : ''}`}
+                        onClick={() => setManual(q.id, false)}
+                      >
+                        No
+                      </button>
+                      <button type="button" className="btn btn-ghost" onClick={() => setManual(q.id, undefined)}>
+                        Desmarcar
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+
+              <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
+                <button type="button" className="btn" onClick={() => setManualOpen(false)}>
+                  Listo
+                </button>
               </div>
             </div>
           </div>

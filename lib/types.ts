@@ -14,6 +14,13 @@ export interface Span {
   canvasHeight?: number;
 }
 
+export interface AmbiguousOption {
+  code: string;
+  desc: string;
+  specialty?: string;
+  score: number;
+}
+
 export interface Finding {
   severity: Severity;
   code: string;
@@ -22,6 +29,10 @@ export interface Finding {
   action?: string;
   suggestion?: { code: string; desc?: string };
   spans?: Span[];
+  ambiguous?: {
+    code: string;
+    options: AmbiguousOption[];
+  };
 }
 
 export interface PageWords {
@@ -51,6 +62,41 @@ export interface Analysis {
   fileName: string;
   analyzedAt: string;
 }
+
+export interface StructuredDoc {
+  dni: string | null;
+  afiliado: string | null;
+  paciente: string | null;
+  fechaPractica: Date | null;
+  fechaAutorizacion: Date | null;
+  fechaVencimiento: Date | null;
+  nroAutorizacion: string | null;
+  prepaga: string | null;
+  codigo: string | null;
+  procedimientoDesc: string | null;
+}
+
+export interface CrossCheckFinding {
+  severity: 'ok' | 'warn' | 'error';
+  title: string;
+  body: string;
+  action?: string;
+}
+
+export type AuthState =
+  | { status: 'uploading' }
+  | { status: 'processing'; fileName: string }
+  | { status: 'missing' }
+  | { status: 'skipped' }
+  | { status: 'error'; fileName?: string; errorMessage?: string }
+  | {
+      status: 'checked';
+      fileName: string;
+      bonoText: string;
+      bonoData: StructuredDoc;
+      parteData: StructuredDoc;
+      crossCheck: CrossCheckFinding[];
+    };
 
 export interface FileEntry {
   id: string;

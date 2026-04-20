@@ -4,12 +4,13 @@ import { useState } from 'react';
 import { Sidebar } from './Sidebar';
 import { UploadView } from './UploadView';
 import { ErrorsView } from './ErrorsView';
-import type { FileEntry } from '@/lib/types';
+import type { AuthState, FileEntry } from '@/lib/types';
 
 export default function TrazaApp() {
   const [active, setActive] = useState<string>('upload');
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
+  const [authStates, setAuthStates] = useState<Record<string, AuthState | undefined>>({});
 
   function upsertFile(entry: FileEntry) {
     setFiles((prev) => {
@@ -24,9 +25,30 @@ export default function TrazaApp() {
     }
   }
 
+  function handleAuthDecision(fileId: string, state: AuthState) {
+    setAuthStates((prev) => ({ ...prev, [fileId]: state }));
+  }
+
+  function handleAuthUpload(fileId: string, state: AuthState) {
+    setAuthStates((prev) => ({ ...prev, [fileId]: state }));
+  }
+
+  function handleAuthReset(fileId: string) {
+    setAuthStates((prev) => {
+      const copy = { ...prev };
+      delete copy[fileId];
+      return copy;
+    });
+  }
+
   function removeFile(id: string) {
     setFiles((prev) => prev.filter((f) => f.id !== id));
     if (selectedFileId === id) setSelectedFileId(null);
+    setAuthStates((prev) => {
+      const copy = { ...prev };
+      delete copy[id];
+      return copy;
+    });
   }
 
   function openFile(id: string) {
@@ -54,6 +76,10 @@ export default function TrazaApp() {
             onRemoveFile={removeFile}
             onSelectFile={setSelectedFileId}
             selectedFileId={selectedFileId}
+            authStates={authStates}
+            onAuthDecision={handleAuthDecision}
+            onAuthUpload={handleAuthUpload}
+            onAuthReset={handleAuthReset}
           />
         )}
         {active === 'errors' && <ErrorsView files={files} onOpenFile={openFile} />}

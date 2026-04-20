@@ -170,7 +170,7 @@ export function UploadView({
             onUploadBono={(st) => onAuthUpload(selected.id, st)}
             onReset={() => onAuthReset(selected.id)}
           />
-          <AnalysisDetail file={selected} />
+          <AnalysisDetail file={selected} onUpsert={onAddFile} />
         </>
       )}
     </div>
@@ -633,9 +633,11 @@ function AmbiguitySelector({
   );
 }
 
-function AnalysisDetail({ file }: { file: FileEntry }) {
+function AnalysisDetail({ file, onUpsert }: { file: FileEntry; onUpsert: (entry: FileEntry) => void }) {
   const [activeFindingIdx, setActiveFindingIdx] = useState<number | null>(null);
   const [selections, setSelections] = useState<Record<string, { idx: number; code: string; desc: string }>>({});
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualStep, setManualStep] = useState(0);
   const analysis = file.analysis!;
   const thumbnails = file.thumbnails || [];
 
@@ -654,6 +656,75 @@ function AnalysisDetail({ file }: { file: FileEntry }) {
     for (const s of f.spans) {
       (spansByPage[s.page] = spansByPage[s.page] || []).push({ ...s, severity: f.severity });
     }
+  }
+
+  const structured = useMemo(() => {
+    if (!file.text) return null;
+    return extractStructured(file.text, NOMEN_FOR_EXTRACT);
+  }, [file.text]);
+
+  const questions = useMemo(() => {
+    const qs: Array<{ id: 'patient' | 'procedure'; title: string; detail: string; errorTitle: string; errorBody: string }> =
+      [];
+    if (structured?.paciente) {
+      qs.push({
+        id: 'patient',
+        title: '¿Reconocés el nombre del paciente?',
+        detail: structured.paciente,
+        errorTitle: 'Nombre del paciente no reconocido',
+        errorBody:
+          `El documento muestra "${structured.paciente}" como paciente. Si no corresponde, la prepaga puede rechazar por datos del afiliado/paciente incorrectos.`,
+      });
+    }
+    const proc =
+      analysis.detected.procedureGuess?.desc ||
+      analysis.detected.procedureGuess?.keyword ||
+      (analysis.detected.codes[0] ? `Código ${analysis.detected.codes[0]}` : null);
+    if (proc) {
+      qs.push({
+        id: 'procedure',
+        title: '¿Reconocés haber realizado esta intervención?',
+        detail: proc,
+        errorTitle: 'Intervención no reconocida',
+        errorBody:
+          `El análisis detectó "${proc}". Si no corresponde al procedimiento realizado, la liquidación puede ser rechazada.`,
+      });
+    }
+    return qs;
+  }, [structured?.paciente, analysis.detected.procedureGuess, analysis.detected.codes]);
+
+  function applyManualResult(qId: 'patient' | 'procedure', ok: boolean) {
+    if (ok) {
+      // If user confirms, we don't add any extra error (assume OK).
+      return;
+    }
+    const q = questions.find((x) => x.id === qId);
+    if (!q) return;
+
+    // We store the manual mismatch as a normal "finding" so it shows everywhere (errores, calendario).
+    const manualCode = qId === 'patient' ? 'MANUAL_PATIENT_MISMATCH' : 'MANUAL_PROCEDURE_MISMATCH';
+    const already = analysis.findings.some((f) => f.code === manualCode);
+    if (already) return;
+
+    const nextFindings: Finding[] = [
+      {
+        severity: 'error',
+        code: manualCode,
+        title: q.errorTitle,
+        body: q.errorBody,
+        action: 'Corregir el documento o volver a generar el parte con los datos correctos.',
+      },
+      ...analysis.findings,
+    ];
+    const summary = {
+      ok: nextFindings.filter((f) => f.severity === 'ok').length,
+      warn: nextFindings.filter((f) => f.severity === 'warn').length,
+      error: nextFindings.filter((f) => f.severity === 'error').length,
+    };
+    const overall: 'error' | 'warn' | 'ok' = summary.error > 0 ? 'error' : summary.warn > 0 ? 'warn' : 'ok';
+
+    // Update the file entry in the parent list via the existing upsert.
+    onUpsert({ ...file, analysis: { ...analysis, findings: nextFindings, summary, overall } });
   }
 
   return (
@@ -689,7 +760,21 @@ function AnalysisDetail({ file }: { file: FileEntry }) {
 
       <div className="panel analysis-result">
         <div className="analysis-head">
-          <h3>Resultado del análisis</h3>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <h3 style={{ margin: 0 }}>Resultado del análisis</h3>
+            <button
+              type="button"
+              className="btn btn-sm btn-ghost"
+              onClick={() => {
+                setManualStep(0);
+                setManualOpen(true);
+              }}
+              disabled={questions.length === 0}
+              title={questions.length === 0 ? 'No se detectaron datos para revisar' : 'Revisar datos personales'}
+            >
+              <Icon name="info" size={12} /> Revisar datos incontrastables
+            </button>
+          </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
             {analysis.detected.prepagas.length > 0 && (
               <>
@@ -768,6 +853,64 @@ function AnalysisDetail({ file }: { file: FileEntry }) {
           ))}
         </div>
       </div>
+
+      {manualOpen && questions.length > 0 && (
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setManualOpen(false);
+          }}
+        >
+          <div className="modal-card">
+            <div className="modal-head">
+              <div style={{ fontWeight: 800 }}>Revisión de datos incontrastables</div>
+              <button type="button" className="btn btn-sm btn-ghost" onClick={() => setManualOpen(false)}>
+                <Icon name="x" size={12} /> Cerrar
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+                Si respondés <b>No</b>, se marcará como <b>error</b>. Si no hacés esta revisión, se asume que está OK.
+              </div>
+
+              <div className="q-card">
+                <div className="q-title">{questions[manualStep].title}</div>
+                <div className="q-detail">{questions[manualStep].detail}</div>
+                <div className="q-actions">
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => {
+                      applyManualResult(questions[manualStep].id, true);
+                      if (manualStep < questions.length - 1) setManualStep((s) => s + 1);
+                      else setManualOpen(false);
+                    }}
+                  >
+                    Sí
+                  </button>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => {
+                      applyManualResult(questions[manualStep].id, false);
+                      if (manualStep < questions.length - 1) setManualStep((s) => s + 1);
+                      else setManualOpen(false);
+                    }}
+                  >
+                    No
+                  </button>
+                </div>
+                <div className="q-progress">
+                  Pregunta {manualStep + 1} de {questions.length}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

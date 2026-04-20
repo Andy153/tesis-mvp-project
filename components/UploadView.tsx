@@ -36,9 +36,11 @@ export function UploadView({
 }: Props) {
   const [drag, setDrag] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
 
   async function handleFiles(fileList: File[]) {
     const batchId = 'b_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+    setActiveBatchId(batchId);
     for (const file of fileList) {
       const id = 'f_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
       const entry: FileEntry = {
@@ -83,6 +85,8 @@ export function UploadView({
   }
 
   const selected = files.find((f) => f.id === selectedFileId);
+  const effectiveBatchId = activeBatchId || selected?.batchId || files[0]?.batchId || null;
+  const currentBatchFiles = effectiveBatchId ? files.filter((f) => f.batchId === effectiveBatchId) : [];
 
   return (
     <div>
@@ -95,7 +99,14 @@ export function UploadView({
           </p>
         </div>
         {files.length > 0 && (
-          <button type="button" className="btn" onClick={() => inputRef.current?.click()}>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => {
+              setActiveBatchId(null);
+              inputRef.current?.click();
+            }}
+          >
             <Icon name="upload" size={14} /> Subir más
           </button>
         )}
@@ -147,9 +158,9 @@ export function UploadView({
         onChange={(e) => e.target.files && handleFiles(Array.from(e.target.files))}
       />
 
-      {files.length > 0 && (
+      {currentBatchFiles.length > 0 && (
         <div className="file-list">
-          {files.map((f) => (
+          {currentBatchFiles.map((f) => (
             <FileRow
               key={f.id}
               file={f}

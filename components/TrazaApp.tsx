@@ -5,6 +5,7 @@ import { Sidebar } from './Sidebar';
 import { UploadView } from './UploadView';
 import { ErrorsView } from './ErrorsView';
 import { CalendarView } from './CalendarView';
+import { DocumentsView } from './DocumentsView';
 import type { AuthState, FileEntry } from '@/lib/types';
 import { loadHistory, saveHistory } from '@/lib/history';
 
@@ -98,6 +99,7 @@ export default function TrazaApp() {
             onAuthReset={handleAuthReset}
           />
         )}
+        {active === 'documents' && <DocumentsView files={files} onOpenFile={openFile} />}
         {active === 'calendar' && (
           <CalendarView files={files} authStates={authStates} onOpenParte={openFile} />
         )}

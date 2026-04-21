@@ -76,6 +76,22 @@ export interface StructuredDoc {
   procedimientoDesc: string | null;
 }
 
+export type SwissCxRow = {
+  fecha: string;
+  socio: string;
+  socioDesc: string;
+  codigo: string;
+  cant: string;
+  detalle: string;
+  institucion: string;
+  cir: 'X' | '';
+  ayud: 'X' | '';
+  inst: 'X' | '';
+  urgencia: 'X' | '';
+  gastos: '';
+  nroAutorizacion: string;
+};
+
 export interface CrossCheckFinding {
   severity: 'ok' | 'warn' | 'error';
   title: string;
@@ -118,6 +134,14 @@ export interface FileEntry {
   ocrWords?: PageWords[];
   analysis?: Analysis;
   errorMessage?: string;
+  exports?: {
+    swissCx?: {
+      createdAt: string;
+      parteFileId: string;
+      batchId: string | null;
+      row: SwissCxRow;
+    };
+  };
 }
 
 export interface ExtractionResult {

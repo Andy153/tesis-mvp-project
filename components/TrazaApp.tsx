@@ -8,6 +8,7 @@ import { CalendarView } from './CalendarView';
 import { DocumentsView } from './DocumentsView';
 import type { AuthState, FileEntry } from '@/lib/types';
 import { loadHistory, saveHistory } from '@/lib/history';
+import { buildSwissCxRow, downloadBytes, downloadText, generateSwissCxFiles } from '@/lib/swissCxExport';
 
 export default function TrazaApp() {
   const [active, setActive] = useState<string>('upload');
@@ -85,6 +86,61 @@ export default function TrazaApp() {
     return acc + f.analysis.summary.error;
   }, 0);
 
+  async function handleFinalizeUpload(args: { parteFileId: string | null; batchId: string | null }) {
+    const parte =
+      (args.parteFileId ? files.find((f) => f.id === args.parteFileId) : null) ||
+      (args.batchId ? files.find((f) => f.batchId === args.batchId) : null) ||
+      files[0] ||
+      null;
+    if (!parte || !parte.text || !parte.analysis) {
+      setUploadVirgin(true);
+      setSelectedFileId(null);
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/templates/swiss-cx', { cache: 'no-store' });
+      if (!res.ok) throw new Error('No se pudo leer la plantilla Swiss.');
+      const templateXlsx = await res.arrayBuffer();
+
+      const row = buildSwissCxRow({ parte, authState: authStates[parte.id] });
+      const { xlsx, csv } = await generateSwissCxFiles({ templateXlsx, row });
+
+      const stamp = new Date().toISOString().slice(0, 10);
+      const safeSocio = (row.socio || 'socio').replace(/[^\w\-]+/g, '').slice(0, 20);
+      const base = `swiss_cx_${stamp}_${safeSocio}`;
+      downloadBytes(
+        xlsx,
+        `${base}.xlsx`,
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      downloadText(csv, `${base}.csv`, 'text/csv;charset=utf-8');
+
+      const exportMeta: NonNullable<FileEntry['exports']> = {
+        swissCx: {
+          createdAt: new Date().toISOString(),
+          parteFileId: parte.id,
+          batchId: args.batchId,
+          row: {
+            ...row,
+            // normalize required exact empties
+            gastos: '',
+          },
+        },
+      };
+
+      setFiles((prev) =>
+        prev.map((f) => (f.id === parte.id ? { ...f, exports: { ...(f.exports || {}), ...exportMeta } } : f)),
+      );
+    } catch (e) {
+      // If export fails, still let the user reset the upload screen.
+      console.error(e);
+    } finally {
+      setUploadVirgin(true);
+      setSelectedFileId(null);
+    }
+  }
+
   return (
     <div className="app">
       <Sidebar active={active} setActive={setActive} errorCount={errorCount} />
@@ -101,10 +157,7 @@ export default function TrazaApp() {
             onAuthUpload={handleAuthUpload}
             onAuthReset={handleAuthReset}
             showVirgin={uploadVirgin}
-            onFinalizeUpload={() => {
-              setUploadVirgin(true);
-              setSelectedFileId(null);
-            }}
+            onFinalizeUpload={handleFinalizeUpload}
           />
         )}
         {active === 'documents' && <DocumentsView files={files} onOpenFile={openFile} />}

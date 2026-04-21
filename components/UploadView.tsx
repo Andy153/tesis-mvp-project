@@ -20,7 +20,7 @@ interface Props {
   onAuthUpload: (fileId: string, state: AuthState) => void;
   onAuthReset: (fileId: string) => void;
   showVirgin?: boolean;
-  onFinalizeUpload?: () => void;
+  onFinalizeUpload?: (args: { parteFileId: string | null; batchId: string | null }) => void;
 }
 
 const ACCEPT = 'application/pdf,image/png,image/jpeg,image/jpg,image/webp';
@@ -197,7 +197,7 @@ export function UploadView({
             type="button"
             className="btn btn-primary"
             onClick={() => {
-              onFinalizeUpload?.();
+              onFinalizeUpload?.({ parteFileId: selected?.id || null, batchId: effectiveBatchId });
               setActiveBatchId(null);
               onSelectFile(null);
             }}

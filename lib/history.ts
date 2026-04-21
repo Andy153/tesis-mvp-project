@@ -12,7 +12,10 @@ type PersistedFinding = {
 
 type PersistedAnalysis = Omit<Analysis, 'findings'> & { findings: PersistedFinding[] };
 
-export type PersistedFileEntry = Omit<FileEntry, 'text' | 'thumbnails' | 'ocrWords' | 'progress' | 'progressMessage'> & {
+export type PersistedFileEntry = Omit<
+  FileEntry,
+  'text' | 'thumbnails' | 'ocrWords' | 'progress' | 'progressMessage'
+> & {
   analysis?: PersistedAnalysis;
 };
 
@@ -79,6 +82,7 @@ export function saveHistory(files: FileEntry[], authStates: Record<string, AuthS
           analysis: f.analysis ? minifyAnalysis(f.analysis) : undefined,
           method: f.method,
           errorMessage: f.errorMessage,
+          exports: f.exports,
         })),
       authStates: Object.fromEntries(
         Object.entries(authStates).map(([k, v]) => [k, v ? minifyAuthState(v) : undefined]),

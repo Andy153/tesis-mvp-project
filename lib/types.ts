@@ -101,13 +101,14 @@ export interface CrossCheckFinding {
 
 export type AuthState =
   | { status: 'uploading' }
-  | { status: 'processing'; fileName: string }
+  | { status: 'processing'; fileName: string; file?: File }
   | { status: 'missing' }
   | { status: 'skipped' }
   | { status: 'error'; fileName?: string; errorMessage?: string }
   | {
       status: 'checked';
       fileName: string;
+      file?: File;
       bonoText: string;
       bonoData: StructuredDoc;
       parteData: StructuredDoc;
@@ -129,6 +130,7 @@ export interface FileEntry {
   progress?: number;
   progressMessage?: string;
   text?: string;
+  file?: File;
   thumbnails?: Thumbnail[];
   method?: 'pdf-text' | 'ocr';
   ocrWords?: PageWords[];
@@ -140,6 +142,13 @@ export interface FileEntry {
       parteFileId: string;
       batchId: string | null;
       row: SwissCxRow;
+      files?: {
+        interventionId: string;
+        parteUrl: string;
+        permisoUrl?: string;
+        xlsxUrl: string;
+        csvUrl: string;
+      };
     };
   };
 }

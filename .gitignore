@@ -25,3 +25,6 @@ coverage/
 
 # Prototipo legacy + PDFs de prueba (no versionar; pesan y no aportan al build)
 TRAZA APP/uploads/
+
+# Server-side persisted interventions (local dev)
+data/

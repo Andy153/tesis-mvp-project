@@ -21,6 +21,8 @@ interface Props {
   onAuthReset: (fileId: string) => void;
   showVirgin?: boolean;
   onFinalizeUpload?: (args: { parteFileId: string | null; batchId: string | null }) => void;
+  onCloseVisualization?: () => void;
+  onEditUpload?: (parteFileId: string) => void;
 }
 
 const ACCEPT = 'application/pdf,image/png,image/jpeg,image/jpg,image/webp';
@@ -37,10 +39,13 @@ export function UploadView({
   onAuthReset,
   showVirgin,
   onFinalizeUpload,
+  onCloseVisualization,
+  onEditUpload,
 }: Props) {
   const [drag, setDrag] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<null | { id: string; name: string }>(null);
 
   async function handleFiles(fileList: File[]) {
     const batchId = 'b_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
@@ -57,6 +62,7 @@ export function UploadView({
         status: 'analyzing',
         progress: 0,
         progressMessage: 'Iniciando...',
+        file,
       };
       onAddFile(entry);
 
@@ -93,6 +99,7 @@ export function UploadView({
   const effectiveBatchId = isVirgin ? null : activeBatchId || selected?.batchId || files[0]?.batchId || null;
   const currentBatchFiles = effectiveBatchId ? files.filter((f) => f.batchId === effectiveBatchId) : [];
   const showEmpty = files.length === 0 || isVirgin;
+  const isFinalized = Boolean(selected?.exports?.swissCx?.files);
 
   return (
     <div>
@@ -171,7 +178,7 @@ export function UploadView({
               key={f.id}
               file={f}
               onClick={() => onSelectFile(f.id)}
-              onRemove={() => onRemoveFile(f.id)}
+              onRemove={() => setConfirmDelete({ id: f.id, name: f.name })}
               isSelected={f.id === selectedFileId}
             />
           ))}
@@ -180,6 +187,22 @@ export function UploadView({
 
       {!showEmpty && selected && selected.status === 'analyzed' && selected.analysis && (
         <>
+          {isFinalized && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginBottom: 12 }}>
+              <button type="button" className="btn" onClick={() => onCloseVisualization?.()}>
+                Cerrar visualización
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  if (selected?.id) onEditUpload?.(selected.id);
+                }}
+              >
+                Editar subida
+              </button>
+            </div>
+          )}
           <AuthorizationCard
             parteFile={selected}
             authState={authStates[selected.id]}
@@ -187,11 +210,14 @@ export function UploadView({
             onUploadBono={(st) => onAuthUpload(selected.id, st)}
             onReset={() => onAuthReset(selected.id)}
           />
+          {selected.exports?.swissCx?.row && (
+            <StoredFilesPanel row={selected.exports.swissCx.row} xlsxUrl={selected.exports.swissCx.files?.xlsxUrl} />
+          )}
           <AnalysisDetail file={selected} onUpsert={onAddFile} />
         </>
       )}
 
-      {!showEmpty && currentBatchFiles.length > 0 && (
+      {!showEmpty && !isFinalized && currentBatchFiles.length > 0 && (
         <div className="upload-finalize">
           <button
             type="button"
@@ -206,6 +232,139 @@ export function UploadView({
           </button>
         </div>
       )}
+
+      {confirmDelete && (
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setConfirmDelete(null);
+          }}
+        >
+          <div className="modal-card" style={{ maxWidth: 520 }}>
+            <div className="modal-head">
+              <div style={{ fontWeight: 800 }}>¿Eliminar documento?</div>
+              <button type="button" className="btn btn-sm btn-ghost" onClick={() => setConfirmDelete(null)}>
+                <Icon name="x" size={12} /> Cerrar
+              </button>
+            </div>
+            <div className="modal-body">
+              <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+                Vas a eliminar <b>{confirmDelete.name}</b>. Esto lo quita del historial y de Documentos/Calendario.
+              </div>
+              <div style={{ marginTop: 14, display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                <button type="button" className="btn" onClick={() => setConfirmDelete(null)}>
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  onClick={() => {
+                    onRemoveFile(confirmDelete.id);
+                    setConfirmDelete(null);
+                  }}
+                >
+                  Sí, eliminar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StoredFilesPanel({
+  row,
+  xlsxUrl,
+}: {
+  row: {
+    fecha: string;
+    socio: string;
+    socioDesc: string;
+    codigo: string;
+    cant: string;
+    detalle: string;
+    institucion: string;
+    cir: 'X' | '';
+    ayud: 'X' | '';
+    inst: 'X' | '';
+    urgencia: 'X' | '';
+    gastos: '';
+    nroAutorizacion: string;
+  };
+  xlsxUrl?: string;
+}) {
+  async function downloadPlanilla() {
+    if (!xlsxUrl) return;
+    const res = await fetch(xlsxUrl, { cache: 'no-store' });
+    if (!res.ok) return;
+    const buf = await res.arrayBuffer();
+    const blob = new Blob([buf], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'planilla_cx_swiss_completada.xlsx';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30_000);
+  }
+
+  return (
+    <div className="panel" style={{ padding: 16, marginTop: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+        <div style={{ fontWeight: 800 }}>Planilla generada (detalle de carga)</div>
+        {xlsxUrl && (
+          <button type="button" className="btn btn-sm" onClick={() => void downloadPlanilla()}>
+            Descargar planilla
+          </button>
+        )}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: 10, fontSize: 13 }}>
+        <div style={{ color: 'var(--text-soft)', fontWeight: 700 }}>Fecha</div>
+        <div>{row.fecha || '—'}</div>
+
+        <div style={{ color: 'var(--text-soft)', fontWeight: 700 }}>Socio</div>
+        <div>{row.socio || '—'}</div>
+
+        <div style={{ color: 'var(--text-soft)', fontWeight: 700 }}>Descripción socio</div>
+        <div>{row.socioDesc || '—'}</div>
+
+        <div style={{ color: 'var(--text-soft)', fontWeight: 700 }}>Código</div>
+        <div>{row.codigo || '—'}</div>
+
+        <div style={{ color: 'var(--text-soft)', fontWeight: 700 }}>Cant</div>
+        <div>{row.cant || '—'}</div>
+
+        <div style={{ color: 'var(--text-soft)', fontWeight: 700 }}>Detalle</div>
+        <div>{row.detalle || '—'}</div>
+
+        <div style={{ color: 'var(--text-soft)', fontWeight: 700 }}>Institución</div>
+        <div>{row.institucion || '—'}</div>
+
+        <div style={{ color: 'var(--text-soft)', fontWeight: 700 }}>Cir.</div>
+        <div>{row.cir || '—'}</div>
+
+        <div style={{ color: 'var(--text-soft)', fontWeight: 700 }}>Ayud.</div>
+        <div>{row.ayud || '—'}</div>
+
+        <div style={{ color: 'var(--text-soft)', fontWeight: 700 }}>Inst.</div>
+        <div>{row.inst || '—'}</div>
+
+        <div style={{ color: 'var(--text-soft)', fontWeight: 700 }}>Urgencia</div>
+        <div>{row.urgencia || '—'}</div>
+
+        <div style={{ color: 'var(--text-soft)', fontWeight: 700 }}>Gastos</div>
+        <div>{row.gastos || '—'}</div>
+
+        <div style={{ color: 'var(--text-soft)', fontWeight: 700 }}>Nro Autorización</div>
+        <div>{row.nroAutorizacion || '—'}</div>
+      </div>
     </div>
   );
 }
@@ -379,7 +538,7 @@ function AuthorizationCard({
   if (authState.status === 'uploading') {
     async function handleAuthFile(file: File | undefined) {
       if (!file) return;
-      onDecision({ status: 'processing', fileName: file.name });
+      onDecision({ status: 'processing', fileName: file.name, file });
       try {
         const { text } = await extractText(file, () => {});
         const bonoData = extractStructured(text, NOMEN_FOR_EXTRACT);
@@ -388,6 +547,7 @@ function AuthorizationCard({
         onUploadBono({
           status: 'checked',
           fileName: file.name,
+          file,
           bonoText: text,
           bonoData,
           parteData,

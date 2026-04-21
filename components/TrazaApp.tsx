@@ -8,7 +8,7 @@ import { CalendarView } from './CalendarView';
 import { DocumentsView } from './DocumentsView';
 import type { AuthState, FileEntry } from '@/lib/types';
 import { loadHistory, saveHistory } from '@/lib/history';
-import { buildSwissCxRow, downloadBytes, downloadText, generateSwissCxFiles } from '@/lib/swissCxExport';
+import { buildSwissCxRow } from '@/lib/swissCxExport';
 
 export default function TrazaApp() {
   const [active, setActive] = useState<string>('upload');
@@ -99,41 +99,48 @@ export default function TrazaApp() {
     }
 
     try {
-      const res = await fetch('/api/templates/swiss-cx', { cache: 'no-store' });
-      if (!res.ok) throw new Error('No se pudo leer la plantilla Swiss.');
-      const templateXlsx = await res.arrayBuffer();
-
       const row = buildSwissCxRow({ parte, authState: authStates[parte.id] });
-      const { xlsx, csv } = await generateSwissCxFiles({ templateXlsx, row });
 
-      const stamp = new Date().toISOString().slice(0, 10);
-      const safeSocio = (row.socio || 'socio').replace(/[^\w\-]+/g, '').slice(0, 20);
-      const base = `swiss_cx_${stamp}_${safeSocio}`;
-      downloadBytes(
-        xlsx,
-        `${base}.xlsx`,
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      const fd = new FormData();
+      if (parte.file) fd.append('parte', parte.file, parte.name);
+
+      const auth = authStates[parte.id];
+      if (auth?.status === 'checked' && auth.file) {
+        fd.append('permiso', auth.file, auth.fileName);
+      }
+
+      fd.append(
+        'payload',
+        JSON.stringify({
+          row,
+          meta: { parteFileName: parte.name, permisoFileName: auth?.status === 'checked' ? auth.fileName : null },
+        }),
       );
-      downloadText(csv, `${base}.csv`, 'text/csv;charset=utf-8');
 
-      const exportMeta: NonNullable<FileEntry['exports']> = {
-        swissCx: {
-          createdAt: new Date().toISOString(),
-          parteFileId: parte.id,
-          batchId: args.batchId,
-          row: {
-            ...row,
-            // normalize required exact empties
-            gastos: '',
-          },
-        },
-      };
+      const res = await fetch('/api/interventions', { method: 'POST', body: fd });
+      if (!res.ok) throw new Error('No se pudo guardar la intervención.');
+      const json = (await res.json()) as { id: string; files: any };
 
       setFiles((prev) =>
-        prev.map((f) => (f.id === parte.id ? { ...f, exports: { ...(f.exports || {}), ...exportMeta } } : f)),
+        prev.map((f) =>
+          f.id === parte.id
+            ? {
+                ...f,
+                exports: {
+                  ...(f.exports || {}),
+                  swissCx: {
+                    createdAt: new Date().toISOString(),
+                    parteFileId: parte.id,
+                    batchId: args.batchId,
+                    row,
+                    files: json.files,
+                  },
+                },
+              }
+            : f,
+        ),
       );
     } catch (e) {
-      // If export fails, still let the user reset the upload screen.
       console.error(e);
     } finally {
       setUploadVirgin(true);
@@ -158,6 +165,26 @@ export default function TrazaApp() {
             onAuthReset={handleAuthReset}
             showVirgin={uploadVirgin}
             onFinalizeUpload={handleFinalizeUpload}
+            onCloseVisualization={() => {
+              setActive('documents');
+              setSelectedFileId(null);
+              setUploadVirgin(true);
+            }}
+            onEditUpload={(parteFileId) => {
+              setUploadVirgin(false);
+              setSelectedFileId(parteFileId);
+              setFiles((prev) =>
+                prev.map((f) => {
+                  if (f.id !== parteFileId) return f;
+                  if (!f.exports?.swissCx) return f;
+                  // keep row metadata, but drop server links so "finalize" can be run again
+                  return {
+                    ...f,
+                    exports: { ...f.exports, swissCx: { ...f.exports.swissCx, files: undefined } },
+                  };
+                }),
+              );
+            }}
           />
         )}
         {active === 'documents' && <DocumentsView files={files} onOpenFile={openFile} />}

@@ -14,7 +14,7 @@ type PersistedAnalysis = Omit<Analysis, 'findings'> & { findings: PersistedFindi
 
 export type PersistedFileEntry = Omit<
   FileEntry,
-  'text' | 'thumbnails' | 'ocrWords' | 'progress' | 'progressMessage'
+  'text' | 'file' | 'thumbnails' | 'ocrWords' | 'progress' | 'progressMessage'
 > & {
   analysis?: PersistedAnalysis;
 };

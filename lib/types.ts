@@ -142,12 +142,13 @@ export interface FileEntry {
       parteFileId: string;
       batchId: string | null;
       row: SwissCxRow;
+      planillaError?: string;
       files?: {
         interventionId: string;
         parteUrl: string;
         permisoUrl?: string;
-        xlsxUrl: string;
-        csvUrl: string;
+        xlsxUrl?: string;
+        csvUrl?: string;
       };
     };
   };

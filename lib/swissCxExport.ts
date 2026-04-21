@@ -1,7 +1,7 @@
 import ExcelJS from 'exceljs';
 import { extractStructured } from './authz';
 import { TRAZA_NOMENCLADOR_FULL } from './nomenclador.js';
-import type { AuthState, FileEntry, SwissCxRow } from './types';
+import type { AuthState, FileEntry, Finding, SwissCxRow } from './types';
 
 type Row = SwissCxRow;
 
@@ -72,7 +72,10 @@ export function buildSwissCxRow(args: {
     analysis?.detected?.procedureGuess?.desc ||
     (codigo && nomenAny[codigo]?.entries?.[0]?.desc ? String(nomenAny[codigo].entries[0].desc) : '');
 
-  const institucion = analysis?.detected?.sanatorios?.[0] || '';
+  let institucion = analysis?.detected?.sanatorios?.[0] || '';
+  // Display names: keep detection keywords short but export full institution name
+  if (institucion === 'Otamendi') institucion = 'Sanatorio Otamendi';
+  if (institucion === 'Mater Dei') institucion = 'Sanatorio Mater Dei';
 
   const { hasAyud, hasInst, hasCir, urgByWord } = detectFlags(parteText);
   const urgencia = urgByWord || isWeekend(structured.fechaPractica) ? 'X' : '';
@@ -154,6 +157,38 @@ export async function generateSwissCxFiles(args: {
   const csv = cols.map(esc).join(';') + '\n';
 
   return { xlsx, csv };
+}
+
+export function applyPlanillaValidationFindings(args: { file: FileEntry; row: SwissCxRow }): FileEntry {
+  const analysis = args.file.analysis;
+  if (!analysis) return args.file;
+  const dropCodes = new Set([
+    'PLANILLA_MISSING_FECHA',
+    'PLANILLA_MISSING_SOCIO',
+    'PLANILLA_MISSING_PACIENTE',
+    'PLANILLA_MISSING_CODIGO',
+  ]);
+  const base = analysis.findings.filter((f) => !dropCodes.has(f.code));
+  const out: Finding[] = [...base];
+
+  const miss = (key: string, title: string, body: string) => {
+    out.unshift({ severity: 'error', code: key, title, body, action: 'Editar la planilla antes de finalizar.' });
+  };
+
+  if (!args.row.fecha?.trim()) miss('PLANILLA_MISSING_FECHA', 'Falta fecha para generar planilla', 'No hay fecha válida en la planilla.');
+  if (!args.row.socio?.trim()) miss('PLANILLA_MISSING_SOCIO', 'Falta N° de socio para generar planilla', 'No se pudo confirmar el número de afiliado.');
+  if (!args.row.socioDesc?.trim())
+    miss('PLANILLA_MISSING_PACIENTE', 'Falta paciente reconocido para generar planilla', 'No se confirmó el nombre del paciente.');
+  if (!args.row.codigo?.trim())
+    miss('PLANILLA_MISSING_CODIGO', 'Falta código para generar planilla', 'No se detectó/confirmó el código de nomenclador.');
+
+  const summary = {
+    ok: out.filter((f) => f.severity === 'ok').length,
+    warn: out.filter((f) => f.severity === 'warn').length,
+    error: out.filter((f) => f.severity === 'error').length,
+  };
+  const overall: 'error' | 'warn' | 'ok' = summary.error > 0 ? 'error' : summary.warn > 0 ? 'warn' : 'ok';
+  return { ...args.file, analysis: { ...analysis, findings: out, summary, overall } };
 }
 
 export function downloadBytes(bytes: Uint8Array, fileName: string, mime: string) {

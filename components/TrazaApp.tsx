@@ -99,12 +99,14 @@ export default function TrazaApp() {
     }
 
     try {
-      const row = buildSwissCxRow({ parte, authState: authStates[parte.id] });
+      const auth = authStates[parte.id];
+      const authErrors =
+        auth?.status === 'checked' ? (auth.crossCheck || []).some((x) => x.severity === 'error') : false;
+      const row = buildSwissCxRow({ parte, authState: auth });
 
       const fd = new FormData();
       if (parte.file) fd.append('parte', parte.file, parte.name);
 
-      const auth = authStates[parte.id];
       if (auth?.status === 'checked' && auth.file) {
         fd.append('permiso', auth.file, auth.fileName);
       }
@@ -113,6 +115,8 @@ export default function TrazaApp() {
         'payload',
         JSON.stringify({
           row,
+          skipPlanilla: auth?.status === 'checked' && authErrors ? true : false,
+          skipReason: auth?.status === 'checked' && authErrors ? 'AUTH_MISMATCH' : null,
           meta: { parteFileName: parte.name, permisoFileName: auth?.status === 'checked' ? auth.fileName : null },
         }),
       );
@@ -120,6 +124,11 @@ export default function TrazaApp() {
       const res = await fetch('/api/interventions', { method: 'POST', body: fd });
       if (!res.ok) throw new Error('No se pudo guardar la intervención.');
       const json = (await res.json()) as { id: string; files: any };
+
+      const planillaError =
+        auth?.status === 'checked' && authErrors
+          ? 'No se pudo generar la planilla porque la autorización no coincide con el parte. Revisá la autorización subida.'
+          : undefined;
 
       setFiles((prev) =>
         prev.map((f) =>
@@ -133,6 +142,7 @@ export default function TrazaApp() {
                     parteFileId: parte.id,
                     batchId: args.batchId,
                     row,
+                    planillaError,
                     files: json.files,
                   },
                 },

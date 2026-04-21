@@ -7,6 +7,8 @@ import type { SwissCxRow } from '@/lib/types';
 
 type CreatePayload = {
   row: SwissCxRow;
+  skipPlanilla?: boolean;
+  skipReason?: string | null;
   meta: {
     parteFileName: string;
     permisoFileName?: string | null;
@@ -56,16 +58,21 @@ export async function POST(req: Request) {
     permisoSaved = true;
   }
 
-  const templatePath = path.join(process.cwd(), 'templates', 'planilla cx swiss.xlsx');
-  const templateXlsx = await readFile(templatePath);
-  const { xlsx, csv } = await generateSwissCxFiles({
-    templateXlsx: templateXlsx.buffer.slice(templateXlsx.byteOffset, templateXlsx.byteOffset + templateXlsx.byteLength),
-    row: payload.row,
-  });
-
   const base = safeBaseName(payload.meta?.parteFileName || parte.name);
-  await writeFile(path.join(root, `${base}.xlsx`), Buffer.from(xlsx));
-  await writeFile(path.join(root, `${base}.csv`), csv, 'utf8');
+  let xlsxFile: string | null = null;
+  let csvFile: string | null = null;
+  if (!payload.skipPlanilla) {
+    const templatePath = path.join(process.cwd(), 'templates', 'planilla cx swiss.xlsx');
+    const templateXlsx = await readFile(templatePath);
+    const { xlsx, csv } = await generateSwissCxFiles({
+      templateXlsx: templateXlsx.buffer.slice(templateXlsx.byteOffset, templateXlsx.byteOffset + templateXlsx.byteLength),
+      row: payload.row,
+    });
+    xlsxFile = `${base}.xlsx`;
+    csvFile = `${base}.csv`;
+    await writeFile(path.join(root, xlsxFile), Buffer.from(xlsx));
+    await writeFile(path.join(root, csvFile), csv, 'utf8');
+  }
 
   await writeFile(
     path.join(root, 'meta.json'),
@@ -75,11 +82,12 @@ export async function POST(req: Request) {
         createdAt: new Date().toISOString(),
         base,
         row: payload.row,
+        planilla: payload.skipPlanilla ? { generated: false, reason: payload.skipReason || null } : { generated: true },
         files: {
           parte: 'parte.pdf',
           permiso: permisoSaved ? 'permiso.pdf' : null,
-          xlsx: `${base}.xlsx`,
-          csv: `${base}.csv`,
+          xlsx: xlsxFile,
+          csv: csvFile,
         },
       },
       null,
@@ -92,8 +100,8 @@ export async function POST(req: Request) {
     interventionId: id,
     parteUrl: `/api/interventions/${id}/files/parte.pdf`,
     permisoUrl: permisoSaved ? `/api/interventions/${id}/files/permiso.pdf` : undefined,
-    xlsxUrl: `/api/interventions/${id}/files/${encodeURIComponent(base)}.xlsx`,
-    csvUrl: `/api/interventions/${id}/files/${encodeURIComponent(base)}.csv`,
+    xlsxUrl: xlsxFile ? `/api/interventions/${id}/files/${encodeURIComponent(base)}.xlsx` : undefined,
+    csvUrl: csvFile ? `/api/interventions/${id}/files/${encodeURIComponent(base)}.csv` : undefined,
   };
 
   return NextResponse.json({ id, files });

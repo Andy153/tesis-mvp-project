@@ -5,6 +5,7 @@ import { Icon } from './Icon';
 import { extractText, analyzeDocument } from '@/lib/analyzer';
 import { crossCheck, extractStructured, requiresAuthorization } from '@/lib/authz';
 import { TRAZA_NOMENCLADOR_FULL } from '@/lib/nomenclador.js';
+import { applyPlanillaValidationFindings } from '@/lib/swissCxExport';
 import type { AuthState, FileEntry, Finding, Span, Thumbnail } from '@/lib/types';
 
 const NOMEN_FOR_EXTRACT = TRAZA_NOMENCLADOR_FULL as Record<string, { entries?: Array<{ desc: string }> }>;
@@ -46,6 +47,11 @@ export function UploadView({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<null | { id: string; name: string }>(null);
+  const [manualOpen, setManualOpen] = useState(false);
+  const [pendingFinalize, setPendingFinalize] = useState<null | { parteFileId: string | null; batchId: string | null }>(
+    null,
+  );
+  const [finalizeBlocked, setFinalizeBlocked] = useState<string | null>(null);
 
   async function handleFiles(fileList: File[]) {
     const batchId = 'b_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
@@ -99,7 +105,56 @@ export function UploadView({
   const effectiveBatchId = isVirgin ? null : activeBatchId || selected?.batchId || files[0]?.batchId || null;
   const currentBatchFiles = effectiveBatchId ? files.filter((f) => f.batchId === effectiveBatchId) : [];
   const showEmpty = files.length === 0 || isVirgin;
-  const isFinalized = Boolean(selected?.exports?.swissCx?.files);
+  const serverFiles = selected?.exports?.swissCx?.files;
+  const hasServerFiles = Boolean(serverFiles && typeof serverFiles === 'object' && (serverFiles as any).interventionId);
+  const isFinalized = hasServerFiles;
+  const needsManualReview = useMemo(() => {
+    if (!selected?.analysis) return false;
+    if (!selected?.text) return false;
+    const analysis = selected.analysis;
+    const structured = extractStructured(selected.text, NOMEN_FOR_EXTRACT);
+    const required: Array<'patient' | 'procedure'> = [];
+    if (structured?.paciente) required.push('patient');
+    const proc =
+      analysis.detected.procedureGuess?.desc ||
+      analysis.detected.procedureGuess?.keyword ||
+      (analysis.detected.codes[0] ? `Código ${analysis.detected.codes[0]}` : null);
+    if (proc) required.push('procedure');
+    if (required.length === 0) return false;
+    const checks = selected.manualChecks || {};
+    return required.some((id) => checks[id] === undefined);
+  }, [selected?.analysis, selected?.text, selected?.manualChecks]);
+
+  const finalizeBlockReason = useMemo(() => {
+    if (!selected?.analysis || !selected?.text) return null;
+    const structured = extractStructured(selected.text, NOMEN_FOR_EXTRACT);
+    const required: Array<'patient' | 'procedure'> = [];
+    if (structured?.paciente) required.push('patient');
+    const proc =
+      selected.analysis.detected.procedureGuess?.desc ||
+      selected.analysis.detected.procedureGuess?.keyword ||
+      (selected.analysis.detected.codes[0] ? `Código ${selected.analysis.detected.codes[0]}` : null);
+    if (proc) required.push('procedure');
+    if (required.length === 0) return null;
+    const checks = selected.manualChecks || {};
+    if (required.some((id) => checks[id] === false)) {
+      const which = required
+        .filter((id) => checks[id] === false)
+        .map((id) => (id === 'patient' ? 'paciente no reconocido' : 'intervención no reconocida'))
+        .join(' y ');
+      return `No se pudo generar la planilla porque no se reconoció: ${which}.`;
+    }
+    // Also block if required planilla fields are missing (after edits)
+    if (!selected.exports?.swissCx?.row) return null;
+    const row = selected.exports.swissCx.row;
+    const miss: string[] = [];
+    if (!row.fecha?.trim()) miss.push('fecha');
+    if (!row.socio?.trim()) miss.push('socio');
+    if (!row.socioDesc?.trim()) miss.push('paciente');
+    if (!row.codigo?.trim()) miss.push('código');
+    if (miss.length) return `No se pudo generar la planilla porque falta: ${miss.join(', ')}.`;
+    return null;
+  }, [selected?.analysis, selected?.text, selected?.manualChecks]);
 
   return (
     <div>
@@ -188,7 +243,7 @@ export function UploadView({
       {!showEmpty && selected && selected.status === 'analyzed' && selected.analysis && (
         <>
           {isFinalized && (
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginBottom: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 14, marginBottom: 16 }}>
               <button type="button" className="btn" onClick={() => onCloseVisualization?.()}>
                 Cerrar visualización
               </button>
@@ -203,17 +258,88 @@ export function UploadView({
               </button>
             </div>
           )}
-          <AuthorizationCard
-            parteFile={selected}
-            authState={authStates[selected.id]}
-            onDecision={(st) => onAuthDecision(selected.id, st)}
-            onUploadBono={(st) => onAuthUpload(selected.id, st)}
-            onReset={() => onAuthReset(selected.id)}
-          />
-          {selected.exports?.swissCx?.row && (
-            <StoredFilesPanel row={selected.exports.swissCx.row} xlsxUrl={selected.exports.swissCx.files?.xlsxUrl} />
+          {!isFinalized && (
+            <AuthorizationCard
+              parteFile={selected}
+              authState={authStates[selected.id]}
+              onDecision={(st) => onAuthDecision(selected.id, st)}
+              onUploadBono={(st) => onAuthUpload(selected.id, st)}
+              onReset={() => {
+                const auth = authStates[selected.id];
+                const correlated =
+                  auth?.status === 'checked' ? !(auth.crossCheck || []).some((x) => x.severity === 'error') : false;
+                if (correlated) {
+                  setFinalizeBlocked(
+                    'No se puede eliminar la autorización porque coincide con el parte. Si la eliminás, no vas a poder facturar.',
+                  );
+                  return;
+                }
+                onAuthReset(selected.id);
+              }}
+            />
           )}
-          <AnalysisDetail file={selected} onUpsert={onAddFile} />
+          {selected.exports?.swissCx?.row && (
+            <StoredFilesPanel
+              row={selected.exports.swissCx.row}
+              files={serverFiles}
+              blockMessage={selected.exports?.swissCx?.planillaError || finalizeBlockReason}
+              onUpdateRow={(nextRow, nextFiles) => {
+                const next: FileEntry = {
+                  ...selected,
+                  exports: {
+                    ...(selected.exports || {}),
+                    swissCx: {
+                      ...(selected.exports?.swissCx as any),
+                      row: nextRow,
+                      files: nextFiles || selected.exports?.swissCx?.files,
+                    },
+                  },
+                };
+                onAddFile(applyPlanillaValidationFindings({ file: next, row: nextRow }));
+              }}
+            />
+          )}
+          <AnalysisDetail
+            file={selected}
+            onUpsert={onAddFile}
+            manualOpenExternal={manualOpen}
+            onManualOpenChange={(v) => {
+              setManualOpen(v);
+              if (!v && pendingFinalize) {
+                // Continue finalize flow only if required checks were answered.
+                if (!selected.text || !selected.analysis) return;
+                const structured = extractStructured(selected.text, NOMEN_FOR_EXTRACT);
+                const required: Array<'patient' | 'procedure'> = [];
+                if (structured?.paciente) required.push('patient');
+                const proc =
+                  selected.analysis.detected.procedureGuess?.desc ||
+                  selected.analysis.detected.procedureGuess?.keyword ||
+                  (selected.analysis.detected.codes[0] ? `Código ${selected.analysis.detected.codes[0]}` : null);
+                if (proc) required.push('procedure');
+                const checks = selected.manualChecks || {};
+                const okAnswered = required.every((id) => checks[id] !== undefined);
+                const okRecognized = required.every((id) => checks[id] !== false);
+                if (okAnswered && !okRecognized) {
+                  setFinalizeBlocked(
+                    `No se pudo generar la planilla porque no se reconoció: ${required
+                      .filter((id) => checks[id] === false)
+                      .map((id) => (id === 'patient' ? 'paciente' : 'intervención'))
+                      .join(' y ')}.`,
+                  );
+                  setPendingFinalize(null);
+                  return;
+                }
+                if (okAnswered && okRecognized) {
+                  onFinalizeUpload?.(pendingFinalize);
+                  setActiveBatchId(null);
+                  onSelectFile(null);
+                  setPendingFinalize(null);
+                }
+              }
+            }}
+            pendingFinalize={Boolean(pendingFinalize)}
+            allowManualReview={!isFinalized}
+          />
         </>
       )}
 
@@ -223,13 +349,29 @@ export function UploadView({
             type="button"
             className="btn btn-primary"
             onClick={() => {
-              onFinalizeUpload?.({ parteFileId: selected?.id || null, batchId: effectiveBatchId });
+              setFinalizeBlocked(null);
+              const args = { parteFileId: selected?.id || null, batchId: effectiveBatchId };
+              if (selected && finalizeBlockReason) {
+                setFinalizeBlocked(finalizeBlockReason);
+                return;
+              }
+              if (selected && needsManualReview) {
+                setPendingFinalize(args);
+                setManualOpen(true);
+                return;
+              }
+              onFinalizeUpload?.(args);
               setActiveBatchId(null);
               onSelectFile(null);
             }}
           >
             Carga finalizada
           </button>
+          {finalizeBlocked && (
+            <div style={{ marginTop: 10, color: 'var(--error)', fontSize: 12 }}>
+              {finalizeBlocked}
+            </div>
+          )}
         </div>
       )}
 
@@ -278,7 +420,9 @@ export function UploadView({
 
 function StoredFilesPanel({
   row,
-  xlsxUrl,
+  files,
+  blockMessage,
+  onUpdateRow,
 }: {
   row: {
     fecha: string;
@@ -295,11 +439,31 @@ function StoredFilesPanel({
     gastos: '';
     nroAutorizacion: string;
   };
-  xlsxUrl?: string;
+  files?: { interventionId: string; parteUrl: string; permisoUrl?: string; xlsxUrl?: string; csvUrl?: string };
+  blockMessage?: string | null;
+  onUpdateRow: (row: any, files?: any) => void;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [draft, setDraft] = useState(row);
+
+  useMemo(() => {
+    setDraft(row);
+  }, [row]);
+
+  function safeNamePart(s: string) {
+    return (s || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 60);
+  }
+
   async function downloadPlanilla() {
-    if (!xlsxUrl) return;
-    const res = await fetch(xlsxUrl, { cache: 'no-store' });
+    if (!files?.xlsxUrl) return;
+    const res = await fetch(files.xlsxUrl, { cache: 'no-store' });
     if (!res.ok) return;
     const buf = await res.arrayBuffer();
     const blob = new Blob([buf], {
@@ -308,44 +472,133 @@ function StoredFilesPanel({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'planilla_cx_swiss_completada.xlsx';
+    const fecha = safeNamePart(draft.fecha || 'sin_fecha');
+    const pac = safeNamePart(draft.socioDesc || 'sin_paciente');
+    a.download = `planilla_cx_swiss_${fecha}_${pac}.xlsx`;
     document.body.appendChild(a);
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 30_000);
   }
 
+  async function saveEdits() {
+    if (!files?.interventionId) return;
+    setSaving(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/interventions/${files.interventionId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ row: draft }),
+      });
+      if (!res.ok) throw new Error('No se pudo guardar la planilla.');
+      const json = (await res.json()) as { files: { xlsxUrl: string; csvUrl: string; interventionId: string } };
+      const nextFiles = { ...files, ...json.files };
+      onUpdateRow(draft, nextFiles);
+      setEditing(false);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'No se pudo guardar la planilla.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className="panel" style={{ padding: 16, marginTop: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 10 }}>
         <div style={{ fontWeight: 800 }}>Planilla generada (detalle de carga)</div>
-        {xlsxUrl && (
-          <button type="button" className="btn btn-sm" onClick={() => void downloadPlanilla()}>
-            Descargar planilla
-          </button>
-        )}
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          {files?.xlsxUrl && (
+            <button type="button" className="btn btn-sm" onClick={() => void downloadPlanilla()}>
+              Descargar planilla
+            </button>
+          )}
+          {files?.interventionId && (
+            <button type="button" className="btn btn-sm btn-ghost" onClick={() => setEditing((v) => !v)}>
+              {editing ? 'Cancelar edición' : 'Editar planilla'}
+            </button>
+          )}
+          {editing && (
+            <button type="button" className="btn btn-sm btn-primary" disabled={saving} onClick={() => void saveEdits()}>
+              {saving ? 'Guardando…' : 'Guardar'}
+            </button>
+          )}
+        </div>
       </div>
+      {blockMessage && (
+        <div
+          style={{
+            marginBottom: 12,
+            padding: '10px 12px',
+            borderRadius: 8,
+            background: 'var(--error-soft)',
+            border: '1px solid rgba(166, 51, 51, 0.25)',
+            color: 'var(--error)',
+            fontSize: 12.5,
+            fontWeight: 600,
+          }}
+        >
+          {blockMessage}
+        </div>
+      )}
+      {err && <div style={{ color: 'var(--error)', marginBottom: 10, fontSize: 12 }}>{err}</div>}
       <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: 10, fontSize: 13 }}>
         <div style={{ color: 'var(--text-soft)', fontWeight: 700 }}>Fecha</div>
-        <div>{row.fecha || '—'}</div>
+        <div>
+          {editing ? (
+            <input className="docs-search" value={draft.fecha} onChange={(e) => setDraft({ ...draft, fecha: e.target.value })} />
+          ) : (
+            row.fecha || '—'
+          )}
+        </div>
 
         <div style={{ color: 'var(--text-soft)', fontWeight: 700 }}>Socio</div>
-        <div>{row.socio || '—'}</div>
+        <div>
+          {editing ? (
+            <input className="docs-search" value={draft.socio} onChange={(e) => setDraft({ ...draft, socio: e.target.value })} />
+          ) : (
+            row.socio || '—'
+          )}
+        </div>
 
         <div style={{ color: 'var(--text-soft)', fontWeight: 700 }}>Descripción socio</div>
-        <div>{row.socioDesc || '—'}</div>
+        <div>
+          {editing ? (
+            <input className="docs-search" value={draft.socioDesc} onChange={(e) => setDraft({ ...draft, socioDesc: e.target.value })} />
+          ) : (
+            row.socioDesc || '—'
+          )}
+        </div>
 
         <div style={{ color: 'var(--text-soft)', fontWeight: 700 }}>Código</div>
-        <div>{row.codigo || '—'}</div>
+        <div>
+          {editing ? (
+            <input className="docs-search" value={draft.codigo} onChange={(e) => setDraft({ ...draft, codigo: e.target.value })} />
+          ) : (
+            row.codigo || '—'
+          )}
+        </div>
 
         <div style={{ color: 'var(--text-soft)', fontWeight: 700 }}>Cant</div>
         <div>{row.cant || '—'}</div>
 
         <div style={{ color: 'var(--text-soft)', fontWeight: 700 }}>Detalle</div>
-        <div>{row.detalle || '—'}</div>
+        <div>
+          {editing ? (
+            <input className="docs-search" value={draft.detalle} onChange={(e) => setDraft({ ...draft, detalle: e.target.value })} />
+          ) : (
+            row.detalle || '—'
+          )}
+        </div>
 
         <div style={{ color: 'var(--text-soft)', fontWeight: 700 }}>Institución</div>
-        <div>{row.institucion || '—'}</div>
+        <div>
+          {editing ? (
+            <input className="docs-search" value={draft.institucion} onChange={(e) => setDraft({ ...draft, institucion: e.target.value })} />
+          ) : (
+            row.institucion || '—'
+          )}
+        </div>
 
         <div style={{ color: 'var(--text-soft)', fontWeight: 700 }}>Cir.</div>
         <div>{row.cir || '—'}</div>
@@ -363,7 +616,13 @@ function StoredFilesPanel({
         <div>{row.gastos || '—'}</div>
 
         <div style={{ color: 'var(--text-soft)', fontWeight: 700 }}>Nro Autorización</div>
-        <div>{row.nroAutorizacion || '—'}</div>
+        <div>
+          {editing ? (
+            <input className="docs-search" value={draft.nroAutorizacion} onChange={(e) => setDraft({ ...draft, nroAutorizacion: e.target.value })} />
+          ) : (
+            row.nroAutorizacion || '—'
+          )}
+        </div>
       </div>
     </div>
   );
@@ -826,10 +1085,29 @@ function AmbiguitySelector({
   );
 }
 
-function AnalysisDetail({ file, onUpsert }: { file: FileEntry; onUpsert: (entry: FileEntry) => void }) {
+function AnalysisDetail({
+  file,
+  onUpsert,
+  manualOpenExternal,
+  onManualOpenChange,
+  pendingFinalize,
+  allowManualReview,
+}: {
+  file: FileEntry;
+  onUpsert: (entry: FileEntry) => void;
+  manualOpenExternal?: boolean;
+  onManualOpenChange?: (v: boolean) => void;
+  pendingFinalize?: boolean;
+  allowManualReview?: boolean;
+}) {
   const [activeFindingIdx, setActiveFindingIdx] = useState<number | null>(null);
   const [selections, setSelections] = useState<Record<string, { idx: number; code: string; desc: string }>>({});
-  const [manualOpen, setManualOpen] = useState(false);
+  const [manualOpenInternal, setManualOpenInternal] = useState(false);
+  const manualOpen = manualOpenExternal !== undefined ? manualOpenExternal : manualOpenInternal;
+  const setManualOpen = (v: boolean) => {
+    if (manualOpenExternal !== undefined) onManualOpenChange?.(v);
+    else setManualOpenInternal(v);
+  };
   const analysis = file.analysis!;
   const thumbnails = file.thumbnails || [];
 
@@ -976,7 +1254,7 @@ function AnalysisDetail({ file, onUpsert }: { file: FileEntry; onUpsert: (entry:
               onClick={() => {
                 setManualOpen(true);
               }}
-              disabled={questions.length === 0}
+              disabled={questions.length === 0 || allowManualReview === false}
               title={questions.length === 0 ? 'No se detectaron datos para revisar' : 'Revisar datos personales'}
             >
               <Icon name="info" size={12} /> Revisar datos incontrastables
@@ -1080,8 +1358,8 @@ function AnalysisDetail({ file, onUpsert }: { file: FileEntry; onUpsert: (entry:
 
             <div className="modal-body">
               <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>
-                Si respondés <b>No</b>, se marcará como <b>error</b>. Podés cambiar la respuesta o <b>desmarcar</b> si te
-                equivocaste. Si no hacés esta revisión, se asume que está OK.
+                Si respondés <b>No</b>, se marcará como <b>error</b>. Para poder finalizar y generar la planilla, completá
+                estas confirmaciones.
               </div>
 
               {questions.map((q) => {
@@ -1114,8 +1392,18 @@ function AnalysisDetail({ file, onUpsert }: { file: FileEntry; onUpsert: (entry:
               })}
 
               <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
-                <button type="button" className="btn" onClick={() => setManualOpen(false)}>
-                  Listo
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => setManualOpen(false)}
+                  disabled={questions.some((q) => file.manualChecks?.[q.id] === undefined)}
+                  title={
+                    questions.some((q) => file.manualChecks?.[q.id] === undefined)
+                      ? 'Respondé Sí/No en todas las preguntas para continuar'
+                      : undefined
+                  }
+                >
+                  {pendingFinalize ? 'Listo y finalizar' : 'Listo'}
                 </button>
               </div>
             </div>

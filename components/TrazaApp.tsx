@@ -14,6 +14,7 @@ export default function TrazaApp() {
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [authStates, setAuthStates] = useState<Record<string, AuthState | undefined>>({});
+  const [uploadVirgin, setUploadVirgin] = useState(false);
 
   useEffect(() => {
     const loaded = loadHistory();
@@ -30,6 +31,7 @@ export default function TrazaApp() {
   }, [files, authStates]);
 
   function upsertFile(entry: FileEntry) {
+    setUploadVirgin(false);
     setFiles((prev) => {
       const idx = prev.findIndex((f) => f.id === entry.id);
       if (idx === -1) return [entry, ...prev];
@@ -70,6 +72,7 @@ export default function TrazaApp() {
 
   function openFile(id: string) {
     setActive('upload');
+    setUploadVirgin(false);
     setSelectedFileId(id);
     setTimeout(() => {
       const el = document.querySelector('.analysis-detail') as HTMLElement | null;
@@ -97,6 +100,11 @@ export default function TrazaApp() {
             onAuthDecision={handleAuthDecision}
             onAuthUpload={handleAuthUpload}
             onAuthReset={handleAuthReset}
+            showVirgin={uploadVirgin}
+            onFinalizeUpload={() => {
+              setUploadVirgin(true);
+              setSelectedFileId(null);
+            }}
           />
         )}
         {active === 'documents' && <DocumentsView files={files} onOpenFile={openFile} />}

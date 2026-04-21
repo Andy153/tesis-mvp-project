@@ -19,6 +19,8 @@ interface Props {
   onAuthDecision: (fileId: string, state: AuthState) => void;
   onAuthUpload: (fileId: string, state: AuthState) => void;
   onAuthReset: (fileId: string) => void;
+  showVirgin?: boolean;
+  onFinalizeUpload?: () => void;
 }
 
 const ACCEPT = 'application/pdf,image/png,image/jpeg,image/jpg,image/webp';
@@ -33,6 +35,8 @@ export function UploadView({
   onAuthDecision,
   onAuthUpload,
   onAuthReset,
+  showVirgin,
+  onFinalizeUpload,
 }: Props) {
   const [drag, setDrag] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -84,9 +88,11 @@ export function UploadView({
     }
   }
 
-  const selected = files.find((f) => f.id === selectedFileId);
-  const effectiveBatchId = activeBatchId || selected?.batchId || files[0]?.batchId || null;
+  const isVirgin = Boolean(showVirgin);
+  const selected = isVirgin ? undefined : files.find((f) => f.id === selectedFileId);
+  const effectiveBatchId = isVirgin ? null : activeBatchId || selected?.batchId || files[0]?.batchId || null;
   const currentBatchFiles = effectiveBatchId ? files.filter((f) => f.batchId === effectiveBatchId) : [];
+  const showEmpty = files.length === 0 || isVirgin;
 
   return (
     <div>
@@ -98,7 +104,7 @@ export function UploadView({
             comunes antes de que presentes.
           </p>
         </div>
-        {files.length > 0 && (
+        {!showEmpty && files.length > 0 && (
           <button
             type="button"
             className="btn"
@@ -112,7 +118,7 @@ export function UploadView({
         )}
       </div>
 
-      {files.length === 0 && (
+      {showEmpty && (
         <div
           className={`upload-zone ${drag ? 'drag' : ''}`}
           onDragOver={(e) => {
@@ -158,7 +164,7 @@ export function UploadView({
         onChange={(e) => e.target.files && handleFiles(Array.from(e.target.files))}
       />
 
-      {currentBatchFiles.length > 0 && (
+      {!showEmpty && currentBatchFiles.length > 0 && (
         <div className="file-list">
           {currentBatchFiles.map((f) => (
             <FileRow
@@ -172,7 +178,7 @@ export function UploadView({
         </div>
       )}
 
-      {selected && selected.status === 'analyzed' && selected.analysis && (
+      {!showEmpty && selected && selected.status === 'analyzed' && selected.analysis && (
         <>
           <AuthorizationCard
             parteFile={selected}
@@ -183,6 +189,22 @@ export function UploadView({
           />
           <AnalysisDetail file={selected} onUpsert={onAddFile} />
         </>
+      )}
+
+      {!showEmpty && currentBatchFiles.length > 0 && (
+        <div className="upload-finalize">
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => {
+              onFinalizeUpload?.();
+              setActiveBatchId(null);
+              onSelectFile(null);
+            }}
+          >
+            Carga finalizada
+          </button>
+        </div>
       )}
     </div>
   );

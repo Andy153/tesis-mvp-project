@@ -175,7 +175,11 @@ body {
 .page-subtitle {
   color: var(--text-muted);
   margin-top: 6px;
-  font-size: 14px;
+  font-family: var(--font-sans);
+  font-size: 14.5px;
+  font-weight: 500;
+  line-height: 1.55;
+  letter-spacing: -0.01em;
   max-width: 600px;
 }
 
@@ -742,7 +746,7 @@ body {
   padding: 10px 12px;
   background: var(--accent-soft);
   border-radius: var(--radius-sm);
-  border: 1px solid rgba(45, 95, 78, 0.15);
+  border: 1px solid rgba(180, 35, 24, 0.18);
 }
 .suggestion-code {
   font-family: var(--font-mono);

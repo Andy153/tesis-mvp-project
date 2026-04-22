@@ -1183,6 +1183,7 @@ function AnalysisDetail({
   const [activeFindingIdx, setActiveFindingIdx] = useState<number | null>(null);
   const [selections, setSelections] = useState<Record<string, { idx: number; code: string; desc: string }>>({});
   const [manualOpenInternal, setManualOpenInternal] = useState(false);
+  const [manualIncompleteWarned, setManualIncompleteWarned] = useState(false);
   const manualOpen = manualOpenExternal !== undefined ? manualOpenExternal : manualOpenInternal;
   const setManualOpen = (v: boolean) => {
     if (manualOpenExternal !== undefined) onManualOpenChange?.(v);
@@ -1258,17 +1259,30 @@ function AnalysisDetail({
     return qs;
   }, [structured?.paciente, analysis.detected.procedureGuess, analysis.detected.codes]);
 
-  function recomputeWithManual(nextChecks: FileEntry['manualChecks']) {
+  function recomputeWithManual(nextChecks: FileEntry['manualChecks'], opts?: { warnIncomplete?: boolean }) {
     const baseFindings =
       autoFindingsSnapshot.current ??
       analysis.findings.filter(
         (f) => f.code !== 'MANUAL_PATIENT_MISMATCH' && f.code !== 'MANUAL_PROCEDURE_MISMATCH',
       );
 
-    const out: Finding[] = [...baseFindings];
+    const out: Finding[] = baseFindings.filter((f) => f.code !== 'MANUAL_CHECKS_PENDING');
 
     const patientQ = questions.find((q) => q.id === 'patient');
     const procQ = questions.find((q) => q.id === 'procedure');
+
+    const incomplete = questions.filter((q) => nextChecks?.[q.id] === undefined);
+    const shouldWarnIncomplete = (opts?.warnIncomplete ?? manualIncompleteWarned) && incomplete.length > 0;
+    if (shouldWarnIncomplete) {
+      const missingLabel = incomplete.map((q) => (q.id === 'patient' ? 'paciente' : 'intervención')).join(', ');
+      out.unshift({
+        severity: 'warn',
+        code: 'MANUAL_CHECKS_PENDING',
+        title: 'Revisión de datos incontrastables pendiente',
+        body: `Falta confirmar (${missingLabel}). Si no lo completás, la liquidación puede quedar con datos sin validar.`,
+        action: 'Abrí “Revisión de datos incontrastables” y respondé Sí/No en todas las preguntas.',
+      });
+    }
 
     if (nextChecks?.patient === false && patientQ) {
       let patientSpans = findSpans(patientQ.detail, file.ocrWords, { maxResults: 2 });
@@ -1326,7 +1340,10 @@ function AnalysisDetail({
     // keep object small (remove undefined keys)
     if (nextChecks.patient === undefined) delete nextChecks.patient;
     if (nextChecks.procedure === undefined) delete nextChecks.procedure;
-    recomputeWithManual(Object.keys(nextChecks).length ? nextChecks : undefined);
+    const compact = Object.keys(nextChecks).length ? nextChecks : undefined;
+    const isComplete = questions.every((q) => compact?.[q.id] !== undefined);
+    if (isComplete) setManualIncompleteWarned(false);
+    recomputeWithManual(compact, { warnIncomplete: !isComplete && manualIncompleteWarned });
   }
 
   return (
@@ -1483,13 +1500,31 @@ function AnalysisDetail({
           role="dialog"
           aria-modal="true"
           onClick={(e) => {
-            if (e.target === e.currentTarget) setManualOpen(false);
+            if (e.target === e.currentTarget) {
+              const incomplete = questions.some((q) => file.manualChecks?.[q.id] === undefined);
+              if (incomplete) {
+                setManualIncompleteWarned(true);
+                recomputeWithManual(file.manualChecks, { warnIncomplete: true });
+              }
+              setManualOpen(false);
+            }
           }}
         >
           <div className="modal-card">
             <div className="modal-head">
               <div style={{ fontWeight: 800 }}>Revisión de datos incontrastables</div>
-              <button type="button" className="btn btn-sm btn-ghost" onClick={() => setManualOpen(false)}>
+              <button
+                type="button"
+                className="btn btn-sm btn-ghost"
+                onClick={() => {
+                  const incomplete = questions.some((q) => file.manualChecks?.[q.id] === undefined);
+                  if (incomplete) {
+                    setManualIncompleteWarned(true);
+                    recomputeWithManual(file.manualChecks, { warnIncomplete: true });
+                  }
+                  setManualOpen(false);
+                }}
+              >
                 <Icon name="x" size={12} /> Cerrar
               </button>
             </div>

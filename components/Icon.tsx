@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react';
 
 type IconName =
+  | 'menu'
   | 'upload'
   | 'alert'
   | 'calendar'
@@ -20,6 +21,13 @@ type IconName =
   | 'sparkles';
 
 const paths: Record<IconName, ReactElement> = {
+  menu: (
+    <>
+      <line x1="3" y1="6" x2="21" y2="6" />
+      <line x1="3" y1="12" x2="21" y2="12" />
+      <line x1="3" y1="18" x2="21" y2="18" />
+    </>
+  ),
   upload: (
     <>
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />

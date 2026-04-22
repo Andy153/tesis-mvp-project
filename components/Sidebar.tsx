@@ -8,6 +8,8 @@ interface SidebarProps {
   active: string;
   setActive: (id: string) => void;
   errorCount: number;
+  mobileOpen?: boolean;
+  onCloseMobile?: () => void;
 }
 
 interface Item {
@@ -19,7 +21,7 @@ interface Item {
   badge?: number;
 }
 
-export function Sidebar({ active, setActive, errorCount }: SidebarProps) {
+export function Sidebar({ active, setActive, errorCount, mobileOpen, onCloseMobile }: SidebarProps) {
   const items: Item[] = [
     { id: 'upload', label: 'Cargar documentos', icon: 'upload', section: 'work' },
     { id: 'documents', label: 'Documentos', icon: 'file', section: 'work' },
@@ -32,7 +34,18 @@ export function Sidebar({ active, setActive, errorCount }: SidebarProps) {
   ];
 
   return (
-    <aside className="sidebar">
+    <aside
+      id="main-sidebar"
+      className={`sidebar${mobileOpen ? ' sidebar--open' : ''}`}
+    >
+      <button
+        type="button"
+        className="sidebar-close"
+        aria-label="Cerrar menú"
+        onClick={() => onCloseMobile?.()}
+      >
+        <Icon name="x" size={20} />
+      </button>
       <div className="brand">
         <span className="brand-mark">Trazá</span>
       </div>

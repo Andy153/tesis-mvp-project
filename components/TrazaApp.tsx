@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Icon } from './Icon';
 import { Sidebar } from './Sidebar';
 import { UploadView } from './UploadView';
 import { ErrorsView } from './ErrorsView';
@@ -11,6 +12,7 @@ import { loadHistory, saveHistory } from '@/lib/history';
 import { buildSwissCxRow } from '@/lib/swissCxExport';
 
 export default function TrazaApp() {
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [active, setActive] = useState<string>('upload');
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
@@ -30,6 +32,26 @@ export default function TrazaApp() {
   useEffect(() => {
     saveHistory(files, authStates);
   }, [files, authStates]);
+
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMobileNavOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [mobileNavOpen]);
+
+  useEffect(() => {
+    if (mobileNavOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [mobileNavOpen]);
 
   function upsertFile(entry: FileEntry) {
     setUploadVirgin(false);
@@ -160,7 +182,34 @@ export default function TrazaApp() {
 
   return (
     <div className="app">
-      <Sidebar active={active} setActive={setActive} errorCount={errorCount} />
+      <header className="app-mob-header">
+        <span className="brand-mark brand-mark--header">Trazá</span>
+        <button
+          type="button"
+          className="app-mob-menu-btn"
+          aria-label="Abrir menú"
+          aria-expanded={mobileNavOpen}
+          aria-controls="main-sidebar"
+          onClick={() => setMobileNavOpen(true)}
+        >
+          <Icon name="menu" size={22} />
+        </button>
+      </header>
+      <div
+        className={`nav-backdrop${mobileNavOpen ? ' is-visible' : ''}`}
+        aria-hidden={!mobileNavOpen}
+        onClick={() => setMobileNavOpen(false)}
+      />
+      <Sidebar
+        active={active}
+        setActive={(id) => {
+          setActive(id);
+          setMobileNavOpen(false);
+        }}
+        errorCount={errorCount}
+        mobileOpen={mobileNavOpen}
+        onCloseMobile={() => setMobileNavOpen(false)}
+      />
       <main className="main">
         {active === 'upload' && (
           <UploadView

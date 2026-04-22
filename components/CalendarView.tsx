@@ -218,33 +218,6 @@ export function CalendarView({
             →
           </button>
         </div>
-
-        <div className="cal-pickers">
-          {mode === 'month' && (
-            <input
-              className="cal-input"
-              type="month"
-              value={`${anchor.getFullYear()}-${String(anchor.getMonth() + 1).padStart(2, '0')}`}
-              onChange={(e) => {
-                const [y, m] = e.target.value.split('-').map(Number);
-                if (!y || !m) return;
-                setAnchor(new Date(y, m - 1, 1));
-              }}
-            />
-          )}
-          {mode !== 'month' && (
-            <input
-              className="cal-input"
-              type="date"
-              value={selectedDay}
-              onChange={(e) => {
-                const k = e.target.value;
-                setSelectedDay(k);
-                setAnchor(parseIso(k));
-              }}
-            />
-          )}
-        </div>
       </div>
 
       <div className="cal-layout">

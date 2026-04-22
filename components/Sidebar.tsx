@@ -10,6 +10,7 @@ interface SidebarProps {
   errorCount: number;
   mobileOpen?: boolean;
   onCloseMobile?: () => void;
+  user?: { displayName: string; profesion: string; avatarDataUrl?: string };
 }
 
 interface Item {
@@ -21,7 +22,7 @@ interface Item {
   badge?: number;
 }
 
-export function Sidebar({ active, setActive, errorCount, mobileOpen, onCloseMobile }: SidebarProps) {
+export function Sidebar({ active, setActive, errorCount, mobileOpen, onCloseMobile, user }: SidebarProps) {
   const items: Item[] = [
     { id: 'upload', label: 'Cargar documentos', icon: 'upload', section: 'work' },
     { id: 'documents', label: 'Documentos', icon: 'file', section: 'work' },
@@ -30,7 +31,6 @@ export function Sidebar({ active, setActive, errorCount, mobileOpen, onCloseMobi
     { id: 'dashboard', label: 'Dashboard', icon: 'dashboard', section: 'soon', disabled: true },
     { id: 'alerts', label: 'Alertas', icon: 'bell', section: 'soon', disabled: true },
     { id: 'projection', label: 'Proyección de cobro', icon: 'chart', section: 'soon', disabled: true },
-    { id: 'settings', label: 'Configuración', icon: 'settings', section: 'soon', disabled: true },
   ];
 
   return (
@@ -80,11 +80,36 @@ export function Sidebar({ active, setActive, errorCount, mobileOpen, onCloseMobi
             <span>{item.label}</span>
           </div>
         ))}
-      <div className="sidebar-footer">
-        <div className="avatar">MF</div>
+      <div
+        className="sidebar-footer sidebar-footer--clickable"
+        role="button"
+        tabIndex={0}
+        onClick={() => setActive('settings')}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setActive('settings');
+          }
+        }}
+        title="Abrir perfil"
+      >
+        <div className="avatar" style={{ overflow: 'hidden' }}>
+          {user?.avatarDataUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={user.avatarDataUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          ) : (
+            (user?.displayName || 'MF')
+              .split(/\s+/)
+              .filter(Boolean)
+              .slice(0, 2)
+              .map((p) => p[0])
+              .join('')
+              .toUpperCase()
+          )}
+        </div>
         <div>
-          <div className="user-name">Dra. M. Ferreira</div>
-          <div className="user-role">Tocoginecología</div>
+          <div className="user-name">{user?.displayName || 'Dra. M. Ferreira'}</div>
+          <div className="user-role">{user?.profesion || 'Tocoginecología'}</div>
         </div>
       </div>
     </aside>

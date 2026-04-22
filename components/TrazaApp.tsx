@@ -7,9 +7,11 @@ import { UploadView } from './UploadView';
 import { ErrorsView } from './ErrorsView';
 import { CalendarView } from './CalendarView';
 import { DocumentsView } from './DocumentsView';
+import { ProfileView } from './ProfileView';
 import type { AuthState, FileEntry } from '@/lib/types';
 import { loadHistory, saveHistory } from '@/lib/history';
 import { buildSwissCxRow } from '@/lib/swissCxExport';
+import { applyThemeMode, loadProfile } from '@/lib/profile';
 
 export default function TrazaApp() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -18,6 +20,8 @@ export default function TrazaApp() {
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [authStates, setAuthStates] = useState<Record<string, AuthState | undefined>>({});
   const [uploadVirgin, setUploadVirgin] = useState(false);
+  const [userProfile, setUserProfile] = useState(() => loadProfile());
+  const [themeApplied, setThemeApplied] = useState(false);
 
   useEffect(() => {
     const loaded = loadHistory();
@@ -27,6 +31,33 @@ export default function TrazaApp() {
     if (loaded.authStates && Object.keys(loaded.authStates).length > 0) {
       setAuthStates(loaded.authStates as Record<string, AuthState | undefined>);
     }
+  }, []);
+
+  useEffect(() => {
+    // Aplica el tema al cargar la app (aunque nunca se abra la pantalla de Perfil).
+    if (themeApplied) return;
+    applyThemeMode(userProfile.theme);
+    setThemeApplied(true);
+  }, [userProfile.theme, themeApplied]);
+
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'traza.profile.v1') {
+        const p = loadProfile();
+        setUserProfile(p);
+        applyThemeMode(p.theme);
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    const id = window.setInterval(() => {
+      const p = loadProfile();
+      setUserProfile(p);
+      applyThemeMode(p.theme);
+    }, 1500);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.clearInterval(id);
+    };
   }, []);
 
   useEffect(() => {
@@ -209,6 +240,11 @@ export default function TrazaApp() {
         errorCount={errorCount}
         mobileOpen={mobileNavOpen}
         onCloseMobile={() => setMobileNavOpen(false)}
+        user={{
+          displayName: userProfile.displayName,
+          profesion: userProfile.profesion,
+          avatarDataUrl: userProfile.avatarDataUrl,
+        }}
       />
       <main className="main">
         {active === 'upload' && (
@@ -251,6 +287,7 @@ export default function TrazaApp() {
           <CalendarView files={files} authStates={authStates} onOpenParte={openFile} />
         )}
         {active === 'errors' && <ErrorsView files={files} onOpenFile={openFile} />}
+        {active === 'settings' && <ProfileView />}
       </main>
     </div>
   );

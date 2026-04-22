@@ -1,8 +1,8 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from './Icon';
-import { extractText, analyzeDocument } from '@/lib/analyzer';
+import { extractText, analyzeDocument, findSpans } from '@/lib/analyzer';
 import { crossCheck, extractStructured, requiresAuthorization } from '@/lib/authz';
 import { TRAZA_NOMENCLADOR_FULL } from '@/lib/nomenclador.js';
 import { applyPlanillaValidationFindings } from '@/lib/swissCxExport';
@@ -28,6 +28,12 @@ interface Props {
 
 const ACCEPT = 'application/pdf,image/png,image/jpeg,image/jpg,image/webp';
 
+/** Si el usuario confirmó la intervención, no superponer avisos automáticos de código/procedimiento en el PDF. */
+function hideProcedureAutoSpansWhenUserConfirmed(f: { code: string }): boolean {
+  const c = f.code;
+  return c === 'NO_CODE_SUGGEST' || c === 'CODE_MISMATCH' || c.startsWith('CODE_UNVERIFIED_') || c.startsWith('CODE_AMBIGUOUS_');
+}
+
 export function UploadView({
   files,
   onAddFile,
@@ -52,6 +58,51 @@ export function UploadView({
     null,
   );
   const [finalizeBlocked, setFinalizeBlocked] = useState<string | null>(null);
+  const [reanalyzeBusy, setReanalyzeBusy] = useState(false);
+  const autoManualPrompted = useRef(new Set<string>());
+
+  async function handleReanalyze(file: FileEntry) {
+    if (!file.file || reanalyzeBusy) return;
+    setReanalyzeBusy(true);
+    const base: FileEntry = {
+      ...file,
+      status: 'analyzing',
+      progress: 0,
+      progressMessage: 'Re-analizando...',
+    };
+    onAddFile(base);
+    try {
+      const { text, thumbnails, method, ocrWords, pageTexts } = await extractText(file.file, (p) => {
+        onAddFile({ ...base, progress: p.progress, progressMessage: p.message });
+      });
+      const analysis = analyzeDocument(text, file.name, ocrWords, pageTexts);
+      autoManualPrompted.current.delete(file.id);
+      onAddFile({
+        ...file,
+        status: 'analyzed',
+        progress: 1,
+        text,
+        thumbnails,
+        method,
+        ocrWords,
+        pageTexts,
+        manualChecks: undefined,
+        analysis,
+        errorMessage: undefined,
+        file: file.file,
+      });
+    } catch (err: unknown) {
+      console.error(err);
+      onAddFile({
+        ...file,
+        status: 'error',
+        errorMessage: err instanceof Error ? err.message : 'Error al re-analizar',
+        file: file.file,
+      });
+    } finally {
+      setReanalyzeBusy(false);
+    }
+  }
 
   async function handleFiles(fileList: File[]) {
     const batchId = 'b_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
@@ -73,11 +124,11 @@ export function UploadView({
       onAddFile(entry);
 
       try {
-        const { text, thumbnails, method, ocrWords } = await extractText(file, (p) => {
+        const { text, thumbnails, method, ocrWords, pageTexts } = await extractText(file, (p) => {
           onAddFile({ ...entry, progress: p.progress, progressMessage: p.message });
         });
 
-        const analysis = analyzeDocument(text, file.name, ocrWords);
+        const analysis = analyzeDocument(text, file.name, ocrWords, pageTexts);
 
         onAddFile({
           ...entry,
@@ -87,6 +138,7 @@ export function UploadView({
           thumbnails,
           method,
           ocrWords,
+          pageTexts,
           analysis,
         });
       } catch (err: unknown) {
@@ -108,6 +160,28 @@ export function UploadView({
   const serverFiles = selected?.exports?.swissCx?.files;
   const hasServerFiles = Boolean(serverFiles && typeof serverFiles === 'object' && (serverFiles as any).interventionId);
   const isFinalized = hasServerFiles;
+
+  useEffect(() => {
+    if (showVirgin || isFinalized) return;
+    const sel = files.find((f) => f.id === selectedFileId);
+    if (!sel || sel.status !== 'analyzed' || !sel.analysis || !sel.text) return;
+    const structured = extractStructured(sel.text, NOMEN_FOR_EXTRACT);
+    const required: Array<'patient' | 'procedure'> = [];
+    if (structured?.paciente) required.push('patient');
+    const proc =
+      sel.analysis.detected.procedureGuess?.desc ||
+      sel.analysis.detected.procedureGuess?.keyword ||
+      (sel.analysis.detected.codes[0] ? `Código ${sel.analysis.detected.codes[0]}` : null);
+    if (proc) required.push('procedure');
+    if (required.length === 0) return;
+    const checks = sel.manualChecks || {};
+    const pending = required.some((id) => checks[id] === undefined);
+    if (!pending) return;
+    if (autoManualPrompted.current.has(sel.id)) return;
+    autoManualPrompted.current.add(sel.id);
+    setManualOpen(true);
+  }, [files, selectedFileId, showVirgin, isFinalized]);
+
   const needsManualReview = useMemo(() => {
     if (!selected?.analysis) return false;
     if (!selected?.text) return false;
@@ -302,6 +376,8 @@ export function UploadView({
           <AnalysisDetail
             file={selected}
             onUpsert={onAddFile}
+            onReanalyze={selected.file ? () => handleReanalyze(selected) : undefined}
+            reanalyzeBusy={reanalyzeBusy}
             manualOpenExternal={manualOpen}
             onManualOpenChange={(v) => {
               setManualOpen(v);
@@ -1088,6 +1164,8 @@ function AmbiguitySelector({
 function AnalysisDetail({
   file,
   onUpsert,
+  onReanalyze,
+  reanalyzeBusy,
   manualOpenExternal,
   onManualOpenChange,
   pendingFinalize,
@@ -1095,6 +1173,8 @@ function AnalysisDetail({
 }: {
   file: FileEntry;
   onUpsert: (entry: FileEntry) => void;
+  onReanalyze?: () => void;
+  reanalyzeBusy?: boolean;
   manualOpenExternal?: boolean;
   onManualOpenChange?: (v: boolean) => void;
   pendingFinalize?: boolean;
@@ -1111,6 +1191,19 @@ function AnalysisDetail({
   const analysis = file.analysis!;
   const thumbnails = file.thumbnails || [];
 
+  /** Hallazgos automáticos antes de respuestas manuales; evita perder CODE_* al togglear MANUAL_*. */
+  const autoFindingsSnapshot = useRef<Finding[] | null>(null);
+  useEffect(() => {
+    if (!file.analysis) return;
+    const cleaned = file.analysis.findings.filter(
+      (f) => f.code !== 'MANUAL_PATIENT_MISMATCH' && f.code !== 'MANUAL_PROCEDURE_MISMATCH',
+    );
+    const answered =
+      file.manualChecks &&
+      (file.manualChecks.patient !== undefined || file.manualChecks.procedure !== undefined);
+    if (!answered) autoFindingsSnapshot.current = cleaned;
+  }, [file.id, file.analysis, file.manualChecks]);
+
   const sorted = [...analysis.findings].sort((a, b) => {
     const order: Record<string, number> = { error: 0, warn: 1, ok: 2, info: 3 };
     return order[a.severity] - order[b.severity];
@@ -1120,9 +1213,11 @@ function AnalysisDetail({
   const activeSpans = activeFinding?.spans || [];
 
   const spansByPage: Record<number, Array<Span & { severity: string }>> = {};
+  const userConfirmedProcedure = file.manualChecks?.procedure === true;
   for (const f of sorted) {
     if (!f.spans) continue;
     if (f.severity === 'ok') continue;
+    if (userConfirmedProcedure && hideProcedureAutoSpansWhenUserConfirmed(f)) continue;
     for (const s of f.spans) {
       (spansByPage[s.page] = spansByPage[s.page] || []).push({ ...s, severity: f.severity });
     }
@@ -1164,9 +1259,11 @@ function AnalysisDetail({
   }, [structured?.paciente, analysis.detected.procedureGuess, analysis.detected.codes]);
 
   function recomputeWithManual(nextChecks: FileEntry['manualChecks']) {
-    const baseFindings = analysis.findings.filter(
-      (f) => f.code !== 'MANUAL_PATIENT_MISMATCH' && f.code !== 'MANUAL_PROCEDURE_MISMATCH',
-    );
+    const baseFindings =
+      autoFindingsSnapshot.current ??
+      analysis.findings.filter(
+        (f) => f.code !== 'MANUAL_PATIENT_MISMATCH' && f.code !== 'MANUAL_PROCEDURE_MISMATCH',
+      );
 
     const out: Finding[] = [...baseFindings];
 
@@ -1174,21 +1271,40 @@ function AnalysisDetail({
     const procQ = questions.find((q) => q.id === 'procedure');
 
     if (nextChecks?.patient === false && patientQ) {
+      let patientSpans = findSpans(patientQ.detail, file.ocrWords, { maxResults: 2 });
+      if (!patientSpans.length && patientQ.detail.includes(',')) {
+        const first = patientQ.detail.split(',')[0].trim();
+        if (first.length >= 3) patientSpans = findSpans(first, file.ocrWords, { maxResults: 2 });
+      }
       out.unshift({
         severity: 'error',
         code: 'MANUAL_PATIENT_MISMATCH',
         title: patientQ.errorTitle,
         body: patientQ.errorBody,
         action: 'Corregir el documento o volver a generar el parte con los datos correctos.',
+        spans: patientSpans.length ? patientSpans : undefined,
       });
     }
     if (nextChecks?.procedure === false && procQ) {
+      const ctx = { maxResults: 2 as const, requireProcedureFieldContext: true as const };
+      let procSpans = findSpans(procQ.detail, file.ocrWords, ctx);
+      if (!procSpans.length) procSpans = findSpans(procQ.detail, file.ocrWords, { maxResults: 2 });
+      if (!procSpans.length && analysis.detected.procedureGuess?.keyword) {
+        procSpans = findSpans(analysis.detected.procedureGuess.keyword, file.ocrWords, ctx);
+        if (!procSpans.length)
+          procSpans = findSpans(analysis.detected.procedureGuess.keyword, file.ocrWords, { maxResults: 2 });
+      }
+      if (!procSpans.length && analysis.detected.codes[0]) {
+        procSpans = findSpans(analysis.detected.codes[0], file.ocrWords, ctx);
+        if (!procSpans.length) procSpans = findSpans(analysis.detected.codes[0], file.ocrWords, { maxResults: 2 });
+      }
       out.unshift({
         severity: 'error',
         code: 'MANUAL_PROCEDURE_MISMATCH',
         title: procQ.errorTitle,
         body: procQ.errorBody,
         action: 'Corregir el documento o volver a generar el parte con los datos correctos.',
+        spans: procSpans.length ? procSpans : undefined,
       });
     }
 
@@ -1218,8 +1334,30 @@ function AnalysisDetail({
       <div className="panel doc-preview">
         <div className="doc-preview-head">
           <div style={{ fontWeight: 600, fontSize: 13 }}>{file.name}</div>
-          <div style={{ fontSize: 11.5, color: 'var(--text-soft)', fontFamily: 'var(--font-mono)' }}>
-            {file.method === 'ocr' ? 'OCR · español' : 'PDF · texto embebido'}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <div style={{ fontSize: 11.5, color: 'var(--text-soft)', fontFamily: 'var(--font-mono)' }}>
+              {file.method === 'ocr' ? 'OCR · español' : 'PDF · texto embebido'}
+            </div>
+            {onReanalyze ? (
+              <button
+                type="button"
+                className="btn btn-sm"
+                onClick={() => onReanalyze()}
+                disabled={reanalyzeBusy}
+                title="Vuelve a leer el archivo y aplicar las últimas reglas de detección (corrige encuadres viejos)."
+              >
+                {reanalyzeBusy ? (
+                  <>
+                    <span className="spinner" style={{ marginRight: 6 }} />
+                    Re-analizando…
+                  </>
+                ) : (
+                  <>
+                    <Icon name="refresh" size={14} /> Re-analizar
+                  </>
+                )}
+              </button>
+            ) : null}
           </div>
         </div>
         <div className="doc-preview-body">

@@ -1,6 +1,8 @@
 import type { Analysis, AuthState, FileEntry } from './types';
+import { analyzeDocument, TRAZA_ANALYZER_REVISION } from './analyzer';
 
 const STORAGE_KEY = 'traza.history.v1';
+const TEXT_CAP = 180_000;
 
 type PersistedFinding = {
   severity: 'error' | 'warn' | 'ok' | 'info';
@@ -14,9 +16,10 @@ type PersistedAnalysis = Omit<Analysis, 'findings'> & { findings: PersistedFindi
 
 export type PersistedFileEntry = Omit<
   FileEntry,
-  'text' | 'file' | 'thumbnails' | 'ocrWords' | 'progress' | 'progressMessage'
+  'file' | 'thumbnails' | 'ocrWords' | 'progress' | 'progressMessage' | 'text'
 > & {
   analysis?: PersistedAnalysis;
+  text?: string;
 };
 
 export type PersistedAuthState =
@@ -34,6 +37,8 @@ export type PersistedAuthState =
 export type PersistedHistory = {
   version: 1;
   savedAt: string;
+  /** Coincide con `TRAZA_ANALYZER_REVISION` del último guardado; si cambia, se re-analiza el texto guardado. */
+  analyzerRevision?: number;
   files: PersistedFileEntry[];
   authStates: Record<string, PersistedAuthState | undefined>;
 };
@@ -68,6 +73,7 @@ export function saveHistory(files: FileEntry[], authStates: Record<string, AuthS
     const persisted: PersistedHistory = {
       version: 1,
       savedAt: new Date().toISOString(),
+      analyzerRevision: TRAZA_ANALYZER_REVISION,
       files: files
         .filter((f) => f.status !== 'analyzing')
         .map((f) => ({
@@ -83,6 +89,8 @@ export function saveHistory(files: FileEntry[], authStates: Record<string, AuthS
           method: f.method,
           errorMessage: f.errorMessage,
           exports: f.exports,
+          text: f.text ? f.text.slice(0, TEXT_CAP) : undefined,
+          pageTexts: f.pageTexts,
         })),
       authStates: Object.fromEntries(
         Object.entries(authStates).map(([k, v]) => [k, v ? minifyAuthState(v) : undefined]),
@@ -94,16 +102,49 @@ export function saveHistory(files: FileEntry[], authStates: Record<string, AuthS
   }
 }
 
-export function loadHistory(): { files: PersistedFileEntry[]; authStates: Record<string, PersistedAuthState | undefined> } {
+function persistedToFileEntry(f: PersistedFileEntry, savedRevision: number): FileEntry {
+  const needReanalyze =
+    f.status === 'analyzed' && Boolean(f.text) && savedRevision !== TRAZA_ANALYZER_REVISION;
+  const analysis: Analysis | undefined =
+    needReanalyze && f.text
+      ? analyzeDocument(f.text, f.name, undefined, f.pageTexts)
+      : f.analysis
+        ? ({ ...f.analysis, findings: f.analysis.findings as Analysis['findings'] } as Analysis)
+        : undefined;
+    return {
+    id: f.id,
+    name: f.name,
+    size: f.size,
+    type: f.type,
+    addedAt: f.addedAt,
+    batchId: f.batchId,
+    manualChecks: f.manualChecks,
+    status: f.status,
+    text: f.text,
+    pageTexts: f.pageTexts,
+    analysis,
+    method: f.method,
+    errorMessage: f.errorMessage,
+    exports: f.exports,
+  };
+}
+
+export function loadHistory(): { files: FileEntry[]; authStates: Record<string, PersistedAuthState | undefined> } {
   if (typeof window === 'undefined') return { files: [], authStates: {} };
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return { files: [], authStates: {} };
     const parsed = JSON.parse(raw) as PersistedHistory;
     if (!parsed || parsed.version !== 1) return { files: [], authStates: {} };
-    return { files: parsed.files || [], authStates: parsed.authStates || {} };
+    const savedRevision = parsed.analyzerRevision ?? 0;
+    const files = (parsed.files || [])
+      .filter((f) => {
+        if (f.status === 'analyzed' && !f.text) return false;
+        return true;
+      })
+      .map((f) => persistedToFileEntry(f, savedRevision));
+    return { files, authStates: parsed.authStates || {} };
   } catch {
     return { files: [], authStates: {} };
   }
 }
-

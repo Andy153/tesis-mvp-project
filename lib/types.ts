@@ -134,6 +134,8 @@ export interface FileEntry {
   thumbnails?: Thumbnail[];
   method?: 'pdf-text' | 'ocr';
   ocrWords?: PageWords[];
+  /** Texto por página (mismo orden que thumbnails / ocrWords); ayuda a anclar fechas al PDF. */
+  pageTexts?: string[];
   analysis?: Analysis;
   errorMessage?: string;
   exports?: {
@@ -159,4 +161,5 @@ export interface ExtractionResult {
   thumbnails: Thumbnail[];
   method: 'pdf-text' | 'ocr';
   ocrWords: PageWords[];
+  pageTexts: string[];
 }

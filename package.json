@@ -6,7 +6,8 @@
     "node": ">=18.18.0"
   },
   "scripts": {
-    "dev": "next dev -p 3000",
+    "dev": "cross-env WATCHPACK_POLLING=1 next dev -p 3000",
+    "dev:clean": "node -e \"require('fs').rmSync('.next',{recursive:true,force:true})\" && cross-env WATCHPACK_POLLING=1 next dev -p 3000",
     "build": "next build",
     "start": "next start -p 3000",
     "lint": "next lint"
@@ -23,6 +24,7 @@
     "@types/node": "^20.12.12",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
+    "cross-env": "^7.0.3",
     "typescript": "^5.4.5"
   }
 }

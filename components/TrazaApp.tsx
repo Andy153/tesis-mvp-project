@@ -22,7 +22,7 @@ export default function TrazaApp() {
   useEffect(() => {
     const loaded = loadHistory();
     if (loaded.files.length > 0) {
-      setFiles(loaded.files as FileEntry[]);
+      setFiles(loaded.files);
     }
     if (loaded.authStates && Object.keys(loaded.authStates).length > 0) {
       setAuthStates(loaded.authStates as Record<string, AuthState | undefined>);

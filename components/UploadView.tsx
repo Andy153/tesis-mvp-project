@@ -58,6 +58,7 @@ export function UploadView({
     null,
   );
   const [finalizeBlocked, setFinalizeBlocked] = useState<string | null>(null);
+  const [finalizeStep, setFinalizeStep] = useState<'idle' | 'needsConfirm' | 'saving' | 'saved'>('idle');
   const [reanalyzeBusy, setReanalyzeBusy] = useState(false);
   const autoManualPrompted = useRef(new Set<string>());
 
@@ -160,6 +161,12 @@ export function UploadView({
   const serverFiles = selected?.exports?.swissCx?.files;
   const hasServerFiles = Boolean(serverFiles && typeof serverFiles === 'object' && (serverFiles as any).interventionId);
   const isFinalized = hasServerFiles;
+
+  useEffect(() => {
+    setFinalizeStep('idle');
+    setFinalizeBlocked(null);
+    setPendingFinalize(null);
+  }, [selectedFileId, effectiveBatchId, isFinalized, showEmpty]);
 
   useEffect(() => {
     if (showVirgin || isFinalized) return;
@@ -406,10 +413,8 @@ export function UploadView({
                   return;
                 }
                 if (okAnswered && okRecognized) {
-                  onFinalizeUpload?.(pendingFinalize);
-                  setActiveBatchId(null);
-                  onSelectFile(null);
-                  setPendingFinalize(null);
+                  // En vez de finalizar automáticamente, armamos un segundo paso explícito.
+                  setFinalizeStep('needsConfirm');
                 }
               }
             }}
@@ -424,7 +429,8 @@ export function UploadView({
           <button
             type="button"
             className="btn btn-primary"
-            onClick={() => {
+            disabled={finalizeStep === 'saving'}
+            onClick={async () => {
               setFinalizeBlocked(null);
               const args = { parteFileId: selected?.id || null, batchId: effectiveBatchId };
               if (selected && finalizeBlockReason) {
@@ -434,14 +440,26 @@ export function UploadView({
               if (selected && needsManualReview) {
                 setPendingFinalize(args);
                 setManualOpen(true);
+                setFinalizeStep('needsConfirm');
                 return;
               }
-              onFinalizeUpload?.(args);
-              setActiveBatchId(null);
-              onSelectFile(null);
+              setFinalizeStep('saving');
+              try {
+                await Promise.resolve(onFinalizeUpload?.(args));
+                setFinalizeStep('saved');
+              } finally {
+                setActiveBatchId(null);
+                onSelectFile(null);
+              }
             }}
           >
-            Listo: confirmar y guardar
+            {finalizeStep === 'saving'
+              ? 'Guardando…'
+              : finalizeStep === 'needsConfirm'
+                ? 'Confirmar y guardar'
+                : finalizeStep === 'saved'
+                  ? 'Guardado'
+                  : 'Listo: confirmar y guardar'}
           </button>
           {finalizeBlocked && (
             <div style={{ marginTop: 10, color: 'var(--error)', fontSize: 12 }}>
@@ -590,10 +608,21 @@ function StoredFilesPanel({
       const res = await fetch(`/api/interventions/${files.interventionId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ row: draft }),
+        body: JSON.stringify({ row: draft, base: files.base }),
       });
       if (!res.ok) throw new Error('No se pudo guardar la planilla.');
-      const json = (await res.json()) as { files: { xlsxUrl: string; csvUrl: string; interventionId: string } };
+      const json = (await res.json()) as {
+        files: {
+          interventionId: string;
+          base?: string;
+          xlsxFileName?: string;
+          csvFileName?: string;
+          xlsxBase64?: string;
+          csvText?: string;
+          xlsxUrl?: string;
+          csvUrl?: string;
+        };
+      };
       const nextFiles = { ...files, ...json.files };
       onUpdateRow(draft, nextFiles);
       setEditing(false);
@@ -614,8 +643,7 @@ function StoredFilesPanel({
               Descargar la planilla
             </button>
           )}
-          {/* Edición de planilla requiere persistencia server-side (no disponible en Vercel). */}
-          {files?.interventionId && Boolean(files?.xlsxUrl) && (
+          {files?.interventionId && (files?.xlsxUrl || files?.xlsxBase64) && (
             <button type="button" className="btn btn-sm btn-ghost" onClick={() => setEditing((v) => !v)}>
               {editing ? 'Cancelar edición' : 'Editar planilla'}
             </button>

@@ -180,10 +180,7 @@ export function CalendarView({
       <div className="page-head">
         <div>
           <h1 className="page-title">Vista por fechas</h1>
-          <p className="page-subtitle">
-            Los documentos se agrupan según la fecha en que los cargaste. Podés pasar de mes, semana o día para
-            ubicar una cirugía o una presentación concreta.
-          </p>
+          <p className="page-subtitle">Los documentos agrupados por fecha de carga.</p>
         </div>
       </div>
 

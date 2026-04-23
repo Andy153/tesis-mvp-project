@@ -1,6 +1,7 @@
 'use client';
 
 import { Logo } from './Logo';
+import { getInitials } from '@/lib/profile';
 import { Icon, type IconName } from './Icon';
 
 type TabId = 'upload' | 'documents' | 'calendar' | 'errors' | 'dashboard' | 'alerts' | 'projection' | 'settings';
@@ -101,13 +102,7 @@ export function Sidebar({ active, setActive, errorCount, mobileOpen, onCloseMobi
             // eslint-disable-next-line @next/next/no-img-element
             <img src={user.avatarDataUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           ) : (
-            (user?.displayName || 'MF')
-              .split(/\s+/)
-              .filter(Boolean)
-              .slice(0, 2)
-              .map((p) => p[0])
-              .join('')
-              .toUpperCase()
+            getInitials(user?.displayName || 'Dra. M. Ferreira')
           )}
         </div>
         <div>

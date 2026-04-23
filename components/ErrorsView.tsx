@@ -55,6 +55,8 @@ export function ErrorsView({ files, onOpenFile }: Props) {
 
   const filesAnalyzed = files.filter((f) => f.analysis).length;
   const filesWithErrors = files.filter((f) => f.analysis?.overall === 'error').length;
+  const statsAllZero =
+    filesAnalyzed === 0 && filesWithErrors === 0 && counts.error === 0 && counts.warn === 0;
 
   return (
     <div>
@@ -62,30 +64,35 @@ export function ErrorsView({ files, onOpenFile }: Props) {
         <div>
           <h1 className="page-title">Qué conviene revisar</h1>
           <p className="page-subtitle">
-            Acá se reúnen los hallazgos de todos los documentos que analizaste. Podés filtrar por tipo y abrir cada
-            archivo para ver el detalle en contexto, antes de presentar a la prepaga.
+            Los hallazgos de todos los documentos, reunidos en un solo lugar.
           </p>
         </div>
       </div>
 
-      <div className="stats">
-        <div className="stat">
-          <div className="stat-label">Documentos ya analizados</div>
-          <div className="stat-value">{filesAnalyzed}</div>
+      {statsAllZero ? (
+        <div className="stats-empty">
+          Todavía no analizaste documentos. Cuando lo hagas, vas a ver un resumen acá.
         </div>
-        <div className="stat">
-          <div className="stat-label">Con observaciones graves</div>
-          <div className="stat-value error">{filesWithErrors}</div>
+      ) : (
+        <div className="stats">
+          <div className="stat">
+            <div className="stat-label">Documentos ya analizados</div>
+            <div className="stat-value">{filesAnalyzed}</div>
+          </div>
+          <div className="stat">
+            <div className="stat-label">Con observaciones graves</div>
+            <div className="stat-value error">{filesWithErrors}</div>
+          </div>
+          <div className="stat">
+            <div className="stat-label">Observaciones graves (total)</div>
+            <div className="stat-value error">{counts.error}</div>
+          </div>
+          <div className="stat">
+            <div className="stat-label">Advertencias (total)</div>
+            <div className="stat-value warn">{counts.warn}</div>
+          </div>
         </div>
-        <div className="stat">
-          <div className="stat-label">Observaciones graves (total)</div>
-          <div className="stat-value error">{counts.error}</div>
-        </div>
-        <div className="stat">
-          <div className="stat-label">Advertencias (total)</div>
-          <div className="stat-value warn">{counts.warn}</div>
-        </div>
-      </div>
+      )}
 
       <div className="errors-toolbar">
         <div

@@ -3,7 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from './Icon';
 import type { ThemeMode, UserProfile } from '@/lib/profile';
-import { applyThemeMode, DEFAULT_PROFILE, fileToAvatarDataUrl, loadProfile, saveProfile } from '@/lib/profile';
+import {
+  applyThemeMode,
+  DEFAULT_PROFILE,
+  fileToAvatarDataUrl,
+  getInitials,
+  loadProfile,
+  saveProfile,
+} from '@/lib/profile';
 
 function sanitizeObra(v: string) {
   return (v || '').trim().replace(/\s+/g, ' ');
@@ -42,22 +49,19 @@ export function ProfileView() {
       <div className="page-head">
         <div>
           <h1 className="page-title">Tu perfil</h1>
-          <p className="page-subtitle">
-            Podés completar cómo te mostramos en la app y ajustar tema claro u oscuro, si te resulta más cómodo para
-            leer.
-          </p>
+          <p className="page-subtitle">Cómo te mostramos en la app y tus preferencias.</p>
         </div>
       </div>
 
       <div className="panel" style={{ padding: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, justifyContent: 'space-between', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div className="avatar avatar--lg" style={{ overflow: 'hidden' }}>
+            <div className="avatar avatar--lg avatar--profile-header" style={{ overflow: 'hidden' }}>
               {profile.avatarDataUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={profile.avatarDataUrl} alt="Foto de perfil" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
-                <span style={{ fontWeight: 800 }}>{(profile.displayName || 'U').slice(0, 2).toUpperCase()}</span>
+                <span style={{ fontWeight: 700 }}>{getInitials(profile.displayName || 'U')}</span>
               )}
             </div>
             <div>
@@ -140,7 +144,7 @@ export function ProfileView() {
           <label className="field">
             <div className="field-label">Tema</div>
             <select
-              className="docs-search"
+              className="docs-search select-theme"
               value={profile.theme}
               onChange={(e) => setProfile((p) => ({ ...p, theme: e.target.value as ThemeMode, updatedAt: new Date().toISOString() }))}
             >
@@ -156,7 +160,7 @@ export function ProfileView() {
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               <button
                 type="button"
-                className="btn btn-ghost"
+                className="btn btn-secondary"
                 onClick={() => {
                   const blob = new Blob([JSON.stringify(profile, null, 2)], { type: 'application/json' });
                   const url = URL.createObjectURL(blob);
@@ -173,7 +177,7 @@ export function ProfileView() {
               </button>
               <button
                 type="button"
-                className="btn btn-ghost"
+                className="btn btn-secondary"
                 onClick={() => {
                   navigator.clipboard?.writeText(JSON.stringify(profile));
                 }}

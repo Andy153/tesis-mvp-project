@@ -236,8 +236,7 @@ export function UploadView({
         <div>
           <h1 className="page-title">Agregar documentos</h1>
           <p className="page-subtitle">
-            Podés traer el parte quirúrgico, autorizaciones u otros archivos en PDF o imagen. Trazá lee el texto y
-            señala, con anticipación, lo que suele generar observaciones en la prepaga, para que lo revises con calma.
+            Subí el parte quirúrgico o la autorización. Revisamos antes de que lo presentes.
           </p>
         </div>
         {!showEmpty && files.length > 0 && (

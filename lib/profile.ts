@@ -60,14 +60,31 @@ export function saveProfile(p: UserProfile) {
   }
 }
 
-export function initials(name: string) {
-  const parts = (name || '')
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-  const a = parts[0]?.[0] || 'U';
-  const b = parts.length > 1 ? parts[parts.length - 1][0] : '';
-  return (a + b).toUpperCase();
+const HONORIFIC = /^(dra?\.?|dr\.?|doctora?\.?|doctor\.?|ing\.?|lic\.?)$/i;
+
+function normalizeToken(t: string) {
+  return t.replace(/\./g, '').toLowerCase();
+}
+
+/** Iniciales para avatar (p. ej. «Dra. M. Ferreira» → «MF»; se ignoran prefijos tipo Dra./Dr.). */
+export function getInitials(name: string): string {
+  const raw = (name || '').trim();
+  if (!raw) return 'U';
+  const parts = raw.split(/\s+/).filter(Boolean);
+  const significant = parts.filter((p) => !HONORIFIC.test(normalizeToken(p)));
+  const sig = significant.length > 0 ? significant : parts;
+
+  const letter = (token: string) => {
+    const m = token.match(/[a-záéíóúñ]/i);
+    return m ? m[0].toUpperCase() : (token[0] || '').toUpperCase();
+  };
+
+  if (sig.length === 0) return 'U';
+  if (sig.length === 1) {
+    const w = sig[0].replace(/[^a-záéíóúñ0-9]/gi, '');
+    return w.slice(0, 2).toUpperCase() || 'U';
+  }
+  return (letter(sig[0]) + letter(sig[sig.length - 1])).slice(0, 2);
 }
 
 export async function fileToDataUrl(file: File): Promise<string> {

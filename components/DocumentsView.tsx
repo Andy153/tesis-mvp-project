@@ -47,10 +47,7 @@ export function DocumentsView({
       <div className="page-head">
         <div>
           <h1 className="page-title">Mis documentos</h1>
-          <p className="page-subtitle">
-            Acá podés ver todo lo que cargaste y cómo quedó el análisis. Los filtros ayudan a ubicar por severidad; la
-            búsqueda incluye nombre de archivo, prepaga o código.
-          </p>
+          <p className="page-subtitle">Todo lo que cargaste, con el resultado del análisis.</p>
         </div>
       </div>
 

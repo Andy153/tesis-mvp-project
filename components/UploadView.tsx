@@ -609,7 +609,7 @@ function StoredFilesPanel({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 10 }}>
         <div style={{ fontWeight: 800, fontSize: '1.05rem' }}>Planilla generada — detalle de la carga</div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          {files?.xlsxUrl && (
+          {(files?.xlsxUrl || files?.xlsxBase64) && (
             <button type="button" className="btn btn-sm" onClick={() => void downloadPlanilla()}>
               Descargar la planilla
             </button>

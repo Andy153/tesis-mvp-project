@@ -525,7 +525,8 @@ function StoredFilesPanel({
   const [err, setErr] = useState<string | null>(null);
   const [draft, setDraft] = useState(row);
 
-  useMemo(() => {
+  // Sync draft when the persisted row changes (avoid setState during render).
+  useEffect(() => {
     setDraft(row);
   }, [row]);
 

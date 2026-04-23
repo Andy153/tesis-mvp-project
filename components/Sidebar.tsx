@@ -1,5 +1,6 @@
 'use client';
 
+import { Logo } from './Logo';
 import { Icon, type IconName } from './Icon';
 
 type TabId = 'upload' | 'documents' | 'calendar' | 'errors' | 'dashboard' | 'alerts' | 'projection' | 'settings';
@@ -24,12 +25,12 @@ interface Item {
 
 export function Sidebar({ active, setActive, errorCount, mobileOpen, onCloseMobile, user }: SidebarProps) {
   const items: Item[] = [
-    { id: 'upload', label: 'Cargar documentos', icon: 'upload', section: 'work' },
-    { id: 'documents', label: 'Documentos', icon: 'file', section: 'work' },
-    { id: 'calendar', label: 'Calendario', icon: 'calendar', section: 'work' },
-    { id: 'errors', label: 'Errores detectados', icon: 'alert', section: 'work', badge: errorCount },
-    { id: 'dashboard', label: 'Dashboard', icon: 'dashboard', section: 'soon', disabled: true },
-    { id: 'alerts', label: 'Alertas', icon: 'bell', section: 'soon', disabled: true },
+    { id: 'upload', label: 'Agregar documentos', icon: 'upload', section: 'work' },
+    { id: 'documents', label: 'Mis documentos', icon: 'file', section: 'work' },
+    { id: 'calendar', label: 'Vista por fechas', icon: 'calendar', section: 'work' },
+    { id: 'errors', label: 'Qué conviene revisar', icon: 'alert', section: 'work', badge: errorCount },
+    { id: 'dashboard', label: 'Resumen general', icon: 'dashboard', section: 'soon', disabled: true },
+    { id: 'alerts', label: 'Avisos', icon: 'bell', section: 'soon', disabled: true },
     { id: 'projection', label: 'Proyección de cobro', icon: 'chart', section: 'soon', disabled: true },
   ];
 
@@ -47,9 +48,10 @@ export function Sidebar({ active, setActive, errorCount, mobileOpen, onCloseMobi
         <Icon name="x" size={20} />
       </button>
       <div className="brand">
-        <span className="brand-mark">Trazá</span>
+        <Logo size={40} variant="dark" />
+        <span className="brand__wordmark">Trazá</span>
       </div>
-      <div className="nav-section">MVP — activo</div>
+      <div className="nav-section">Menú principal</div>
       {items
         .filter((i) => i.section === 'work')
         .map((item) => (
@@ -66,18 +68,19 @@ export function Sidebar({ active, setActive, errorCount, mobileOpen, onCloseMobi
               }
             }}
           >
-            <Icon name={item.icon} />
+            <Icon name={item.icon} size={20} />
             <span>{item.label}</span>
             {item.badge && item.badge > 0 ? <span className="nav-badge">{item.badge}</span> : null}
           </div>
         ))}
-      <div className="nav-section">Próximas features</div>
+      <div className="nav-section">Próximamente</div>
       {items
         .filter((i) => i.section === 'soon')
         .map((item) => (
           <div key={item.id} className="nav-item disabled">
-            <Icon name={item.icon} />
-            <span>{item.label}</span>
+            <Icon name={item.icon} size={20} />
+            <span className="nav-item__label">{item.label}</span>
+            <span className="nav-item__soon">Próximo</span>
           </div>
         ))}
       <div
@@ -91,7 +94,7 @@ export function Sidebar({ active, setActive, errorCount, mobileOpen, onCloseMobi
             setActive('settings');
           }
         }}
-        title="Abrir perfil"
+        title="Podés tocar aquí para abrir tu perfil y preferencias"
       >
         <div className="avatar" style={{ overflow: 'hidden' }}>
           {user?.avatarDataUrl ? (

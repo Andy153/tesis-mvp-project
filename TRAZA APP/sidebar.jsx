@@ -56,7 +56,8 @@ function Sidebar({ active, setActive, errorCount }) {
       {items.filter(i => i.section === 'soon').map(item => (
         <div key={item.id} className="nav-item disabled">
           <Icon name={item.icon} />
-          <span>{item.label}</span>
+          <span className="nav-item__label">{item.label}</span>
+          <span className="nav-item__soon">Próximo</span>
         </div>
       ))}
       <div className="sidebar-footer">

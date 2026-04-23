@@ -1,18 +1,18 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter, JetBrains_Mono, Space_Grotesk } from 'next/font/google';
+import { Dela_Gothic_One, Unbounded, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 
-const inter = Inter({
+const delaGothicOne = Dela_Gothic_One({
   subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  variable: '--font-inter',
+  weight: '400',
+  variable: '--font-dela-gothic-one',
   display: 'swap',
 });
 
-const display = Space_Grotesk({
+const unbounded = Unbounded({
   subsets: ['latin'],
   weight: ['400', '500', '600', '700'],
-  variable: '--font-display',
+  variable: '--font-unbounded',
   display: 'swap',
 });
 
@@ -26,20 +26,23 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: 'Trazá — MVP',
   description:
-    'Trazá detecta automáticamente errores en partes quirúrgicos y documentación antes de que los presentes a la prepaga.',
+    'Trazá revisa partes quirúrgicos y documentación y señala, con anticipación, lo que suele generar observaciones en la prepaga.',
+  icons: {
+    icon: [{ url: '/favicon.svg', type: 'image/svg+xml' }],
+  },
 };
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#FAFAF7',
+  themeColor: '#F4F8F5',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html
       lang="es"
-      className={`${inter.variable} ${display.variable} ${jetbrainsMono.variable}`}
+      className={`${delaGothicOne.variable} ${unbounded.variable} ${jetbrainsMono.variable}`}
     >
       <body>{children}</body>
     </html>

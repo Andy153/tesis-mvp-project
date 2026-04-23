@@ -46,9 +46,10 @@ export function DocumentsView({
     <div>
       <div className="page-head">
         <div>
-          <h1 className="page-title">Documentos</h1>
+          <h1 className="page-title">Mis documentos</h1>
           <p className="page-subtitle">
-            Encontrá rápidamente documentos subidos y su estado. Usá filtros por severidad y búsqueda por nombre, prepaga o código.
+            Acá podés ver todo lo que cargaste y cómo quedó el análisis. Los filtros ayudan a ubicar por severidad; la
+            búsqueda incluye nombre de archivo, prepaga o código.
           </p>
         </div>
       </div>
@@ -71,7 +72,7 @@ export function DocumentsView({
 
         <input
           className="docs-search"
-          placeholder="Buscar por archivo, prepaga o código…"
+          placeholder="Buscá por nombre de archivo, prepaga o código…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
@@ -82,8 +83,8 @@ export function DocumentsView({
           <div className="empty-icon">
             <Icon name="empty" size={48} />
           </div>
-          <div className="empty-title">Sin resultados</div>
-          <div>Probá con otro filtro o búsqueda.</div>
+          <div className="empty-title">No encontramos documentos con esos criterios</div>
+          <div>Podés ajustar el filtro o escribir otra palabra en la búsqueda.</div>
         </div>
       ) : (
         <div className="errors-table">
@@ -115,7 +116,7 @@ export function DocumentsView({
                       {a?.overall === 'warn' && (
                         <span className="badge badge-warn">
                           <span className="badge-dot" />
-                          Warn
+                          Advertencia
                         </span>
                       )}
                       {a?.overall === 'ok' && (
@@ -148,14 +149,14 @@ export function DocumentsView({
                     <td>{prepaga}</td>
                     <td>
                       {codigo ? (
-                        <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5 }}>{codigo}</code>
+                        <code style={{ fontFamily: 'var(--font-mono)', fontSize: 14 }}>{codigo}</code>
                       ) : (
                         <span style={{ color: 'var(--text-soft)' }}>—</span>
                       )}
                     </td>
                     <td>
                       <button className="btn btn-sm btn-ghost" onClick={() => onOpenFile(f.id)}>
-                        Ver
+                        Abrir revisión
                       </button>
                     </td>
                   </tr>

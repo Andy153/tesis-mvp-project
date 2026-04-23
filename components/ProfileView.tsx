@@ -41,8 +41,11 @@ export function ProfileView() {
     <div className="page">
       <div className="page-head">
         <div>
-          <h1 className="page-title">Perfil</h1>
-          <p className="page-subtitle">Configurá tu usuario y preferencias de trabajo.</p>
+          <h1 className="page-title">Tu perfil</h1>
+          <p className="page-subtitle">
+            Podés completar cómo te mostramos en la app y ajustar tema claro u oscuro, si te resulta más cómodo para
+            leer.
+          </p>
         </div>
       </div>
 
@@ -58,7 +61,7 @@ export function ProfileView() {
               )}
             </div>
             <div>
-              <div style={{ fontWeight: 800, fontSize: 16 }}>{profile.displayName || '—'}</div>
+              <div style={{ fontWeight: 800, fontSize: 15 }}>{profile.displayName || '—'}</div>
               <div style={{ color: 'var(--text-soft)', fontSize: 12 }}>{profile.profesion || '—'}</div>
               <div style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 4 }}>
                 Actualizado: {new Date(profile.updatedAt).toLocaleString('es-AR')}
@@ -73,7 +76,7 @@ export function ProfileView() {
               disabled={avatarBusy}
               onClick={() => fileRef.current?.click()}
             >
-              <Icon name="upload" size={14} /> {avatarBusy ? 'Cargando…' : 'Cambiar foto'}
+              <Icon name="upload" size={18} /> {avatarBusy ? 'Cargando…' : 'Cambiar la foto'}
             </button>
             <button
               type="button"
@@ -82,7 +85,7 @@ export function ProfileView() {
                 setProfile({ ...DEFAULT_PROFILE, updatedAt: new Date().toISOString() });
               }}
             >
-              Resetear perfil
+              Volver a los datos sugeridos
             </button>
           </div>
         </div>
@@ -109,10 +112,10 @@ export function ProfileView() {
 
       <div className="grid-2" style={{ marginTop: 14 }}>
         <div className="panel" style={{ padding: 16 }}>
-          <div style={{ fontWeight: 800, marginBottom: 10 }}>Datos profesionales</div>
+          <div style={{ fontWeight: 800, marginBottom: 10, fontSize: '1.05rem' }}>Datos profesionales</div>
           <div className="form-grid">
             <label className="field">
-              <div className="field-label">Nombre para mostrar</div>
+              <div className="field-label">Nombre que querés que aparezca</div>
               <input
                 className="docs-search"
                 value={profile.displayName}

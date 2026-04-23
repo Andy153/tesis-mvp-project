@@ -179,9 +179,10 @@ export function CalendarView({
     <div>
       <div className="page-head">
         <div>
-          <h1 className="page-title">Calendario</h1>
+          <h1 className="page-title">Vista por fechas</h1>
           <p className="page-subtitle">
-            Historial de documentos subidos por fecha. Filtrá por mes, semana o día y revisá problemas detectados.
+            Los documentos se agrupan según la fecha en que los cargaste. Podés pasar de mes, semana o día para
+            ubicar una cirugía o una presentación concreta.
           </p>
         </div>
       </div>

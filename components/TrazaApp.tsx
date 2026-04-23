@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Logo } from './Logo';
 import { Icon } from './Icon';
 import { Sidebar } from './Sidebar';
 import { UploadView } from './UploadView';
@@ -214,7 +215,10 @@ export default function TrazaApp() {
   return (
     <div className="app">
       <header className="app-mob-header">
-        <span className="brand-mark brand-mark--header">Trazá</span>
+        <div className="app-mob-header__brand">
+          <Logo size={40} variant="dark" />
+          <span className="brand__wordmark">Trazá</span>
+        </div>
         <button
           type="button"
           className="app-mob-menu-btn"

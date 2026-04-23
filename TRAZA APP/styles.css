@@ -99,6 +99,9 @@ body {
   user-select: none;
   position: relative;
 }
+.nav-item > svg {
+  flex-shrink: 0;
+}
 .nav-item:hover { background: var(--bg-sunken); color: var(--text); }
 .nav-item.active {
   background: var(--accent-soft);
@@ -121,15 +124,22 @@ body {
   cursor: not-allowed;
   pointer-events: none;
 }
-.nav-item.disabled::after {
-  content: 'Próximo';
-  position: absolute;
-  right: 12px;
+.nav-item.disabled .nav-item__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nav-item__soon {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding-left: 8px;
   font-size: 9px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--text-soft);
   font-weight: 400;
+  white-space: nowrap;
 }
 .sidebar-footer {
   margin-top: auto;

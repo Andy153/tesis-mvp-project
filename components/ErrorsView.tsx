@@ -60,29 +60,29 @@ export function ErrorsView({ files, onOpenFile }: Props) {
     <div>
       <div className="page-head">
         <div>
-          <h1 className="page-title">Errores detectados</h1>
+          <h1 className="page-title">Qué conviene revisar</h1>
           <p className="page-subtitle">
-            Historial consolidado de todos los errores encontrados en tus documentos. Corregilos antes de
-            presentar para evitar rechazos.
+            Acá se reúnen los hallazgos de todos los documentos que analizaste. Podés filtrar por tipo y abrir cada
+            archivo para ver el detalle en contexto, antes de presentar a la prepaga.
           </p>
         </div>
       </div>
 
       <div className="stats">
         <div className="stat">
-          <div className="stat-label">Documentos analizados</div>
+          <div className="stat-label">Documentos ya analizados</div>
           <div className="stat-value">{filesAnalyzed}</div>
         </div>
         <div className="stat">
-          <div className="stat-label">Con errores críticos</div>
+          <div className="stat-label">Con observaciones graves</div>
           <div className="stat-value error">{filesWithErrors}</div>
         </div>
         <div className="stat">
-          <div className="stat-label">Errores totales</div>
+          <div className="stat-label">Observaciones graves (total)</div>
           <div className="stat-value error">{counts.error}</div>
         </div>
         <div className="stat">
-          <div className="stat-label">Advertencias</div>
+          <div className="stat-label">Advertencias (total)</div>
           <div className="stat-value warn">{counts.warn}</div>
         </div>
       </div>
@@ -114,12 +114,14 @@ export function ErrorsView({ files, onOpenFile }: Props) {
             <Icon name="empty" size={48} />
           </div>
           <div className="empty-title">
-            {allErrors.length === 0 ? 'Todavía no analizaste documentos' : 'Sin resultados para este filtro'}
+            {allErrors.length === 0
+              ? 'Todavía no hay hallazgos para mostrar'
+              : 'No hay hallazgos con el filtro elegido'}
           </div>
           <div>
             {allErrors.length === 0
-              ? 'Subí un documento en la pestaña "Cargar documentos" para empezar'
-              : 'Probá con otro filtro'}
+              ? 'Cuando agregues un documento en «Agregar documentos», los puntos a revisar van a aparecer acá.'
+              : 'Podés probar con otro filtro o volver a «Todos».'}
           </div>
         </div>
       ) : (
@@ -148,7 +150,7 @@ export function ErrorsView({ files, onOpenFile }: Props) {
                     {e.severity === 'warn' && (
                       <span className="badge badge-warn">
                         <span className="badge-dot" />
-                        Warn
+                        Advertencia
                       </span>
                     )}
                     {e.severity === 'info' && (
@@ -169,14 +171,14 @@ export function ErrorsView({ files, onOpenFile }: Props) {
                   <td>{e.prepaga}</td>
                   <td>
                     {e.codigo ? (
-                      <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5 }}>{e.codigo}</code>
+                      <code style={{ fontFamily: 'var(--font-mono)', fontSize: 14 }}>{e.codigo}</code>
                     ) : (
                       <span style={{ color: 'var(--text-soft)' }}>—</span>
                     )}
                   </td>
                   <td>
                     <button className="btn btn-sm btn-ghost" onClick={() => onOpenFile(e.fileId)}>
-                      Ver archivo
+                      Abrir en revisión
                     </button>
                   </td>
                 </tr>

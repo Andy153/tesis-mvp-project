@@ -234,10 +234,10 @@ export function UploadView({
     <div>
       <div className="page-head">
         <div>
-          <h1 className="page-title">Cargar documentos</h1>
+          <h1 className="page-title">Agregar documentos</h1>
           <p className="page-subtitle">
-            Subí parte quirúrgico, autorizaciones u otra documentación. Trazá detecta automáticamente errores
-            comunes antes de que presentes.
+            Podés traer el parte quirúrgico, autorizaciones u otros archivos en PDF o imagen. Trazá lee el texto y
+            señala, con anticipación, lo que suele generar observaciones en la prepaga, para que lo revises con calma.
           </p>
         </div>
         {!showEmpty && files.length > 0 && (
@@ -249,7 +249,7 @@ export function UploadView({
               inputRef.current?.click();
             }}
           >
-            <Icon name="upload" size={14} /> Subir más
+            <Icon name="upload" size={18} /> Agregar otros archivos
           </button>
         )}
       </div>
@@ -277,9 +277,10 @@ export function UploadView({
           <div className="upload-icon">
             <Icon name="upload" size={48} />
           </div>
-          <div className="upload-title">Arrastrá archivos acá o hacé click para subir</div>
+          <div className="upload-title">Arrastrá los archivos a esta zona, o tocá acá para elegirlos</div>
           <div className="upload-hint">
-            Trazá analiza cada documento y detecta errores antes de que presentes
+            Cuando terminen de cargarse, vas a ver el documento y un resumen debajo, con los puntos que conviene
+            revisar antes de presentar.
           </div>
           <div className="upload-formats">
             <span className="fmt">PDF</span>
@@ -319,7 +320,7 @@ export function UploadView({
           {isFinalized && (
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 14, marginBottom: 16 }}>
               <button type="button" className="btn" onClick={() => onCloseVisualization?.()}>
-                Cerrar visualización
+                Volver al listado de documentos
               </button>
               <button
                 type="button"
@@ -328,7 +329,7 @@ export function UploadView({
                   if (selected?.id) onEditUpload?.(selected.id);
                 }}
               >
-                Editar subida
+                Quiero volver a editar esta carga
               </button>
             </div>
           )}
@@ -441,7 +442,7 @@ export function UploadView({
               onSelectFile(null);
             }}
           >
-            Carga finalizada
+            Listo: confirmar y guardar
           </button>
           {finalizeBlocked && (
             <div style={{ marginTop: 10, color: 'var(--error)', fontSize: 12 }}>
@@ -462,18 +463,19 @@ export function UploadView({
         >
           <div className="modal-card" style={{ maxWidth: 520 }}>
             <div className="modal-head">
-              <div style={{ fontWeight: 800 }}>¿Eliminar documento?</div>
+              <div style={{ fontWeight: 800, fontSize: '1.05rem' }}>¿Querés sacar este documento de Trazá?</div>
               <button type="button" className="btn btn-sm btn-ghost" onClick={() => setConfirmDelete(null)}>
-                <Icon name="x" size={12} /> Cerrar
+                <Icon name="x" size={14} /> Cerrar
               </button>
             </div>
             <div className="modal-body">
-              <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>
-                Vas a eliminar <b>{confirmDelete.name}</b>. Esto lo quita del historial y de Documentos/Calendario.
+              <div style={{ color: 'var(--text-muted)', fontSize: 15, lineHeight: 1.5 }}>
+                Si confirmás, <b>{confirmDelete.name}</b> deja de aparecer en el historial, en &quot;Mis
+                documentos&quot; y en la vista por fechas.
               </div>
               <div style={{ marginTop: 14, display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
                 <button type="button" className="btn" onClick={() => setConfirmDelete(null)}>
-                  Cancelar
+                  Mejor no, volver
                 </button>
                 <button
                   type="button"
@@ -483,7 +485,7 @@ export function UploadView({
                     setConfirmDelete(null);
                   }}
                 >
-                  Sí, eliminar
+                  Sí, sacarlo
                 </button>
               </div>
             </div>
@@ -582,11 +584,11 @@ function StoredFilesPanel({
   return (
     <div className="panel" style={{ padding: 16, marginTop: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 10 }}>
-        <div style={{ fontWeight: 800 }}>Planilla generada (detalle de carga)</div>
+        <div style={{ fontWeight: 800, fontSize: '1.05rem' }}>Planilla generada — detalle de la carga</div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           {files?.xlsxUrl && (
             <button type="button" className="btn btn-sm" onClick={() => void downloadPlanilla()}>
-              Descargar planilla
+              Descargar la planilla
             </button>
           )}
           {files?.interventionId && (
@@ -798,7 +800,7 @@ function FileRow({
           onClick();
         }}
       >
-        <Icon name="eye" size={12} /> Ver
+        <Icon name="eye" size={16} /> Ver detalle
       </button>
       <button
         type="button"
@@ -849,21 +851,23 @@ function AuthorizationCard({
           </div>
           <div style={{ flex: 1 }}>
             <div className="auth-card-title">
-              ¿Este procedimiento tiene autorización previa?
+              Autorización previa
               <span className="auth-card-confidence">{confidenceLabel}</span>
             </div>
-            <div className="auth-card-reason">{authRule.reason}</div>
+            <div className="auth-card-reason">
+              {authRule.reason} Si corresponde, podés indicarlo abajo para que podamos cruzar el bono con el parte.
+            </div>
           </div>
         </div>
         <div className="auth-actions">
           <button type="button" className="auth-btn primary" onClick={() => onDecision({ status: 'uploading' })}>
-            <Icon name="upload" size={13} /> Sí, subir el bono
+            <Icon name="upload" size={16} /> Sí, tengo el bono para subir
           </button>
           <button type="button" className="auth-btn" onClick={() => onDecision({ status: 'missing' })}>
-            No la tengo todavía
+            Todavía no la tengo
           </button>
           <button type="button" className="auth-btn" onClick={() => onDecision({ status: 'skipped' })}>
-            No la requiere
+            En este caso no hace falta
           </button>
         </div>
       </div>
@@ -900,16 +904,17 @@ function AuthorizationCard({
     return (
       <div className="auth-card">
         <button type="button" className="auth-reset" onClick={onReset}>
-          ← Cambiar
+          ← Volver atrás
         </button>
         <div className="auth-card-head">
           <div className="auth-card-icon">
             <Icon name="upload" size={18} />
           </div>
           <div style={{ flex: 1 }}>
-            <div className="auth-card-title">Subí el bono de autorización</div>
+            <div className="auth-card-title">Subir el bono de autorización</div>
             <div className="auth-card-reason">
-              Trazá va a cruzar los datos con el parte quirúrgico: DNI, afiliado, código, fechas.
+              Elegí el archivo del bono: vamos a leerlo y contrastarlo con el parte (DNI, afiliado, código, fechas) para
+              avisarte si algo no coincide.
             </div>
           </div>
         </div>
@@ -932,8 +937,8 @@ function AuthorizationCard({
             if (e.key === 'Enter' || e.key === ' ') authInputRef.current?.click();
           }}
         >
-          <div className="auth-upload-title">Arrastrá el bono acá o hacé click</div>
-          <div className="auth-upload-hint">PDF, PNG, JPG · Trazá lo lee y lo contrasta con el parte</div>
+          <div className="auth-upload-title">Arrastrá el bono a esta zona, o tocá para elegirlo</div>
+          <div className="auth-upload-hint">Formatos admitidos: PDF, PNG o JPG.</div>
         </div>
         <input
           ref={authInputRef}
@@ -970,16 +975,17 @@ function AuthorizationCard({
     return (
       <div className="auth-card">
         <button type="button" className="auth-reset" onClick={onReset}>
-          ← Cambiar
+          ← Volver atrás
         </button>
         <div className="auth-card-head">
           <div className="auth-card-icon" style={{ background: 'var(--error)' }}>
             <Icon name="x" size={18} />
           </div>
           <div style={{ flex: 1 }}>
-            <div className="auth-card-title">Falta el bono de autorización</div>
+            <div className="auth-card-title">Sin bono de autorización por ahora</div>
             <div className="auth-card-reason">
-              Sin autorización, la prepaga va a rechazar la facturación. Tramitala antes de presentar la liquidación.
+              Muchas prepagas piden la autorización previa: conviene tramitarla antes de presentar la liquidación, para
+              reducir el riesgo de rechazo.
             </div>
           </div>
         </div>
@@ -991,15 +997,18 @@ function AuthorizationCard({
     return (
       <div className="auth-card resolved-skip">
         <button type="button" className="auth-reset" onClick={onReset}>
-          ← Cambiar
+          ← Volver atrás
         </button>
         <div className="auth-card-head">
           <div className="auth-card-icon">
             <Icon name="info" size={18} />
           </div>
           <div style={{ flex: 1 }}>
-            <div className="auth-card-title">Autorización no aplica</div>
-            <div className="auth-card-reason">Marcaste que este procedimiento no requiere autorización previa.</div>
+            <div className="auth-card-title">Autorización no aplica en este caso</div>
+            <div className="auth-card-reason">
+              Quedó registrado que este procedimiento no requiere autorización previa según tu criterio clínico /
+              administrativo.
+            </div>
           </div>
         </div>
       </div>

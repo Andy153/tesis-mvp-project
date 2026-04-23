@@ -46,21 +46,27 @@ export async function POST(req: Request) {
 
   const id = crypto.randomBytes(10).toString('hex');
   const root = path.join(process.cwd(), 'data', 'interventions', id);
-  await mkdir(root, { recursive: true });
-
-  const parteBuf = Buffer.from(await parte.arrayBuffer());
-  await writeFile(path.join(root, 'parte.pdf'), parteBuf);
+  const canPersistToDisk = !process.env.VERCEL;
 
   let permisoSaved = false;
-  if (permiso instanceof File) {
-    const permisoBuf = Buffer.from(await permiso.arrayBuffer());
-    await writeFile(path.join(root, 'permiso.pdf'), permisoBuf);
-    permisoSaved = true;
+  if (canPersistToDisk) {
+    await mkdir(root, { recursive: true });
+
+    const parteBuf = Buffer.from(await parte.arrayBuffer());
+    await writeFile(path.join(root, 'parte.pdf'), parteBuf);
+
+    if (permiso instanceof File) {
+      const permisoBuf = Buffer.from(await permiso.arrayBuffer());
+      await writeFile(path.join(root, 'permiso.pdf'), permisoBuf);
+      permisoSaved = true;
+    }
   }
 
   const base = safeBaseName(payload.meta?.parteFileName || parte.name);
   let xlsxFile: string | null = null;
   let csvFile: string | null = null;
+  let xlsxBase64: string | undefined;
+  let csvText: string | undefined;
   if (!payload.skipPlanilla) {
     const templatePath = path.join(process.cwd(), 'templates', 'planilla cx swiss.xlsx');
     const templateXlsx = await readFile(templatePath);
@@ -70,38 +76,53 @@ export async function POST(req: Request) {
     });
     xlsxFile = `${base}.xlsx`;
     csvFile = `${base}.csv`;
-    await writeFile(path.join(root, xlsxFile), Buffer.from(xlsx));
-    await writeFile(path.join(root, csvFile), csv, 'utf8');
+
+    // Always return the bytes inline so deployments (Vercel) can download without disk persistence.
+    xlsxBase64 = Buffer.from(xlsx).toString('base64');
+    csvText = csv;
+
+    if (canPersistToDisk) {
+      await writeFile(path.join(root, xlsxFile), Buffer.from(xlsx));
+      await writeFile(path.join(root, csvFile), csv, 'utf8');
+    }
   }
 
-  await writeFile(
-    path.join(root, 'meta.json'),
-    JSON.stringify(
-      {
-        id,
-        createdAt: new Date().toISOString(),
-        base,
-        row: payload.row,
-        planilla: payload.skipPlanilla ? { generated: false, reason: payload.skipReason || null } : { generated: true },
-        files: {
-          parte: 'parte.pdf',
-          permiso: permisoSaved ? 'permiso.pdf' : null,
-          xlsx: xlsxFile,
-          csv: csvFile,
+  if (canPersistToDisk) {
+    await writeFile(
+      path.join(root, 'meta.json'),
+      JSON.stringify(
+        {
+          id,
+          createdAt: new Date().toISOString(),
+          base,
+          row: payload.row,
+          planilla: payload.skipPlanilla ? { generated: false, reason: payload.skipReason || null } : { generated: true },
+          files: {
+            parte: 'parte.pdf',
+            permiso: permisoSaved ? 'permiso.pdf' : null,
+            xlsx: xlsxFile,
+            csv: csvFile,
+          },
         },
-      },
-      null,
-      2,
-    ),
-    'utf8',
-  );
+        null,
+        2,
+      ),
+      'utf8',
+    );
+  }
 
   const files = {
     interventionId: id,
-    parteUrl: `/api/interventions/${id}/files/parte.pdf`,
-    permisoUrl: permisoSaved ? `/api/interventions/${id}/files/permiso.pdf` : undefined,
-    xlsxUrl: xlsxFile ? `/api/interventions/${id}/files/${encodeURIComponent(base)}.xlsx` : undefined,
-    csvUrl: csvFile ? `/api/interventions/${id}/files/${encodeURIComponent(base)}.csv` : undefined,
+    base,
+    xlsxFileName: xlsxFile || undefined,
+    csvFileName: csvFile || undefined,
+    xlsxBase64,
+    csvText,
+    // Only available when persistence is enabled (local/dev environments)
+    parteUrl: canPersistToDisk ? `/api/interventions/${id}/files/parte.pdf` : undefined,
+    permisoUrl: canPersistToDisk && permisoSaved ? `/api/interventions/${id}/files/permiso.pdf` : undefined,
+    xlsxUrl: canPersistToDisk && xlsxFile ? `/api/interventions/${id}/files/${encodeURIComponent(base)}.xlsx` : undefined,
+    csvUrl: canPersistToDisk && csvFile ? `/api/interventions/${id}/files/${encodeURIComponent(base)}.csv` : undefined,
   };
 
   return NextResponse.json({ id, files });

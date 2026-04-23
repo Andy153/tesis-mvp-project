@@ -516,7 +516,18 @@ function StoredFilesPanel({
     gastos: '';
     nroAutorizacion: string;
   };
-  files?: { interventionId: string; parteUrl: string; permisoUrl?: string; xlsxUrl?: string; csvUrl?: string };
+  files?: {
+    interventionId: string;
+    base?: string;
+    xlsxFileName?: string;
+    csvFileName?: string;
+    xlsxBase64?: string;
+    csvText?: string;
+    parteUrl?: string;
+    permisoUrl?: string;
+    xlsxUrl?: string;
+    csvUrl?: string;
+  };
   blockMessage?: string | null;
   onUpdateRow: (row: any, files?: any) => void;
 }) {
@@ -540,10 +551,22 @@ function StoredFilesPanel({
   }
 
   async function downloadPlanilla() {
-    if (!files?.xlsxUrl) return;
-    const res = await fetch(files.xlsxUrl, { cache: 'no-store' });
-    if (!res.ok) return;
-    const buf = await res.arrayBuffer();
+    if (!files) return;
+
+    let buf: ArrayBuffer | null = null;
+    if (files.xlsxBase64) {
+      const bin = atob(files.xlsxBase64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      buf = bytes.buffer;
+    } else if (files.xlsxUrl) {
+      const res = await fetch(files.xlsxUrl, { cache: 'no-store' });
+      if (!res.ok) return;
+      buf = await res.arrayBuffer();
+    } else {
+      return;
+    }
+
     const blob = new Blob([buf], {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     });
@@ -552,7 +575,7 @@ function StoredFilesPanel({
     a.href = url;
     const fecha = safeNamePart(draft.fecha || 'sin_fecha');
     const pac = safeNamePart(draft.socioDesc || 'sin_paciente');
-    a.download = `planilla_cx_swiss_${fecha}_${pac}.xlsx`;
+    a.download = files.xlsxFileName || `planilla_cx_swiss_${fecha}_${pac}.xlsx`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -591,7 +614,8 @@ function StoredFilesPanel({
               Descargar la planilla
             </button>
           )}
-          {files?.interventionId && (
+          {/* Edición de planilla requiere persistencia server-side (no disponible en Vercel). */}
+          {files?.interventionId && Boolean(files?.xlsxUrl) && (
             <button type="button" className="btn btn-sm btn-ghost" onClick={() => setEditing((v) => !v)}>
               {editing ? 'Cancelar edición' : 'Editar planilla'}
             </button>

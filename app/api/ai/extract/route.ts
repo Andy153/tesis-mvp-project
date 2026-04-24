@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { callGemma, type DocumentType } from '@/lib/ai/gemma';
+import { callOpenAI, type DocumentType } from '@/lib/ai/openai';
 
 const BodySchema = z.object({
   imageBase64: z.string().min(1),
@@ -26,7 +26,7 @@ function dataUrlApproxBytes(dataUrl: string) {
  * POST /api/ai/extract
  *
  * Receives a base64 data URL + documentType and returns the typed result
- * from `callGemma`. The request is considered "valid" even if Gemma fails;
+ * from `callOpenAI`. The request is considered "valid" even if extraction fails;
  * in that case we still return 200 with `{ ok: false, ... }` so the client can
  * decide on fallback (e.g. Tesseract) in later commits.
  */
@@ -52,7 +52,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const result = await callGemma({ imageBase64, documentType });
+    const result = await callOpenAI({ imageBase64, documentType });
     return NextResponse.json(result, { status: 200 });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

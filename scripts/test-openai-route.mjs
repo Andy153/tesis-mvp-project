@@ -27,7 +27,7 @@ async function main() {
         'Smoke test failed: missing sample image.',
         `Expected file at: ${SAMPLE_PATH}`,
         'Please add your test image there (filename must be sample-parte.jpg) and re-run:',
-        '  node scripts/test-gemma-route.mjs',
+        '  node scripts/test-openai-route.mjs',
       ].join('\n'),
     );
     process.exit(1);
@@ -61,4 +61,3 @@ main().catch((e) => {
   console.error('Smoke test crashed:', e?.message || e);
   process.exit(1);
 });
-

@@ -3,26 +3,26 @@ import { PROMPT_BONO_AUTORIZACION, PROMPT_PARTE_QUIRURGICO } from './prompts';
 import { BonoAutorizacionSchema, ParteQuirurgicoSchema } from './schemas';
 
 /**
- * NVIDIA Integrate (OpenAI-compatible) endpoint for chat completions.
+ * OpenAI Chat Completions endpoint (OpenAI-compatible).
  */
-export const GEMMA_ENDPOINT = 'https://integrate.api.nvidia.com/v1/chat/completions';
+export const OPENAI_ENDPOINT = 'https://api.openai.com/v1/chat/completions';
 
 /**
- * Model used for extraction.
+ * Model used for extraction (pinned for stability).
  */
-export const GEMMA_MODEL = 'google/gemma-3-27b-it';
+export const OPENAI_MODEL = 'gpt-4o-mini-2024-07-18';
 
 /**
  * Supported document types.
  */
 export type DocumentType = 'parte_quirurgico' | 'bono_autorizacion';
 
-export type GemmaErrorCode = 'NETWORK' | 'API_ERROR' | 'INVALID_JSON' | 'VALIDATION_FAILED' | 'TIMEOUT';
+export type OpenAIErrorCode = 'NETWORK' | 'API_ERROR' | 'INVALID_JSON' | 'VALIDATION_FAILED' | 'TIMEOUT';
 
-export type GemmaOk<T> = { ok: true; data: T; tokensUsed: number; elapsedMs: number };
-export type GemmaErr = { ok: false; error: string; errorCode: GemmaErrorCode };
+export type OpenAIOk<T> = { ok: true; data: T; tokensUsed: number; elapsedMs: number };
+export type OpenAIErr = { ok: false; error: string; errorCode: OpenAIErrorCode };
 
-export type CallGemmaParams = {
+export type CallOpenAIParams = {
   /** Image as a data URL (e.g. `data:image/jpeg;base64,...`). */
   imageBase64: string;
   /** Document type to extract. */
@@ -89,16 +89,16 @@ function mergeAbortSignals(timeoutController: AbortController, upstream?: AbortS
 }
 
 /**
- * Calls NVIDIA Gemma to extract structured JSON from an image.
+ * Calls OpenAI to extract structured JSON from an image.
  *
- * This function runs server-side. It reads `process.env.NVIDIA_API_KEY`.
+ * This function runs server-side. It reads `process.env.OPENAI_API_KEY`.
  */
-export async function callGemma(params: CallGemmaParams) {
+export async function callOpenAI(params: CallOpenAIParams) {
   const startedAt = Date.now();
 
-  const apiKey = process.env.NVIDIA_API_KEY;
+  const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    return { ok: false, error: 'API key not configured', errorCode: 'API_ERROR' } satisfies GemmaErr;
+    return { ok: false, error: 'OpenAI API key not configured', errorCode: 'API_ERROR' } satisfies OpenAIErr;
   }
 
   const prompt = getPrompt(params.documentType);
@@ -109,7 +109,7 @@ export async function callGemma(params: CallGemmaParams) {
   const timeout = setTimeout(() => timeoutController.abort(), 60_000);
 
   try {
-    const resp = await fetch(GEMMA_ENDPOINT, {
+    const resp = await fetch(OPENAI_ENDPOINT, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -117,7 +117,7 @@ export async function callGemma(params: CallGemmaParams) {
         Accept: 'application/json',
       },
       body: JSON.stringify({
-        model: GEMMA_MODEL,
+        model: OPENAI_MODEL,
         messages: [
           {
             role: 'user',
@@ -131,6 +131,7 @@ export async function callGemma(params: CallGemmaParams) {
         temperature: 0.0,
         top_p: 0.7,
         stream: false,
+        response_format: { type: 'json_object' },
       }),
       signal,
     });
@@ -139,9 +140,9 @@ export async function callGemma(params: CallGemmaParams) {
       const text = await resp.text().catch(() => '');
       return {
         ok: false,
-        error: `Gemma API error (${resp.status}): ${text || resp.statusText || 'Unknown error'}`,
+        error: `OpenAI API error (${resp.status}): ${text || resp.statusText || 'Unknown error'}`,
         errorCode: 'API_ERROR',
-      } satisfies GemmaErr;
+      } satisfies OpenAIErr;
     }
 
     const json = (await resp.json()) as unknown;
@@ -149,9 +150,9 @@ export async function callGemma(params: CallGemmaParams) {
     if (!parsed.success) {
       return {
         ok: false,
-        error: 'Gemma response shape is not OpenAI-compatible',
+        error: 'OpenAI response shape is not OpenAI-compatible',
         errorCode: 'API_ERROR',
-      } satisfies GemmaErr;
+      } satisfies OpenAIErr;
     }
 
     const contentRaw = parsed.data.choices[0]?.message?.content ?? '';
@@ -162,32 +163,31 @@ export async function callGemma(params: CallGemmaParams) {
     } catch {
       return {
         ok: false,
-        error: 'Gemma returned invalid JSON',
+        error: 'OpenAI returned invalid JSON',
         errorCode: 'INVALID_JSON',
-      } satisfies GemmaErr;
+      } satisfies OpenAIErr;
     }
 
     const validated = schema.safeParse(dataUnknown);
     if (!validated.success) {
       return {
         ok: false,
-        error: 'Gemma JSON did not match expected schema',
+        error: 'OpenAI JSON did not match expected schema',
         errorCode: 'VALIDATION_FAILED',
-      } satisfies GemmaErr;
+      } satisfies OpenAIErr;
     }
 
     const elapsedMs = Date.now() - startedAt;
     const tokensUsed = parsed.data.usage?.total_tokens ?? 0;
-    return { ok: true, data: validated.data, tokensUsed, elapsedMs } as GemmaOk<typeof validated.data>;
+    return { ok: true, data: validated.data, tokensUsed, elapsedMs } as OpenAIOk<typeof validated.data>;
   } catch (e) {
     if (isAbortError(e)) {
       const elapsedMs = Date.now() - startedAt;
-      return { ok: false, error: `Gemma request timed out after ${elapsedMs}ms`, errorCode: 'TIMEOUT' } satisfies GemmaErr;
+      return { ok: false, error: `OpenAI request timed out after ${elapsedMs}ms`, errorCode: 'TIMEOUT' } satisfies OpenAIErr;
     }
     const msg = e instanceof Error ? e.message : String(e);
-    return { ok: false, error: msg || 'Network error', errorCode: 'NETWORK' } satisfies GemmaErr;
+    return { ok: false, error: msg || 'Network error', errorCode: 'NETWORK' } satisfies OpenAIErr;
   } finally {
     clearTimeout(timeout);
   }
 }
-

@@ -7,7 +7,7 @@ import { TRAZA_PREPAGAS, TRAZA_REQUIRED_FIELDS, TRAZA_SANATORIOS } from './traza
 import { matchScore } from './semantic';
 
 /** Incrementar al cambiar reglas de análisis para invalidar análisis guardados en `loadHistory`. */
-export const TRAZA_ANALYZER_REVISION = 12;
+export const TRAZA_ANALYZER_REVISION = 13;
 
 type NomenRow = { entries: Array<{ desc: string; specialty?: string }>; ambiguous?: boolean };
 const NOMEN = TRAZA_NOMENCLADOR_FULL as Record<string, NomenRow>;

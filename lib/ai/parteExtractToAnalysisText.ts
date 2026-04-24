@@ -27,8 +27,20 @@ export function parteExtractToAnalysisText(d: ParteQuirurgicoExtract): string {
   const { paciente, cobertura, cirugia, equipo_quirurgico, procedimiento, anestesia, biopsia } = d;
   const sanatorio = d.sanatorio;
 
-  pushLine(lines, 'paciente apellido nombre', paciente.apellido_nombre);
-  pushLine(lines, 'dni', paciente.dni);
+  // Orden y etiquetas alineados con `extractStructured` (lib/authz) y `detectFlags` (planilla Swiss).
+  const nombre = paciente.apellido_nombre?.trim();
+  if (nombre) lines.push(`Paciente: ${nombre.replace(/\s+/g, ' ')}`);
+  const dni = paciente.dni?.trim();
+  if (dni) lines.push(`DNI: ${dni}`);
+
+  const socio = cobertura.numero_afiliado?.trim();
+  if (socio) lines.push(`Afiliado: ${socio}`);
+
+  const fechaCir = cirugia.fecha?.trim();
+  if (fechaCir) {
+    lines.push(`Fecha cirugía práctica realizada: ${fechaCir}`);
+  }
+
   pushLine(lines, 'fecha nacimiento', paciente.fecha_nacimiento);
   if (paciente.edad != null) pushLine(lines, 'edad', paciente.edad);
   pushLine(lines, 'sexo', paciente.sexo);
@@ -64,9 +76,16 @@ export function parteExtractToAnalysisText(d: ParteQuirurgicoExtract): string {
     );
   }
 
-  const code = formatNomenCode(procedimiento.codigo_nomenclador ?? null);
+  const rawCode = procedimiento.codigo_nomenclador?.trim() ?? null;
+  const code = formatNomenCode(rawCode);
   if (code) {
     lines.push(`código codigo nomenclador nomenclador cod. nomenclador: ${code}`);
+  }
+  if (rawCode) {
+    const digitsOnly = rawCode.replace(/\D/g, '');
+    if (digitsOnly.length >= 4 && digitsOnly.length <= 8) {
+      lines.push(`código nomenclador ${digitsOnly}`);
+    }
   }
 
   pushLine(lines, 'diagnóstico operatorio diagnostico dx', procedimiento.diagnostico_operatorio);

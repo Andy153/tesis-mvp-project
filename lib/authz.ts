@@ -101,6 +101,10 @@ export function extractStructured(
     /Paciente[:\s]*([A-ZÁÉÍÓÚÑa-záéíóúñ,\.\s]{3,80}?)(?=\s*(?:DNI|Fecha|Edad|Sexo|Convenio|N[°º]|\n|$))/i,
   );
   if (pacienteMatch) result.paciente = pacienteMatch[1].trim().replace(/\s+/g, ' ');
+  if (!result.paciente) {
+    const alt = text.match(/\bpaciente\s+apellido\s+nombre\s*:\s*([^\n]+)/i);
+    if (alt) result.paciente = alt[1].trim().replace(/\s+/g, ' ');
+  }
 
   const fechaRegex = /(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/g;
   const fechas: Array<{ str: string; date: Date; context: string }> = [];
@@ -127,7 +131,11 @@ export function extractStructured(
     }
   }
   if (!result.fechaPractica && fechas.length > 0) {
-    result.fechaPractica = fechas[0].date;
+    const ctxNac = /nacim|edad|fn\b|fecha\s*nac|cumplea/i;
+    const ctxPract = /cirugia|practica|realizado|realizacion|ingreso|inicio|fin|quirurg|operaci|intervenc|procedim/;
+    const notBirth = fechas.filter((f) => !ctxNac.test(f.context));
+    const withPract = notBirth.find((f) => ctxPract.test(f.context));
+    result.fechaPractica = withPract?.date ?? notBirth[0]?.date ?? fechas[fechas.length - 1]?.date ?? fechas[0].date;
   }
 
   const nroAuthMatch =

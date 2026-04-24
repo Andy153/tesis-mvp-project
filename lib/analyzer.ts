@@ -1,5 +1,7 @@
 // Trazá — Motor de análisis (TypeScript, client-only)
 import type { Analysis, ExtractionResult, Finding, PageWords, Span } from './types';
+import { parteExtractToAnalysisText } from './ai/parteExtractToAnalysisText';
+import type { ParteQuirurgicoExtract } from './ai/schemas';
 import { TRAZA_NOMENCLADOR_FULL, TRAZA_PROC_KEYWORDS } from './nomenclador.js';
 import { TRAZA_PREPAGAS, TRAZA_REQUIRED_FIELDS, TRAZA_SANATORIOS } from './traza-constants';
 import { matchScore } from './semantic';
@@ -14,6 +16,44 @@ type ProcKw = { keywords: string[]; code: string };
 const PROC_KEYWORDS = TRAZA_PROC_KEYWORDS as ProcKw[];
 
 type ProgressFn = (p: { progress: number; message: string }) => void;
+
+async function fetchParteExtractionFromOpenAI(imageDataUrl: string): Promise<ParteQuirurgicoExtract | null> {
+  try {
+    const res = await fetch('/api/ai/extract', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageBase64: imageDataUrl, documentType: 'parte_quirurgico' }),
+    });
+    const json = (await res.json()) as { ok?: boolean; data?: ParteQuirurgicoExtract };
+    if (!json || json.ok !== true || !json.data) return null;
+    return json.data;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Primera página solamente (Commit 2). Si OpenAI responde ok, reemplaza `text` y repite el mismo
+ * string en cada entrada de `pageTexts`. `method`, `ocrWords` y `thumbnails` quedan del pipeline legacy.
+ */
+async function tryOverlayOpenAiParteText(result: ExtractionResult, onProgress?: ProgressFn): Promise<ExtractionResult> {
+  const first = result.thumbnails[0]?.dataUrl;
+  const n = result.pageTexts.length;
+  if (!first || n === 0) {
+    onProgress?.({ progress: 1, message: 'Listo' });
+    return result;
+  }
+  onProgress?.({ progress: 1, message: 'Finalizando...' });
+  const data = await fetchParteExtractionFromOpenAI(first);
+  if (!data) {
+    onProgress?.({ progress: 1, message: 'Listo' });
+    return result;
+  }
+  const text = parteExtractToAnalysisText(data);
+  const pageTexts = Array.from({ length: n }, () => text);
+  onProgress?.({ progress: 1, message: 'Listo' });
+  return { ...result, text, pageTexts };
+}
 
 export async function extractText(file: File, onProgress?: ProgressFn): Promise<ExtractionResult> {
   const type = file.type;
@@ -123,8 +163,8 @@ async function extractFromPdf(file: File, onProgress?: ProgressFn): Promise<Extr
     allText = pageTexts.join('\n') + '\n';
   }
 
-  onProgress?.({ progress: 1, message: 'Listo' });
-  return { text: allText, thumbnails, method, ocrWords, pageTexts };
+  const base: ExtractionResult = { text: allText, thumbnails, method, ocrWords, pageTexts };
+  return tryOverlayOpenAiParteText(base, onProgress);
 }
 
 async function extractFromImage(file: File, onProgress?: ProgressFn): Promise<ExtractionResult> {
@@ -135,14 +175,14 @@ async function extractFromImage(file: File, onProgress?: ProgressFn): Promise<Ex
   const res = await ocrImageWithWords(dataUrl, (prog) => {
     onProgress?.({ progress: 0.2 + 0.75 * prog, message: 'Reconociendo texto...' });
   });
-  onProgress?.({ progress: 1, message: 'Listo' });
-  return {
+  const base: ExtractionResult = {
     text: res.text,
     thumbnails: [{ dataUrl, width: dim.width, height: dim.height }],
     method: 'ocr',
     ocrWords: [{ page: 0, words: res.words, width: dim.width, height: dim.height }],
     pageTexts: [res.text],
   };
+  return tryOverlayOpenAiParteText(base, onProgress);
 }
 
 function imageDimensions(dataUrl: string): Promise<{ width: number; height: number }> {

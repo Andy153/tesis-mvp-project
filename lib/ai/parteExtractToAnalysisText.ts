@@ -37,8 +37,9 @@ export function parteExtractToAnalysisText(d: ParteQuirurgicoExtract): string {
   if (socio) lines.push(`Afiliado: ${socio}`);
 
   const fechaCir = cirugia.fecha?.trim();
+  // Debe coincidir con `extractGeneralPlazoDateStr` en lib/analyzer.ts (regex `fecha…` + fecha inmediata).
   if (fechaCir) {
-    lines.push(`Fecha cirugía práctica realizada: ${fechaCir}`);
+    lines.push(`fecha: ${fechaCir}`);
   }
 
   pushLine(lines, 'fecha nacimiento', paciente.fecha_nacimiento);
@@ -51,7 +52,6 @@ export function parteExtractToAnalysisText(d: ParteQuirurgicoExtract): string {
 
   pushLine(lines, 'sanatorio clínica institución centro asistencial', sanatorio);
 
-  pushLine(lines, 'fecha', cirugia.fecha);
   pushLine(lines, 'hora inicio', cirugia.hora_inicio);
   pushLine(lines, 'hora fin', cirugia.hora_fin);
   pushLine(lines, 'quirófano quirofano', cirugia.quirofano);

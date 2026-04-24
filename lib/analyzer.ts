@@ -7,7 +7,7 @@ import { TRAZA_PREPAGAS, TRAZA_REQUIRED_FIELDS, TRAZA_SANATORIOS } from './traza
 import { matchScore } from './semantic';
 
 /** Incrementar al cambiar reglas de análisis para invalidar análisis guardados en `loadHistory`. */
-export const TRAZA_ANALYZER_REVISION = 13;
+export const TRAZA_ANALYZER_REVISION = 14;
 
 type NomenRow = { entries: Array<{ desc: string; specialty?: string }>; ambiguous?: boolean };
 const NOMEN = TRAZA_NOMENCLADOR_FULL as Record<string, NomenRow>;
@@ -705,9 +705,13 @@ function extractGeneralPlazoDateStr(text: string): string | null {
   for (const m of text.matchAll(re)) {
     const date = m[1];
     const idx = m.index ?? 0;
-    const ctx = stripAccents(text.slice(Math.max(0, idx - 40), Math.min(text.length, idx + 80)).toLowerCase());
-    const hasBad = badCtx.some((b) => ctx.includes(b));
+    // Solo texto *antes* del match para badCtx: si incluimos lo que viene después, la línea
+    // siguiente "fecha nacimiento: …" mete "nacimiento" en el contexto y descarta un `fecha:`
+    // válido de cirugía (p. ej. texto serializado desde OpenAI).
+    const ctxBefore = stripAccents(text.slice(Math.max(0, idx - 40), idx).toLowerCase());
+    const hasBad = badCtx.some((b) => ctxBefore.includes(b));
     if (hasBad) continue;
+    const ctx = stripAccents(text.slice(Math.max(0, idx - 40), Math.min(text.length, idx + 80)).toLowerCase());
     let score = 0;
     if (ctx.includes('n° cirugia') || ctx.includes('n° cirugia') || ctx.includes('n cirugia')) score += 2;
     if (ctx.includes('centro de procedimientos')) score += 1;

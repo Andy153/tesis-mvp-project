@@ -97,13 +97,26 @@ export function extractStructured(
   const afiliadoMatch = text.match(/af[ií]liado[:\s\u00ba\u00b0Nn\.]*([0-9]{6,20})/i);
   if (afiliadoMatch) result.afiliado = afiliadoMatch[1];
 
+  // Lookahead amplio: formularios suelen tener Afiliado/HC antes del DNI, o "D.N.I." en vez de "DNI".
   const pacienteMatch = text.match(
-    /Paciente[:\s]*([A-ZÁÉÍÓÚÑa-záéíóúñ,\.\s]{3,80}?)(?=\s*(?:DNI|Fecha|Edad|Sexo|Convenio|N[°º]|\n|$))/i,
+    /Paciente[:\s]*([A-ZÁÉÍÓÚÑa-záéíóúñ0-9,\.\-\s]{3,120}?)(?=\s*(?:DNI|D\.?\s*N\.?\s*I\.?|Fecha|Edad|Sexo|Convenio|N[°º]|Afiliado|afiliado|Historia|HC\b|Documento|CUIL|\n|$))/i,
   );
   if (pacienteMatch) result.paciente = pacienteMatch[1].trim().replace(/\s+/g, ' ');
   if (!result.paciente) {
     const alt = text.match(/\bpaciente\s+apellido\s+nombre\s*:\s*([^\n]+)/i);
     if (alt) result.paciente = alt[1].trim().replace(/\s+/g, ' ');
+  }
+  if (!result.paciente) {
+    const ay = text.match(/\b(?:Apellido\s+y\s+nombre|Apellidos?\s*,\s*nombres?)\s*[:\s-–—]\s*([^\n\r]{3,200})/i);
+    if (ay) result.paciente = ay[1].trim().replace(/\s+/g, ' ');
+  }
+  if (!result.paciente) {
+    const lineP = text.match(/\bPaciente\s*[:\s\-–—]\s*([^\n\r]+)/i);
+    if (lineP) {
+      let s = lineP[1].trim().replace(/\s+/g, ' ');
+      s = s.replace(/\s+D\.?\s*N\.?\s*I\.?\s*:?\s*\d[\d.\s]{5,14}\s*$/i, '').trim();
+      if (s.length >= 3 && s.length <= 120) result.paciente = s;
+    }
   }
 
   const fechaRegex = /(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/g;

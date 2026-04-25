@@ -1,3 +1,5 @@
+import type { ParteQuirurgicoExtract } from './ai/schemas';
+
 export type Severity = 'error' | 'warn' | 'ok' | 'info';
 
 export interface BBox {
@@ -136,6 +138,8 @@ export interface FileEntry {
   ocrWords?: PageWords[];
   /** Texto por página (mismo orden que thumbnails / ocrWords); ayuda a anclar fechas al PDF. */
   pageTexts?: string[];
+  /** JSON GPT página 1; respaldo planilla si `text` serializado no trae nombre (regex). */
+  aiParteExtract?: ParteQuirurgicoExtract;
   analysis?: Analysis;
   errorMessage?: string;
   exports?: {
@@ -162,4 +166,5 @@ export interface ExtractionResult {
   method: 'pdf-text' | 'ocr';
   ocrWords: PageWords[];
   pageTexts: string[];
+  aiParteExtract?: ParteQuirurgicoExtract;
 }

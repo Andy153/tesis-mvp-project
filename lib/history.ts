@@ -91,6 +91,7 @@ export function saveHistory(files: FileEntry[], authStates: Record<string, AuthS
           exports: f.exports,
           text: f.text ? f.text.slice(0, TEXT_CAP) : undefined,
           pageTexts: f.pageTexts,
+          aiParteExtract: f.aiParteExtract,
         })),
       authStates: Object.fromEntries(
         Object.entries(authStates).map(([k, v]) => [k, v ? minifyAuthState(v) : undefined]),
@@ -122,6 +123,7 @@ function persistedToFileEntry(f: PersistedFileEntry, savedRevision: number): Fil
     status: f.status,
     text: f.text,
     pageTexts: f.pageTexts,
+    aiParteExtract: f.aiParteExtract,
     analysis,
     method: f.method,
     errorMessage: f.errorMessage,

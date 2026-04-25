@@ -73,7 +73,7 @@ export function UploadView({
     };
     onAddFile(base);
     try {
-      const { text, thumbnails, method, ocrWords, pageTexts } = await extractText(file.file, (p) => {
+      const { text, thumbnails, method, ocrWords, pageTexts, aiParteExtract } = await extractText(file.file, (p) => {
         onAddFile({ ...base, progress: p.progress, progressMessage: p.message });
       });
       const analysis = analyzeDocument(text, file.name, ocrWords, pageTexts);
@@ -87,6 +87,7 @@ export function UploadView({
         method,
         ocrWords,
         pageTexts,
+        aiParteExtract,
         manualChecks: undefined,
         analysis,
         errorMessage: undefined,
@@ -125,7 +126,7 @@ export function UploadView({
       onAddFile(entry);
 
       try {
-        const { text, thumbnails, method, ocrWords, pageTexts } = await extractText(file, (p) => {
+        const { text, thumbnails, method, ocrWords, pageTexts, aiParteExtract } = await extractText(file, (p) => {
           onAddFile({ ...entry, progress: p.progress, progressMessage: p.message });
         });
 
@@ -140,6 +141,7 @@ export function UploadView({
           method,
           ocrWords,
           pageTexts,
+          aiParteExtract,
           analysis,
         });
       } catch (err: unknown) {

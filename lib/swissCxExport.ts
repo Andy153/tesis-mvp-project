@@ -58,7 +58,11 @@ export function buildSwissCxRow(args: {
   const fecha = fmtDate(structured.fechaPractica);
 
   const socio = bestAfiliadoFromText(parteText);
-  const socioDesc = structured.paciente || '';
+  const socioDesc =
+    (structured.paciente || '').trim() ||
+    String(args.parte.aiParteExtract?.paciente?.apellido_nombre || '')
+      .trim()
+      .replace(/\s+/g, ' ');
 
   const codigo =
     structured.codigo ||

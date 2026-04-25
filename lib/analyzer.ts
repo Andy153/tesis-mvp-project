@@ -1,5 +1,6 @@
 // Trazá — Motor de análisis (TypeScript, client-only)
 import type { Analysis, ExtractionResult, Finding, PageWords, Span } from './types';
+import { extractStructured } from './authz';
 import { parteExtractToAnalysisText } from './ai/parteExtractToAnalysisText';
 import type { ParteQuirurgicoExtract } from './ai/schemas';
 import { TRAZA_NOMENCLADOR_FULL, TRAZA_PROC_KEYWORDS } from './nomenclador.js';
@@ -7,7 +8,7 @@ import { TRAZA_PREPAGAS, TRAZA_REQUIRED_FIELDS, TRAZA_SANATORIOS } from './traza
 import { matchScore } from './semantic';
 
 /** Incrementar al cambiar reglas de análisis para invalidar análisis guardados en `loadHistory`. */
-export const TRAZA_ANALYZER_REVISION = 14;
+export const TRAZA_ANALYZER_REVISION = 18;
 
 type NomenRow = { entries: Array<{ desc: string; specialty?: string }>; ambiguous?: boolean };
 const NOMEN = TRAZA_NOMENCLADOR_FULL as Record<string, NomenRow>;
@@ -49,10 +50,16 @@ async function tryOverlayOpenAiParteText(result: ExtractionResult, onProgress?: 
     onProgress?.({ progress: 1, message: 'Listo' });
     return result;
   }
-  const text = parteExtractToAnalysisText(data);
+  let text = parteExtractToAnalysisText(data);
+  if (!data.paciente?.apellido_nombre?.trim()) {
+    const legacyPaciente = extractStructured(result.text.slice(0, 25_000), TRAZA_NOMENCLADOR_FULL as any).paciente;
+    if (legacyPaciente?.trim()) {
+      text = `Paciente: ${legacyPaciente.trim().replace(/\s+/g, ' ')}\n${text}`;
+    }
+  }
   const pageTexts = Array.from({ length: n }, () => text);
   onProgress?.({ progress: 1, message: 'Listo' });
-  return { ...result, text, pageTexts };
+  return { ...result, text, pageTexts, aiParteExtract: data };
 }
 
 export async function extractText(file: File, onProgress?: ProgressFn): Promise<ExtractionResult> {
@@ -82,7 +89,8 @@ async function extractFromPdf(file: File, onProgress?: ProgressFn): Promise<Extr
 
   for (let p = 1; p <= pdf.numPages; p++) {
     const page = await pdf.getPage(p);
-    const SCALE = 1.8;
+    // Página 1 más nítida para OpenAI Vision y para OCR en esa hoja.
+    const SCALE = p === 1 ? 2.75 : 1.8;
     const viewport = page.getViewport({ scale: SCALE });
 
     const textContent = await page.getTextContent();
@@ -573,6 +581,43 @@ function findInterventionAnchorSpan(ocrPages?: PageWords[]): Span[] | undefined 
   return [synthetic];
 }
 
+/** Resalta el procedimiento en el PDF: strict → suelto → tokens sueltos / descripción → caja de intervención. */
+function findSpansForProcedureKeyword(
+  keyword: string,
+  ocrPages?: PageWords[],
+  opts?: { desc?: string },
+): Span[] | undefined {
+  if (!ocrPages) return undefined;
+
+  const strict = findSpans(keyword, ocrPages, { requireProcedureFieldContext: true, maxResults: 2 });
+  if (strict.length) return strict;
+  const loose = findSpans(keyword, ocrPages, { maxResults: 2 });
+  if (loose.length) return loose;
+
+  const needleTokens = stripAccents(keyword.toLowerCase())
+    .replace(/[^\w\s.\-]/g, ' ')
+    .split(/\s+/)
+    .filter((t) => t.length > 0);
+  for (const tok of needleTokens) {
+    if (tok.length < 4) continue;
+    const one = findSpans(tok, ocrPages, { maxResults: 1 });
+    if (one.length) return one;
+  }
+
+  if (opts?.desc) {
+    const descToks = stripAccents(opts.desc.toLowerCase())
+      .replace(/[^\w\s.\-]/g, ' ')
+      .split(/\s+/)
+      .filter((t) => t.length >= 4);
+    for (const tok of descToks.slice(0, 8)) {
+      const one = findSpans(tok, ocrPages, { maxResults: 1 });
+      if (one.length) return one;
+    }
+  }
+
+  return ocrPages.length > 0 ? findInterventionAnchorSpan(ocrPages) : undefined;
+}
+
 /**
  * Ubica texto en `ocrWords` para dibujar rectángulos. En OCR hay que ser estricto: fechas partidas
  * en tokens cortos generan demasiados falsos; por defecto solo `maxResults` cajas (1).
@@ -856,7 +901,7 @@ export function analyzeDocument(
         body: `El documento menciona "${procedureGuess.keyword}" pero no incluye el código correspondiente. Sin código la prepaga no puede procesar la liquidación.`,
         action: `Agregar código ${procedureGuess.code} — ${procedureGuess.desc}.`,
         suggestion: { code: procedureGuess.code, desc: procedureGuess.desc },
-        spans: findSpans(procedureGuess.keyword, ocrWords, { requireProcedureFieldContext: true }),
+        spans: findSpansForProcedureKeyword(procedureGuess.keyword, ocrWords, { desc: procedureGuess.desc }),
       });
     } else {
       const interventionAnchor = findInterventionAnchorSpan(ocrWords);

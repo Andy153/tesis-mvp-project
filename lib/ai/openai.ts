@@ -8,9 +8,9 @@ import { BonoAutorizacionSchema, ParteQuirurgicoSchema } from './schemas';
 export const OPENAI_ENDPOINT = 'https://api.openai.com/v1/chat/completions';
 
 /**
- * Model used for extraction (pinned for stability).
+ * Model used for extraction (vision + JSON). Slug API: `gpt-4o-mini`.
  */
-export const OPENAI_MODEL = 'gpt-4o-mini-2024-07-18';
+export const OPENAI_MODEL = 'gpt-4o-mini';
 
 /**
  * Supported document types.
@@ -123,7 +123,10 @@ export async function callOpenAI(params: CallOpenAIParams) {
             role: 'user',
             content: [
               { type: 'text', text: prompt },
-              { type: 'image_url', image_url: { url: params.imageBase64 } },
+              {
+                type: 'image_url',
+                image_url: { url: params.imageBase64, detail: 'high' },
+              },
             ],
           },
         ],

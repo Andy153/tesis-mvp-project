@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /* Trazá — paleta verde / blanco · títulos: Dela Gothic One · texto: Unbounded */
 :root {
   --bg: #F4F8F5;
@@ -1987,3 +1991,5 @@ html[data-theme='dark'] .q-actions .btn.btn-primary:hover {
     transition: none;
   }
 }
+
+.tabular { font-variant-numeric: tabular-nums; }

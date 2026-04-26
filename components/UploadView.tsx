@@ -9,6 +9,7 @@ import { applyPlanillaValidationFindings } from '@/lib/swissCxExport';
 import type { AuthState, FileEntry, Finding, Span, Thumbnail } from '@/lib/types';
 
 const NOMEN_FOR_EXTRACT = TRAZA_NOMENCLADOR_FULL as Record<string, { entries?: Array<{ desc: string }> }>;
+const PIPE = '[TRAZA_PIPELINE]';
 
 interface Props {
   files: FileEntry[];
@@ -65,6 +66,8 @@ export function UploadView({
   async function handleReanalyze(file: FileEntry) {
     if (!file.file || reanalyzeBusy) return;
     setReanalyzeBusy(true);
+    const tAll0 = Date.now();
+    console.log(`${PIPE} ui:reanalyze:start fileId=${file.id} name=${file.name} size=${file.size} type=${file.type}`);
     const base: FileEntry = {
       ...file,
       status: 'analyzing',
@@ -73,10 +76,30 @@ export function UploadView({
     };
     onAddFile(base);
     try {
-      const { text, thumbnails, method, ocrWords, pageTexts, aiParteExtract } = await extractText(file.file, (p) => {
+      const tExtract0 = Date.now();
+      const {
+        text,
+        thumbnails,
+        method,
+        ocrWords,
+        pageTexts,
+        aiParteExtract,
+        institution_from_text,
+        raw_text,
+        raw_text_light,
+        raw_pageTexts,
+      } = await extractText(
+        file.file,
+        (p) => {
         onAddFile({ ...base, progress: p.progress, progressMessage: p.message });
-      });
+        },
+      );
+      console.log(
+        `${PIPE} ui:reanalyze:extract done ms=${Date.now() - tExtract0} text_len=${text.length} thumbs=${thumbnails.length} method=${method} pages=${pageTexts?.length ?? 0}`,
+      );
+      const tAnalyze0 = Date.now();
       const analysis = analyzeDocument(text, file.name, ocrWords, pageTexts);
+      console.log(`${PIPE} ui:reanalyze:analyze done ms=${Date.now() - tAnalyze0} overall=${analysis.overall}`);
       autoManualPrompted.current.delete(file.id);
       onAddFile({
         ...file,
@@ -87,12 +110,17 @@ export function UploadView({
         method,
         ocrWords,
         pageTexts,
+        raw_text,
+        raw_text_light,
+        raw_pageTexts,
+        institution_from_text,
         aiParteExtract,
         manualChecks: undefined,
         analysis,
         errorMessage: undefined,
         file: file.file,
       });
+      console.log(`${PIPE} ui:reanalyze:done total_ms=${Date.now() - tAll0}`);
     } catch (err: unknown) {
       console.error(err);
       onAddFile({
@@ -110,6 +138,7 @@ export function UploadView({
     const batchId = 'b_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
     setActiveBatchId(batchId);
     for (const file of fileList) {
+      const tAll0 = Date.now();
       const id = 'f_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
       const entry: FileEntry = {
         id,
@@ -124,13 +153,34 @@ export function UploadView({
         file,
       };
       onAddFile(entry);
+      console.log(`${PIPE} ui:upload:start batchId=${batchId} fileId=${id} name=${file.name} size=${file.size} type=${file.type}`);
 
       try {
-        const { text, thumbnails, method, ocrWords, pageTexts, aiParteExtract } = await extractText(file, (p) => {
+        const tExtract0 = Date.now();
+        const {
+          text,
+          thumbnails,
+          method,
+          ocrWords,
+          pageTexts,
+          aiParteExtract,
+          institution_from_text,
+          raw_text,
+          raw_text_light,
+          raw_pageTexts,
+        } = await extractText(
+          file,
+          (p) => {
           onAddFile({ ...entry, progress: p.progress, progressMessage: p.message });
-        });
+          },
+        );
+        console.log(
+          `${PIPE} ui:upload:extract done ms=${Date.now() - tExtract0} text_len=${text.length} thumbs=${thumbnails.length} method=${method} pages=${pageTexts?.length ?? 0}`,
+        );
 
+        const tAnalyze0 = Date.now();
         const analysis = analyzeDocument(text, file.name, ocrWords, pageTexts);
+        console.log(`${PIPE} ui:upload:analyze done ms=${Date.now() - tAnalyze0} overall=${analysis.overall}`);
 
         onAddFile({
           ...entry,
@@ -141,9 +191,14 @@ export function UploadView({
           method,
           ocrWords,
           pageTexts,
+          raw_text,
+          raw_text_light,
+          raw_pageTexts,
+          institution_from_text,
           aiParteExtract,
           analysis,
         });
+        console.log(`${PIPE} ui:upload:done total_ms=${Date.now() - tAll0}`);
       } catch (err: unknown) {
         console.error(err);
         onAddFile({
@@ -1486,8 +1541,14 @@ function AnalysisDetail({
             )}
             {analysis.detected.codes.length > 0 ? (
               <>
-                Código detectado:{' '}
+                Código en documento:{' '}
                 <code style={{ fontFamily: 'var(--font-mono)' }}>{analysis.detected.codes.join(', ')}</code>
+              </>
+            ) : analysis.detected.procedureGuess?.code ? (
+              <>
+                Código no encontrado en documento ·{' '}
+                <span style={{ color: 'var(--text-soft)' }}>Sugerencia de Trazá (fuente: procedimiento detectado)</span>{' '}
+                <code style={{ fontFamily: 'var(--font-mono)' }}>{analysis.detected.procedureGuess.code}</code>
               </>
             ) : (
               <span style={{ color: 'var(--text-soft)' }}>Sin código detectado</span>
@@ -1523,7 +1584,7 @@ function AnalysisDetail({
             >
               <div className="finding-head">
                 <span className="finding-title">{f.title}</span>
-                {f.spans && f.spans.length > 0 && (
+                {f.spans && f.spans.length > 0 && f.code !== 'NO_CODE_SUGGEST' && (
                   <span className="finding-loc">
                     <Icon name="target" size={11} /> en documento
                   </span>
@@ -1540,7 +1601,9 @@ function AnalysisDetail({
                     <div className="suggestion-desc">{f.suggestion.desc}</div>
                   </div>
                   <div className="suggestion-note">
-                    Detectamos el procedimiento en el texto. Este es el código de nomenclador que corresponde.
+                    {f.code === 'NO_CODE_SUGGEST'
+                      ? 'Fuente: procedimiento detectado en el texto. Revisá y confirmá el código antes de presentar.'
+                      : 'Detectamos el procedimiento en el texto. Este es el código de nomenclador que corresponde.'}
                   </div>
                 </div>
               )}

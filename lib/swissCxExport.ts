@@ -22,14 +22,273 @@ function normalizeText(s: string) {
 }
 
 function bestAfiliadoFromText(text: string) {
-  // Prefer the explicit extractor, then fall back to "longest digit run" heuristic
-  const structured = extractStructured(text, TRAZA_NOMENCLADOR_FULL as any);
-  if (structured.afiliado && structured.afiliado.length >= 6) return structured.afiliado;
+  try {
+    const maskPreview = (raw: string, max = 800) => {
+      const s = String(raw || '').replace(/\s+/g, ' ').trim();
+      const truncated = s.length > max ? s.slice(0, max) + '…' : s;
+      // mask digit runs
+      return truncated.replace(/\d/g, 'X');
+    };
+    // Prefer the explicit extractor; NEVER fall back to DNI/long digit runs.
+    const structured = extractStructured(text, TRAZA_NOMENCLADOR_FULL as any);
+    if (structured.afiliado && structured.afiliado.length >= 6) return structured.afiliado;
 
-  const candidates = [...text.matchAll(/\b(\d{6,20})\b/g)].map((m) => m[1]);
-  if (candidates.length === 0) return structured.afiliado || '';
-  candidates.sort((a, b) => b.length - a.length);
-  return candidates[0];
+    const norm = normalizeText(text);
+    console.log(
+      `[TRAZA_PIPELINE] planilla_mapping socio_input text_len=${String(text || '').length} contains_numero=${norm.includes('numero') || norm.includes('nro') || norm.includes('nº') || norm.includes('n°')} contains_plan=${norm.includes('plan')} contains_cobertura=${norm.includes('cobertura')} contains_swiss=${norm.includes('swiss')} contains_documento=${norm.includes('documento') || norm.includes('doc.')} contains_dni=${norm.includes('dni')}`,
+    );
+    console.log(`[TRAZA_PIPELINE] planilla_mapping socio_input_preview="${maskPreview(text, 800)}"`);
+
+    const maskNum = (v: string) => {
+      const s = String(v || '').trim();
+      if (!s) return '';
+      if (s.length <= 4) return `${s.slice(0, 1)}${'X'.repeat(Math.max(0, s.length - 2))}${s.slice(-1)}(len${s.length})`;
+      return `${s.slice(0, 2)}${'X'.repeat(Math.max(0, s.length - 4))}${s.slice(-2)}(len${s.length})`;
+    };
+    const digitsOnly = (s: string) => String(s || '').replace(/\D/g, '');
+    const MIN_LEN_PRIMARY = 10;
+    const MIN_LEN_CONTEXTUAL = 10;
+    const MIN_LEN_SECONDARY = 10;
+    const MAX_LEN = 22;
+
+    const levenshtein = (a: string, b: string) => {
+      if (a === b) return 0;
+      if (!a) return b.length;
+      if (!b) return a.length;
+      const m = a.length;
+      const n = b.length;
+      const dp = new Array(n + 1);
+      for (let j = 0; j <= n; j++) dp[j] = j;
+      for (let i = 1; i <= m; i++) {
+        let prev = dp[0];
+        dp[0] = i;
+        for (let j = 1; j <= n; j++) {
+          const tmp = dp[j];
+          const cost = a.charCodeAt(i - 1) === b.charCodeAt(j - 1) ? 0 : 1;
+          dp[j] = Math.min(dp[j] + 1, dp[j - 1] + 1, prev + cost);
+          prev = tmp;
+        }
+      }
+      return dp[n];
+    };
+
+    const normalizeTextForSocioCtx = (s: string) => {
+      // Keep length stable where possible (same-length replacements) to preserve match indices.
+      let out = String(s || '');
+      out = out.replace(/\bm[úu]mero\b/gi, 'numero');
+      out = out.replace(/\bmumero\b/gi, 'numero');
+      out = out.replace(/\bmúmero\b/gi, 'numero');
+      out = out.replace(/\bpano\b/gi, 'plan');
+      out = out.replace(/\bpian\b/gi, 'plan');
+      out = out.replace(/\bpian\b/gi, 'plan');
+      return out;
+    };
+
+    const findFuzzySignals = (window: string, targets: string[]) => {
+      const toks = String(window || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .split(/[^a-z0-9]+/g)
+        .filter((t) => t.length >= 4 && t.length <= 18);
+      const found = new Set<string>();
+      for (const tok of toks) {
+        for (const t of targets) {
+          const tt = t.replace(/\s+/g, '');
+          const d = levenshtein(tok, tt);
+          if (d <= 2) {
+            found.add(t);
+            break;
+          }
+        }
+        if (found.size >= 8) break;
+      }
+      return [...found];
+    };
+
+    // Look for labeled membership/credential numbers; keep generic and avoid DNI.
+    // Captures digits even if OCR inserts spaces/dashes/dots between them.
+    const primaryLabel =
+      String.raw`\b(?:n(?:u|ú)mero|n(?:ro|[º°])?)?\s*(?:de\s*)?(?:credencial|afiliad[oa]|socio|carnet)\b`;
+    const primaryLabel2 =
+      String.raw`\b(?:credencial|afiliad[oa]|socio|carnet)\b\s*(?:n(?:u|ú)mero|n(?:ro|[º°])?)?\b`;
+    const secondaryLabel =
+      String.raw`\b(?:n(?:u|ú)mero|n(?:ro|[º°])?)?\s*(?:de\s*)?(?:hc|historia\s+clinica|historia\s+clínica|encuentro|episodio)\b`;
+    const secondaryLabel2 =
+      String.raw`\b(?:hc|historia\s+clinica|historia\s+clínica|encuentro|episodio)\b\s*(?:n(?:u|ú)mero|n(?:ro|[º°])?)?\b`;
+    const coverageHint = String.raw`\b(?:cobertura|plan)\b`;
+    const numChunk = String.raw`([0-9][0-9\s.\-–_]{6,40}[0-9])`; // must start+end with digit
+    const rePrimary = new RegExp(String.raw`(?:${primaryLabel}|${primaryLabel2})[^0-9]{0,18}${numChunk}`, 'gi');
+    const reSecondary = new RegExp(String.raw`(?:${secondaryLabel}|${secondaryLabel2})[^0-9]{0,18}${numChunk}`, 'gi');
+    // Keep coverage/plan as a weak hint; treated as secondary bucket.
+    const reCoverageHint = new RegExp(String.raw`(?:${coverageHint})[^0-9]{0,18}${numChunk}`, 'gi');
+    console.log(`[TRAZA_PIPELINE] planilla_mapping socio_regex_compiled ok=true`);
+
+    const acceptedPrimary: Array<{ raw: string; digits: string; reason: string }> = [];
+    const acceptedContextual: Array<{ raw: string; digits: string; reason: string }> = [];
+    const acceptedSecondary: Array<{ raw: string; digits: string; reason: string }> = [];
+    const rejected: Array<{ raw: string; digits: string; reason: string }> = [];
+
+    const collect = (it: IterableIterator<RegExpMatchArray>, bucket: 'primary' | 'secondary', matchReason: string) => {
+      for (const m of it) {
+        const raw = String(m[1] || '').trim();
+        const dig = digitsOnly(raw);
+        const minLen = bucket === 'primary' ? MIN_LEN_PRIMARY : MIN_LEN_SECONDARY;
+        if (dig.length < minLen) {
+          rejected.push({ raw, digits: dig, reason: `${bucket}:${matchReason}:too_short` });
+          continue;
+        }
+        if (dig.length > MAX_LEN) {
+          rejected.push({ raw, digits: dig, reason: `${bucket}:${matchReason}:too_long` });
+          continue;
+        }
+        if (bucket === 'primary') acceptedPrimary.push({ raw, digits: dig, reason: matchReason });
+        else acceptedSecondary.push({ raw, digits: dig, reason: matchReason });
+      }
+    };
+
+    collect(norm.matchAll(rePrimary), 'primary', 'label');
+    collect(norm.matchAll(reSecondary), 'secondary', 'label');
+    collect(norm.matchAll(reCoverageHint), 'secondary', 'coverage_hint');
+
+    // Contextual strategy: capture "Número: XXXXX" only when nearby context indicates coverage/plan.
+    // Never accept if context indicates DNI/document/patient fields.
+    const ctxSignalsCoverage = [
+      'plan',
+      'cobertura',
+      'prepaga',
+      'obra social',
+      'swiss',
+      'medical',
+      'credencial',
+      'afiliad',
+      'socio',
+      'carnet',
+    ];
+    const ctxSignalsDoc = ['dni', 'documento', 'tipo de documento', 'doc.', 'paciente', 'apellido y nombre'];
+    const normCtx = normalizeTextForSocioCtx(norm);
+    const ctxRe =
+      /\b(?:numero|n(?:ro|[º°])?|n°|nº)\b\s*[:#]?\s*([0-9][0-9\s.\-–_]{6,40}[0-9])\b/gi;
+
+    const contextualAccepted: Array<{ digits: string; reason: string }> = [];
+    const contextualRejected: Array<{ digits: string; reason: string }> = [];
+    let ctxLogged = 0;
+    for (const m of normCtx.matchAll(ctxRe)) {
+      const idx = typeof m.index === 'number' ? m.index : -1;
+      const rawNum = String(m[1] || '').trim();
+      const dig = digitsOnly(rawNum);
+      if (dig.length < MIN_LEN_CONTEXTUAL) {
+        contextualRejected.push({ digits: dig, reason: 'too_short' });
+        continue;
+      }
+      if (dig.length > MAX_LEN) {
+        contextualRejected.push({ digits: dig, reason: 'too_long' });
+        continue;
+      }
+      if (idx < 0) {
+        contextualRejected.push({ digits: dig, reason: 'no_index' });
+        continue;
+      }
+      const from = Math.max(0, idx - 120);
+      const to = Math.min(normCtx.length, idx + (m[0]?.length || 0) + 80);
+      const winNorm = normCtx.slice(from, to);
+      const hasCoverage = ctxSignalsCoverage.some((s) => winNorm.includes(s.replace(/\s+/g, ' ')));
+      const hasDoc = ctxSignalsDoc.some((s) => winNorm.includes(s.replace(/\s+/g, ' ')));
+      const covFound = findFuzzySignals(winNorm, ctxSignalsCoverage);
+      const docFound = findFuzzySignals(winNorm, ctxSignalsDoc);
+
+      if (ctxLogged < 3) {
+        const prev = winNorm.replace(/\d/g, 'X');
+        console.log(
+          `[TRAZA_PIPELINE] planilla_mapping socio_context_window_preview="${prev.slice(0, 220)}"`,
+        );
+        console.log(
+          `[TRAZA_PIPELINE] planilla_mapping socio_context_signals_found=${JSON.stringify({
+            coverage: covFound,
+            document: docFound,
+          })}`,
+        );
+        ctxLogged++;
+      }
+
+      if (hasDoc && !hasCoverage) {
+        contextualRejected.push({ digits: dig, reason: 'document_context' });
+        continue;
+      }
+      if (hasCoverage || covFound.length > 0) {
+        contextualAccepted.push({ digits: dig, reason: 'coverage_context' });
+        continue;
+      }
+      contextualRejected.push({ digits: dig, reason: 'insufficient_context' });
+    }
+
+    for (const c of contextualAccepted) acceptedContextual.push({ raw: '', digits: c.digits, reason: c.reason });
+    for (const r of contextualRejected) rejected.push({ raw: '', digits: r.digits, reason: `context:${r.reason}` });
+
+    // Contextual logs (masked).
+    console.log(
+      `[TRAZA_PIPELINE] planilla_mapping socio_contextual_candidates=${JSON.stringify(
+        contextualAccepted.slice(0, 8).map((c) => ({ masked: maskNum(c.digits), context_reason: c.reason })),
+      )}`,
+    );
+    console.log(
+      `[TRAZA_PIPELINE] planilla_mapping socio_contextual_rejected=${JSON.stringify(
+        contextualRejected.slice(0, 8).map((c) => ({ masked: maskNum(c.digits), context_reason: c.reason })),
+      )}`,
+    );
+
+    // Debug logs: show candidates masked, never full numbers.
+    if (acceptedPrimary.length > 0 || acceptedContextual.length > 0 || acceptedSecondary.length > 0) {
+      console.log(
+        `[TRAZA_PIPELINE] planilla_mapping socio_labeled_candidates=${JSON.stringify(
+          [
+            ...acceptedPrimary.map((c) => ({ masked: maskNum(c.digits), source: 'primary', reason: c.reason })),
+            ...acceptedContextual.map((c) => ({ masked: maskNum(c.digits), source: 'contextual', reason: c.reason })),
+            ...acceptedSecondary.map((c) => ({ masked: maskNum(c.digits), source: 'secondary', reason: c.reason })),
+          ].slice(0, 12),
+        )}`,
+      );
+    } else {
+      console.log(`[TRAZA_PIPELINE] planilla_mapping socio_labeled_candidates=[]`);
+    }
+    if (rejected.length > 0) {
+      console.log(
+        `[TRAZA_PIPELINE] planilla_mapping socio_rejected_candidates=${JSON.stringify(
+          rejected.slice(0, 8).map((c) => ({ masked: maskNum(c.digits), reason: c.reason })),
+        )}`,
+      );
+    } else {
+      console.log(`[TRAZA_PIPELINE] planilla_mapping socio_rejected_candidates=[]`);
+    }
+
+    const pickBest = (arr: Array<{ raw: string; digits: string; reason: string }>) => {
+      const uniq = new Map<string, { raw: string; digits: string; reason: string }>();
+      for (const a of arr) if (!uniq.has(a.digits)) uniq.set(a.digits, a);
+      const list = [...uniq.values()];
+      list.sort((a, b) => b.digits.length - a.digits.length);
+      return list[0] || null;
+    };
+
+    const chosenPrimary = pickBest(acceptedPrimary);
+    const chosenContextual = pickBest(acceptedContextual);
+    const chosenSecondary = pickBest(acceptedSecondary);
+    const chosen = chosenPrimary || chosenContextual || chosenSecondary;
+    const chosenSource = chosenPrimary ? 'primary' : chosenContextual ? 'contextual' : chosenSecondary ? 'secondary' : 'none';
+
+    if (!chosen) {
+      console.log(`[TRAZA_PIPELINE] planilla_mapping socio_selected_source=none socio_selected_value_masked=`);
+      return '';
+    }
+
+    console.log(
+      `[TRAZA_PIPELINE] planilla_mapping socio_selected_source=${chosenSource} socio_selected_value_masked=${maskNum(chosen.digits)}`,
+    );
+    return chosen.digits;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.log(`[TRAZA_PIPELINE] planilla_mapping socio_error=${msg || 'unknown'}`);
+    return '';
+  }
 }
 
 function detectFlags(text: string) {
@@ -52,12 +311,39 @@ export function buildSwissCxRow(args: {
   authState: AuthState | undefined;
 }): Row {
   const parteText = args.parte.text || '';
+  const rawText = (args.parte as any).raw_text || '';
+  const rawTextLight = (args.parte as any).raw_text_light || '';
+  const rawPages = (args.parte as any).raw_pageTexts as string[] | undefined;
+  const rawJoined = rawPages && rawPages.length ? rawPages.join('\n') : '';
+  const socioText =
+    rawText && rawText.length >= parteText.length
+      ? rawText
+      : rawTextLight
+        ? rawTextLight
+        : rawJoined && rawJoined.length >= parteText.length
+          ? rawJoined
+          : parteText;
+  const socio_text_source =
+    socioText === rawText
+      ? 'raw_text'
+      : socioText === rawTextLight
+        ? 'raw_text_light'
+        : socioText === rawJoined
+          ? 'raw_pageTexts_joined'
+          : 'parte.text';
+
+  console.log(
+    `[TRAZA_PIPELINE] planilla_mapping socio_text_source=${socio_text_source} socio_text_len=${String(socioText || '').length} parte_text_len=${String(parteText || '').length} raw_text_len=${String(rawText || '').length}`,
+  );
   const analysis = args.parte.analysis;
 
   const structured = extractStructured(parteText, TRAZA_NOMENCLADOR_FULL as any);
   const fecha = fmtDate(structured.fechaPractica);
 
-  const socio = bestAfiliadoFromText(parteText);
+  const socioStructured = (structured.afiliado || '').trim();
+  const socioLabeled = bestAfiliadoFromText(socioText);
+  const socio = socioStructured || socioLabeled || '';
+  const socio_source = socioStructured ? 'extractStructured.afiliado' : socioLabeled ? 'labeled_regex' : 'none';
   const socioDesc =
     (structured.paciente || '').trim() ||
     String(args.parte.aiParteExtract?.paciente?.apellido_nombre || '')
@@ -76,10 +362,32 @@ export function buildSwissCxRow(args: {
     analysis?.detected?.procedureGuess?.desc ||
     (codigo && nomenAny[codigo]?.entries?.[0]?.desc ? String(nomenAny[codigo].entries[0].desc) : '');
 
-  let institucion = analysis?.detected?.sanatorios?.[0] || '';
+  const instOpenAi = String(args.parte.aiParteExtract?.sanatorio || '').trim();
+  const instDetected = String(analysis?.detected?.sanatorios?.[0] || '').trim();
+  const instFromText = String((args.parte as any).institution_from_text || '').trim();
+  let institucion = instOpenAi || instDetected || instFromText || '';
+  const institucion_source = instOpenAi
+    ? 'aiParteExtract.sanatorio'
+    : instDetected
+      ? 'analysis.detected.sanatorios[0]'
+      : instFromText
+        ? 'institution_from_text'
+        : 'none';
   // Display names: keep detection keywords short but export full institution name
   if (institucion === 'Otamendi') institucion = 'Sanatorio Otamendi';
   if (institucion === 'Mater Dei') institucion = 'Sanatorio Mater Dei';
+
+  // Debug mapping logs (avoid printing full sensitive values).
+  const maskNum = (s: string) => {
+    const v = String(s || '').trim();
+    if (!v) return '';
+    if (v.length <= 4) return `${v.slice(0, 1)}${'X'.repeat(Math.max(0, v.length - 2))}${v.slice(-1)}`;
+    return `${v.slice(0, 2)}${'X'.repeat(Math.max(0, v.length - 4))}${v.slice(-2)}`;
+  };
+  console.log(`[TRAZA_PIPELINE] planilla_mapping socio_source=${socio_source} socio_value=${maskNum(socio)}`);
+  console.log(
+    `[TRAZA_PIPELINE] planilla_mapping institucion_source=${institucion_source} institucion_value="${String(institucion || '').slice(0, 80)}"`,
+  );
 
   const { hasAyud, hasInst, hasCir, urgByWord } = detectFlags(parteText);
   const urgencia = urgByWord || isWeekend(structured.fechaPractica) ? 'X' : '';

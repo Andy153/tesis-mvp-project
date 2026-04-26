@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { PROMPT_BONO_AUTORIZACION, PROMPT_PARTE_QUIRURGICO } from './prompts';
 import { BonoAutorizacionSchema, ParteQuirurgicoSchema } from './schemas';
 
+const PIPE = '[TRAZA_PIPELINE]';
+
 /**
  * OpenAI Chat Completions endpoint (OpenAI-compatible).
  */
@@ -25,6 +27,8 @@ export type OpenAIErr = { ok: false; error: string; errorCode: OpenAIErrorCode }
 export type CallOpenAIParams = {
   /** Image as a data URL (e.g. `data:image/jpeg;base64,...`). */
   imageBase64: string;
+  /** Optional multiple images (up to 3). If provided, `imageBase64` is treated as the first image. */
+  imagesBase64?: string[];
   /** Document type to extract. */
   documentType: DocumentType;
   /** Optional abort signal (e.g. client cancellation). */
@@ -70,6 +74,46 @@ function stripMarkdownFences(s: string) {
   return trimmed;
 }
 
+function flattenFieldStatus(value: unknown, path = '', out: string[] = [], depth = 0): string[] {
+  if (depth > 6) return out;
+  if (value === null) {
+    out.push(`${path}=null`);
+    return out;
+  }
+  if (value === undefined) {
+    out.push(`${path}=undefined`);
+    return out;
+  }
+  const t = typeof value;
+  if (t === 'string') {
+    const s = String(value);
+    out.push(`${path}=string(${s.trim().length === 0 ? 'empty' : 'len' + s.length})`);
+    return out;
+  }
+  if (t === 'number') {
+    out.push(`${path}=number`);
+    return out;
+  }
+  if (t === 'boolean') {
+    out.push(`${path}=boolean`);
+    return out;
+  }
+  if (Array.isArray(value)) {
+    out.push(`${path}=array(len${value.length})`);
+    return out;
+  }
+  if (t === 'object') {
+    const obj = value as Record<string, unknown>;
+    for (const k of Object.keys(obj)) {
+      flattenFieldStatus(obj[k], path ? `${path}.${k}` : k, out, depth + 1);
+      if (out.length >= 80) break;
+    }
+    return out;
+  }
+  out.push(`${path}=${t}`);
+  return out;
+}
+
 function isAbortError(e: unknown) {
   return (
     !!e &&
@@ -95,6 +139,10 @@ function mergeAbortSignals(timeoutController: AbortController, upstream?: AbortS
  */
 export async function callOpenAI(params: CallOpenAIParams) {
   const startedAt = Date.now();
+  const images = (params.imagesBase64 && params.imagesBase64.length ? params.imagesBase64 : [params.imageBase64]).slice(0, 3);
+  console.log(
+    `${PIPE} openai:call start docType=${params.documentType} model=${OPENAI_MODEL} images=${images.length} img_lens=${images.map((s) => s.length).join(',')}`,
+  );
 
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -109,6 +157,7 @@ export async function callOpenAI(params: CallOpenAIParams) {
   const timeout = setTimeout(() => timeoutController.abort(), 60_000);
 
   try {
+    const tFetch0 = Date.now();
     const resp = await fetch(OPENAI_ENDPOINT, {
       method: 'POST',
       headers: {
@@ -123,10 +172,10 @@ export async function callOpenAI(params: CallOpenAIParams) {
             role: 'user',
             content: [
               { type: 'text', text: prompt },
-              {
-                type: 'image_url',
-                image_url: { url: params.imageBase64, detail: 'high' },
-              },
+              ...images.map((url) => ({
+                type: 'image_url' as const,
+                image_url: { url, detail: 'high' as const },
+              })),
             ],
           },
         ],
@@ -138,6 +187,7 @@ export async function callOpenAI(params: CallOpenAIParams) {
       }),
       signal,
     });
+    console.log(`${PIPE} openai:http status=${resp.status} ok=${resp.ok} fetch_ms=${Date.now() - tFetch0}`);
 
     if (!resp.ok) {
       const text = await resp.text().catch(() => '');
@@ -160,6 +210,7 @@ export async function callOpenAI(params: CallOpenAIParams) {
 
     const contentRaw = parsed.data.choices[0]?.message?.content ?? '';
     const content = stripMarkdownFences(String(contentRaw || ''));
+    console.log(`${PIPE} openai:content chars=${content.length} tokensUsed=${parsed.data.usage?.total_tokens ?? 0}`);
     let dataUnknown: unknown;
     try {
       dataUnknown = JSON.parse(content);
@@ -182,6 +233,8 @@ export async function callOpenAI(params: CallOpenAIParams) {
 
     const elapsedMs = Date.now() - startedAt;
     const tokensUsed = parsed.data.usage?.total_tokens ?? 0;
+    const fieldStatus = flattenFieldStatus(validated.data);
+    console.log(`${PIPE} openai:validated ok fields=${fieldStatus.join(' | ')}`);
     return { ok: true, data: validated.data, tokensUsed, elapsedMs } as OpenAIOk<typeof validated.data>;
   } catch (e) {
     if (isAbortError(e)) {

@@ -138,6 +138,14 @@ export interface FileEntry {
   ocrWords?: PageWords[];
   /** Texto por página (mismo orden que thumbnails / ocrWords); ayuda a anclar fechas al PDF. */
   pageTexts?: string[];
+  /** Texto original (pre-OpenAI overlay), típico OCR/PDF completo. */
+  raw_text?: string;
+  /** Texto liviano (fast_default): OCR parcial de portada para datos administrativos. */
+  raw_text_light?: string;
+  /** Texto por página original (pre-OpenAI overlay). */
+  raw_pageTexts?: string[];
+  /** Institución detectada desde texto/OCR (headers); fallback si OpenAI viene vacío. */
+  institution_from_text?: string;
   /** JSON GPT página 1; respaldo planilla si `text` serializado no trae nombre (regex). */
   aiParteExtract?: ParteQuirurgicoExtract;
   analysis?: Analysis;
@@ -166,5 +174,9 @@ export interface ExtractionResult {
   method: 'pdf-text' | 'ocr';
   ocrWords: PageWords[];
   pageTexts: string[];
+  raw_text?: string;
+  raw_text_light?: string;
+  raw_pageTexts?: string[];
+  institution_from_text?: string;
   aiParteExtract?: ParteQuirurgicoExtract;
 }

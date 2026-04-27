@@ -1,6 +1,5 @@
 'use client';
 
-import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ArrowRight, Upload } from 'lucide-react';
 
@@ -10,7 +9,7 @@ type Props = {
 
 export function CtaCarga({ onComenzar }: Props) {
   return (
-    <Card className="bg-accent/30 border-primary/20 p-8">
+    <section className="panel" style={{ padding: 18, background: 'var(--accent-soft)', borderColor: 'var(--border)' }}>
       <div className="flex flex-col md:flex-row md:items-center gap-6">
         <div className="h-16 w-16 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
           <Upload className="h-8 w-8 text-primary" />
@@ -26,7 +25,7 @@ export function CtaCarga({ onComenzar }: Props) {
           <ArrowRight className="ml-2 h-4 w-4" />
         </Button>
       </div>
-    </Card>
+    </section>
   );
 }
 

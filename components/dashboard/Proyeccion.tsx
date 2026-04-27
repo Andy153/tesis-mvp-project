@@ -1,18 +1,9 @@
 'use client';
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
-import { ArrowRight, Lock } from 'lucide-react';
+import { Lock } from 'lucide-react';
+import Image from 'next/image';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -28,37 +19,40 @@ export function Proyeccion() {
 
   const porcentajeCobrado = proyeccion.total > 0 ? Math.round((proyeccion.cobrado / proyeccion.total) * 100) : 0;
 
-  const filasPrepaga = PREPAGAS.map((prepaga) => {
-    const datos = proyeccion.porPrepaga.find((p) => p.prepaga.id === prepaga.id);
-    return {
-      prepaga,
-      cantidad: datos?.cantidad ?? 0,
-      monto: datos?.monto ?? 0,
-    };
-  });
+  const swiss = PREPAGAS.find((p) => p.id === 'swiss')!;
+  const osde = PREPAGAS.find((p) => p.id === 'osde')!;
+  const swissDatos = proyeccion.porPrepaga.find((p) => p.prepaga.id === 'swiss');
+  const swissCantidad = swissDatos?.cantidad ?? 0;
+  const swissMonto = swissDatos?.monto ?? 0;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Proyección de cobro</CardTitle>
-        <CardDescription>{mesCapitalizado}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <div className="text-xl md:text-2xl font-semibold tabular text-primary leading-tight break-all">
+    <section className="panel mt-[15px] mb-[15px]" style={{ padding: 16 }}>
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ fontWeight: 800, fontSize: 15, lineHeight: 1.25, color: 'var(--text)' }}>Proyección de cobro</div>
+        <div style={{ marginTop: 6, fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.45 }}>{mesCapitalizado}</div>
+      </div>
+      <div>
+        <div className="proj-summary-grid">
+          <div className="panel" style={{ padding: 12, background: 'var(--bg-sunken)' }}>
+            <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-soft)', fontWeight: 700 }}>
+              Cobrado
+            </div>
+            <div style={{ marginTop: 6, fontSize: 18, fontWeight: 800, color: 'var(--accent)', lineHeight: 1.1 }} className="tabular proj-kpi-value">
               {formatCurrency(proyeccion.cobrado)}
             </div>
-            <div className="text-xs text-muted-foreground mt-2">Cobrado</div>
-            <div className="text-xs text-muted-foreground">de {formatCurrency(proyeccion.total)} totales</div>
+            <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>
+              de <span className="tabular">{formatCurrency(proyeccion.total)}</span> totales
+            </div>
           </div>
-          <div>
-            <div className="text-xl md:text-2xl font-semibold tabular text-foreground leading-tight break-all">
+          <div className="panel" style={{ padding: 12, background: 'var(--bg-sunken)' }}>
+            <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-soft)', fontWeight: 700 }}>
+              Pendiente
+            </div>
+            <div style={{ marginTop: 6, fontSize: 18, fontWeight: 800, color: 'var(--text)', lineHeight: 1.1 }} className="tabular proj-kpi-value">
               {formatCurrency(proyeccion.pendiente)}
             </div>
-            <div className="text-xs text-muted-foreground mt-2">Pendiente</div>
-            <div className="text-xs text-muted-foreground">
-              {proyeccion.cantidadPendiente}{' '}
+            <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>
+              <span className="tabular">{proyeccion.cantidadPendiente}</span>{' '}
               {proyeccion.cantidadPendiente === 1 ? 'intervención' : 'intervenciones'}
             </div>
           </div>
@@ -68,46 +62,139 @@ export function Proyeccion() {
 
         <Separator className="my-6" />
 
-        <h3 className="text-sm font-medium mb-3">Por prepaga</h3>
-        <div className="space-y-2">
-          {filasPrepaga.map(({ prepaga, cantidad, monto }) => (
-            <div
-              key={prepaga.id}
-              className={`flex items-center justify-between py-2 ${!prepaga.disponible ? 'opacity-50' : ''}`}
-            >
-              <div className="flex items-center gap-3 min-w-0 flex-1">
-                <div
-                  className="h-6 w-6 rounded-full flex items-center justify-center text-xs font-semibold text-white shrink-0"
-                  style={{ backgroundColor: prepaga.colorHex }}
-                >
-                  {prepaga.nombre.charAt(0)}
-                </div>
-                <span className="text-sm truncate">{prepaga.nombre}</span>
-              </div>
-              {prepaga.disponible ? (
-                <div className="text-right">
-                  <div className="tabular text-sm font-medium">{formatCurrency(monto)}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {cantidad} {cantidad === 1 ? 'intervención' : 'intervenciones'}
-                  </div>
-                </div>
-              ) : (
-                <Badge variant="outline" className="gap-1 text-xs">
-                  <Lock className="h-3 w-3" />
-                  Próximamente
-                </Badge>
-              )}
-            </div>
-          ))}
+        <div
+          style={{
+            marginTop: 10,
+            fontSize: 11,
+            textTransform: 'uppercase',
+            letterSpacing: '0.08em',
+            color: 'var(--text-soft)',
+            fontWeight: 700,
+            marginBottom: 10,
+          }}
+        >
+          Por prepaga
         </div>
-      </CardContent>
-      <CardFooter>
-        <Button variant="ghost" size="sm" className="ml-auto text-primary hover:text-primary hover:bg-primary/10">
-          Conocer más
-          <ArrowRight className="ml-1 h-3 w-3" />
-        </Button>
-      </CardFooter>
-    </Card>
+
+        <div style={{ display: 'grid', gap: 10 }}>
+          {/* Swiss Medical (activa) */}
+          <div
+            className="panel"
+            data-proj-prepaga-row
+            style={{
+              padding: 12,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+              borderColor: 'var(--border)',
+              background: 'var(--bg-panel)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
+              {/* Logo placeholder */}
+              <div
+                aria-hidden
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 8,
+                  border: '1px solid var(--border)',
+                  background: 'var(--bg-sunken)',
+                  display: 'grid',
+                  placeItems: 'center',
+                  flexShrink: 0,
+                  overflow: 'hidden',
+                }}
+                title="Swiss Medical"
+              >
+                <Image
+                  src="/logos/swiss-medical.png"
+                  alt="Swiss Medical"
+                  width={28}
+                  height={28}
+                  style={{ objectFit: 'contain' }}
+                />
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 800, fontSize: 13, color: 'var(--text)', lineHeight: 1.2, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{swiss.nombre}</span>
+                  <span aria-hidden style={{ width: 8, height: 8, borderRadius: 999, background: swiss.colorHex, opacity: 0.8 }} />
+                </div>
+                <div style={{ marginTop: 3, fontSize: 12, color: 'var(--text-muted)' }}>
+                  <span className="tabular">{swissCantidad}</span> {swissCantidad === 1 ? 'intervención' : 'intervenciones'}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ textAlign: 'right', flexShrink: 0 }} data-proj-prepaga-right>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-soft)' }}>Estimado</div>
+              <div style={{ fontWeight: 900, fontSize: 13, color: 'var(--accent-ink)' }} className="tabular">
+                {formatCurrency(swissMonto)}
+              </div>
+            </div>
+          </div>
+
+          {/* OSDE (no disponible) */}
+          <div
+            className="panel"
+            data-proj-prepaga-row
+            style={{
+              padding: 12,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+              borderColor: 'var(--border)',
+              background: 'var(--bg-panel)',
+              opacity: 0.55,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
+              {/* Logo placeholder */}
+              <div
+                aria-hidden
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 8,
+                  border: '1px solid var(--border)',
+                  background: 'var(--bg-sunken)',
+                  display: 'grid',
+                  placeItems: 'center',
+                  flexShrink: 0,
+                  overflow: 'hidden',
+                }}
+                title="OSDE (próximamente)"
+              >
+                <Image src="/logos/osde.png" alt="OSDE" width={28} height={28} style={{ objectFit: 'contain' }} />
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 800, fontSize: 13, color: 'var(--text)', lineHeight: 1.2, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{osde.nombre}</span>
+                  <span aria-hidden style={{ width: 8, height: 8, borderRadius: 999, background: 'var(--text-soft)', opacity: 0.7 }} />
+                </div>
+                <div style={{ marginTop: 3, fontSize: 12, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <Lock size={14} /> Próximamente
+                </div>
+              </div>
+            </div>
+
+            <div style={{ textAlign: 'right', flexShrink: 0 }} data-proj-prepaga-right>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-soft)' }}>Estimado</div>
+              <div style={{ fontWeight: 900, fontSize: 13, color: 'var(--text-soft)' }} className="tabular">
+                —
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
+        <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--accent)' }}>
+          Conocer más <span aria-hidden>→</span>
+        </button>
+      </div>
+    </section>
   );
 }
 

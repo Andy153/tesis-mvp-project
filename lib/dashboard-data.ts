@@ -157,12 +157,113 @@ export type AtencionItem = {
   itemId: string;
 };
 
+export type AtencionGrupo = {
+  itemId: string;
+  fileName: string;
+  addedAt: string;
+  fechaRelativa: string;
+  observaciones: AtencionItem[];
+};
+
 function parseSwissRowDate(s: string | undefined): Date | null {
   if (!s) return null;
   const m = String(s).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (!m) return null;
   const d = new Date(parseInt(m[3], 10), parseInt(m[2], 10) - 1, parseInt(m[1], 10));
   return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function tipoWeight(tipo: AtencionItem['tipo']): number {
+  // menor = más prioritario
+  const weight: Record<AtencionItem['tipo'], number> = { error: 0, plazo: 1, autorizacion: 2, warning: 3 };
+  return weight[tipo] ?? 99;
+}
+
+function groupPriority(g: AtencionGrupo): number {
+  let best = 99;
+  for (const o of g.observaciones) best = Math.min(best, tipoWeight(o.tipo));
+  return best;
+}
+
+/**
+ * Versión agrupada: devuelve 1 entrada por documento con todas sus observaciones relevantes.
+ * Esto evita duplicar tarjetas y permite UI compacta + modal con detalle.
+ */
+export function getDocumentosQueRequierenAtencionPorDocumento(
+  items: HistoryItem[],
+  opts?: { maxDocs?: number; maxFindingsPorDoc?: number },
+): AtencionGrupo[] {
+  const now = new Date();
+  const maxDocs = opts?.maxDocs;
+  const maxFindingsPorDoc = opts?.maxFindingsPorDoc ?? 8;
+
+  const out: AtencionGrupo[] = [];
+
+  for (const it of items || []) {
+    const observaciones: AtencionItem[] = [];
+    const findings = it.analysis?.findings || [];
+
+    const severas = findings.filter((f) => f.severity === 'error' || f.severity === 'warn').slice(0, Math.max(0, maxFindingsPorDoc));
+    for (const f of severas) {
+      observaciones.push({
+        id: `att_${it.id}_${f.severity}_${f.code}`,
+        tipo: f.severity === 'error' ? 'error' : 'warning',
+        titulo: f.title,
+        descripcion: f.action || f.suggestion?.desc || f.body,
+        fechaRelativa: formatDistanceToNow(new Date(it.addedAt), { locale: es, addSuffix: true }),
+        itemId: it.id,
+      });
+    }
+
+    // Authorization: infer "bono cargado" if planilla has permisoUrl.
+    const auth = requiresAuthorization(it.analysis);
+    const permisoUrl = it.exports?.swissCx?.files?.permisoUrl;
+    if (auth.required && !permisoUrl) {
+      observaciones.push({
+        id: `att_${it.id}_auth`,
+        tipo: 'autorizacion',
+        titulo: 'Falta autorización previa',
+        descripcion: 'Cargá el bono para evitar rechazos.',
+        fechaRelativa: formatDistanceToNow(new Date(it.addedAt), { locale: es, addSuffix: true }),
+        itemId: it.id,
+      });
+    }
+
+    // Plazo: fecha de práctica + 60 días, sin presentación.
+    const pract = parseSwissRowDate(it.exports?.swissCx?.row?.fecha);
+    const presented = Boolean(it.tracking?.fechaPresentacion);
+    if (pract && !presented) {
+      const daysSince = Math.floor((now.getTime() - pract.getTime()) / 86400000);
+      const left = 60 - daysSince;
+      if (left <= 10 && left > 0) {
+        observaciones.push({
+          id: `att_${it.id}_plazo`,
+          tipo: 'plazo',
+          titulo: 'Plazo próximo a vencer',
+          descripcion: `Quedan ${left} días para presentar antes del límite de 60.`,
+          fechaRelativa: formatDistanceToNow(pract, { locale: es, addSuffix: true }),
+          itemId: it.id,
+        });
+      }
+    }
+
+    if (observaciones.length === 0) continue;
+
+    observaciones.sort((a, b) => tipoWeight(a.tipo) - tipoWeight(b.tipo));
+
+    out.push({
+      itemId: it.id,
+      fileName: it.name,
+      addedAt: it.addedAt,
+      fechaRelativa: formatDistanceToNow(new Date(it.addedAt), { locale: es, addSuffix: true }),
+      observaciones,
+    });
+  }
+
+  out.sort((a, b) => groupPriority(a) - groupPriority(b));
+
+  if (typeof maxDocs === 'number') return out.slice(0, Math.max(0, maxDocs));
+  return out;
 }
 
 export function getDocumentosQueRequierenAtencion(items: HistoryItem[], limit?: number): AtencionItem[] {
@@ -229,8 +330,7 @@ export function getDocumentosQueRequierenAtencion(items: HistoryItem[], limit?: 
     }
   }
 
-  const weight: Record<AtencionItem['tipo'], number> = { error: 0, plazo: 1, autorizacion: 2, warning: 3 };
-  out.sort((a, b) => weight[a.tipo] - weight[b.tipo]);
+  out.sort((a, b) => tipoWeight(a.tipo) - tipoWeight(b.tipo));
 
   if (typeof limit === 'number') return out.slice(0, Math.max(0, limit));
   return out;

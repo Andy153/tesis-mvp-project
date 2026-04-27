@@ -252,7 +252,7 @@ export default function TrazaApp() {
         }}
       />
       <main className="main">
-        {active === 'dashboard' && <DashboardView onNavigate={(view) => setActive(view)} />}
+        {active === 'dashboard' && <DashboardView onNavigate={(view) => setActive(view)} onOpenFile={openFile} />}
         {active === 'upload' && (
           <UploadView
             files={files}

@@ -1527,11 +1527,39 @@ html[data-theme='dark'] .cal-nav {
 .cal-weekday-row.selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(45, 95, 78, 0.12); }
 .cal-weekday-name { font-weight: 600; text-transform: capitalize; }
 .cal-weekday-date { font-size: 12px; color: var(--text-soft); margin-top: 1px; }
-.cal-weekday-right { display: inline-flex; align-items: center; gap: 8px; }
+.cal-weekday-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 10px;
+  margin-right: 10px;
+}
 .cal-count { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); }
 .cal-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--ok); opacity: 0.7; }
 .cal-dot.err { background: var(--error); opacity: 0.85; }
 .cal-day-head { display: flex; align-items: center; gap: 10px; font-weight: 700; text-transform: capitalize; }
+
+/* Dashboard responsiveness helpers */
+.cal-shell {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.proj-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.ind-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  align-items: center;
+}
+.ind-actions .btn {
+  justify-content: center;
+}
 
 .cal-list { padding: 0; overflow: hidden; }
 .cal-items { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
@@ -1956,6 +1984,30 @@ html[data-theme='dark'] .q-actions .btn.btn-primary:hover {
   }
 }
 
+@media (max-width: 640px) {
+  .cal-shell { grid-template-columns: 1fr; }
+  .proj-summary-grid { grid-template-columns: 1fr; }
+  .proj-kpi-value { font-size: 16px !important; }
+
+  .ind-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ind-actions .btn:nth-child(3) { grid-column: 1 / -1; }
+
+  /* Atención: avoid horizontal scroll by stacking actions */
+  [data-att-row] { flex-direction: column; align-items: stretch; }
+  [data-att-actions] { flex-direction: row; justify-content: flex-end; }
+
+  /* Proyección: prevent overflow in "Por prepaga" rows */
+  [data-proj-prepaga-row] { flex-direction: column; align-items: stretch; }
+  [data-proj-prepaga-right] { text-align: left !important; }
+
+  /* Indicadores: shorten labels on small screens */
+  .ind-full { display: none; }
+  .ind-short { display: inline; }
+}
+
+/* default: show full labels */
+.ind-full { display: inline; }
+.ind-short { display: none; }
 @media (max-width: 480px) {
   .stats {
     grid-template-columns: 1fr;

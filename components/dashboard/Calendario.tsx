@@ -1,29 +1,13 @@
 'use client';
 
-import { useState } from 'react';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { ArrowRight } from 'lucide-react';
-import { format, isSameDay, parseISO } from 'date-fns';
-import { es } from 'date-fns/locale';
+import * as React from 'react';
+import { parseISO } from 'date-fns';
 
 import { loadHistoryWithFallback } from '@/lib/history';
 import { getCobrosDelMesPorDia, PREPAGAS } from '@/lib/dashboard-data';
 import { formatCurrency } from '@/lib/utils';
 
 export function Calendario() {
-  const [diaSeleccionado, setDiaSeleccionado] = useState<Date | undefined>(undefined);
-  const [popoverOpen, setPopoverOpen] = useState(false);
-
   const { files } = loadHistoryWithFallback();
   const cobrosPorDia = getCobrosDelMesPorDia(files);
 
@@ -33,104 +17,195 @@ export function Calendario() {
     0,
   );
 
-  const diasConCobros = cobrosPorDia.map((dia) => parseISO(dia.fecha));
-
-  const itemsDelDia = diaSeleccionado
-    ? cobrosPorDia.find((dia) => isSameDay(parseISO(dia.fecha), diaSeleccionado))?.items ?? []
-    : [];
+  const diasConCobros = cobrosPorDia
+    .map((dia) => ({ fecha: dia.fecha, date: parseISO(dia.fecha), items: dia.items }))
+    .filter((d) => d.items.length > 0)
+    .sort((a, b) => a.date.getTime() - b.date.getTime());
 
   const getColorPrepaga = (prepagaId: string) => {
     return PREPAGAS.find((p) => p.id === prepagaId)?.colorHex ?? '#2A6B52';
   };
 
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Próximos cobros</CardTitle>
-        <CardDescription>Cobros estimados según plazos de cada prepaga</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <p className="text-sm text-muted-foreground mb-4">
-          Este mes tenés{' '}
-          <strong className="text-foreground tabular">{cantidadCobros} cobros estimados</strong> por un total de{' '}
-          <strong className="text-foreground tabular">{formatCurrency(totalEstimado)}</strong>.
-        </p>
+  const hoy = new Date();
+  const proximosDias = diasConCobros.filter((d) => d.date.getTime() >= new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()).getTime());
+  const topDias = (proximosDias.length > 0 ? proximosDias : diasConCobros).slice(0, 7);
+  const [selectedKey, setSelectedKey] = React.useState<string>(() => topDias[0]?.fecha ?? '');
 
-        <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
-          <PopoverTrigger asChild>
-            <div>
-              <Calendar
-                mode="single"
-                selected={diaSeleccionado}
-                onSelect={(day) => {
-                  if (!day) return;
-                  const tieneCobros = cobrosPorDia.some((dia) => isSameDay(parseISO(dia.fecha), day));
-                  if (tieneCobros) {
-                    setDiaSeleccionado(day);
-                    setPopoverOpen(true);
-                  }
-                }}
-                locale={es}
-                weekStartsOn={1}
-                modifiers={{ cobro: diasConCobros }}
-                modifiersClassNames={{
-                  cobro:
-                    'relative font-semibold after:content-[""] after:absolute after:bottom-1 after:left-1/2 after:-translate-x-1/2 after:h-1.5 after:w-1.5 after:rounded-full after:bg-primary',
-                }}
-                className="w-full rounded-md"
-                classNames={{
-                  months: 'w-full',
-                  month: 'w-full space-y-4',
-                  table: 'w-full border-collapse',
-                  head_row: 'flex w-full',
-                  head_cell: 'text-muted-foreground rounded-md w-full font-normal text-xs uppercase',
-                  row: 'flex w-full mt-1',
-                  cell: 'flex-1 text-center text-sm relative p-0 focus-within:relative focus-within:z-20',
-                  day: 'h-10 w-full p-0 font-normal hover:bg-accent hover:text-accent-foreground rounded-md transition-colors',
-                  day_selected: 'bg-primary text-primary-foreground hover:bg-primary',
-                  day_today: 'ring-1 ring-primary',
-                }}
-              />
-            </div>
-          </PopoverTrigger>
-          {itemsDelDia.length > 0 && (
-            <PopoverContent className="w-80" align="center">
-              <div className="space-y-2">
-                <p className="text-xs text-muted-foreground">
-                  {diaSeleccionado && format(diaSeleccionado, "EEEE d 'de' MMMM", { locale: es })}
-                </p>
-                {itemsDelDia
-                  .sort((a, b) => b.monto - a.monto)
-                  .map((item) => (
+  const selected = topDias.find((d) => d.fecha === selectedKey) ?? topDias[0] ?? null;
+  const totalDelDia = selected
+    ? selected.items.reduce((acc, item) => acc + item.monto, 0)
+    : 0;
+
+  const leftRef = React.useRef<HTMLDivElement | null>(null);
+  const [rightMinHeight, setRightMinHeight] = React.useState<number | undefined>(undefined);
+
+  React.useLayoutEffect(() => {
+    const el = leftRef.current;
+    if (!el) return;
+
+    const update = () => {
+      const rect = el.getBoundingClientRect();
+      if (rect.height > 0) setRightMinHeight(Math.ceil(rect.height));
+    };
+
+    update();
+
+    const ro = new ResizeObserver(() => update());
+    ro.observe(el);
+
+    window.addEventListener('resize', update);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', update);
+    };
+  }, [topDias.length, selectedKey]);
+
+  return (
+    <section>
+      <div style={{ marginBottom: 10 }}>
+        <div style={{ fontWeight: 800, fontSize: 15, lineHeight: 1.25, color: 'var(--text)' }}>Próximos cobros</div>
+        <div style={{ marginTop: 6, fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.45 }}>
+          Resumen de cobros estimados según plazos de cada prepaga
+        </div>
+      </div>
+
+      <div className="stats-empty" style={{ marginBottom: 14 }}>
+        Este mes tenés <b className="tabular">{cantidadCobros}</b> cobro(s) estimados por un total de{' '}
+        <b className="tabular">{formatCurrency(totalEstimado)}</b>.
+      </div>
+
+      <div className="cal-shell">
+        <div ref={leftRef} className="panel cal-panel" style={{ width: '100%' }}>
+          <div className="cal-week">
+            {topDias.length === 0 ? (
+              <div className="empty" style={{ border: 'none' }}>
+                <div className="empty-title">Todavía no hay cobros estimados</div>
+                <div>Cuando cargues intervenciones, vas a ver aquí las fechas probables de cobro.</div>
+              </div>
+            ) : (
+              topDias.map((d) => {
+                const total = d.items.reduce((acc, item) => acc + item.monto, 0);
+                const isSel = d.fecha === (selected?.fecha ?? '');
+                return (
+                  <div
+                    key={d.fecha}
+                    className={`cal-weekday-row ${isSel ? 'selected' : ''}`}
+                    onClick={() => setSelectedKey(d.fecha)}
+                    role="button"
+                    tabIndex={0}
+                    style={{
+                      background: 'var(--bg-panel)',
+                      borderColor: 'var(--border)',
+                    }}
+                  >
+                    <div className="cal-weekday-left">
+                      <div className="cal-weekday-name">{d.date.toLocaleDateString('es-AR', { weekday: 'short' })}</div>
+                      <div className="cal-weekday-date">
+                        {d.date.toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })}
+                      </div>
+                    </div>
+                    <div className="cal-weekday-right">
+                      <span className="cal-count tabular">{d.items.length}</span>
+                      <span className="cal-dot" />
+                    </div>
                     <div
-                      key={item.id}
-                      className="flex items-center justify-between gap-2 py-2 border-b border-border last:border-0"
+                      style={{
+                        marginLeft: 'auto',
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 12,
+                        color: 'var(--text-muted)',
+                      }}
+                      className="tabular"
                     >
-                      <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <div
-                          className="h-2 w-2 rounded-full shrink-0"
-                          style={{ backgroundColor: getColorPrepaga(item.prepagaId) }}
-                        />
-                        <div className="min-w-0">
-                          <div className="text-sm font-medium truncate">{item.pacienteIniciales}</div>
-                          <div className="text-xs text-muted-foreground truncate">{item.tipo}</div>
+                      {formatCurrency(total)}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        <div className="panel cal-list" style={{ width: '100%', minHeight: rightMinHeight }}>
+          {selected ? (
+            <div className="cal-items">
+              <div className="cal-day-block">
+                <div className="cal-day-label">
+                  {selected.date.toLocaleDateString('es-AR', { weekday: 'short', day: '2-digit', month: 'short' })}
+                  <span className="cal-day-meta">
+                    <span className="tabular">{selected.items.length}</span> cobro(s) ·{' '}
+                    <span className="tabular">{formatCurrency(totalDelDia)}</span>
+                  </span>
+                </div>
+
+                <div className="cal-card" style={{ padding: 14 }}>
+                  {selected.items
+                    .slice()
+                    .sort((a, b) => b.monto - a.monto)
+                    .slice(0, 6)
+                    .map((item) => (
+                      <div
+                        key={item.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: 12,
+                          padding: '10px 0',
+                          borderTop: '1px dashed var(--border)',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
+                          <span
+                            aria-hidden
+                            style={{
+                              width: 10,
+                              height: 10,
+                              borderRadius: 999,
+                              background: getColorPrepaga(item.prepagaId),
+                              flexShrink: 0,
+                            }}
+                          />
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text)', lineHeight: 1.25 }}>
+                              {item.pacienteIniciales}
+                            </div>
+                            <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.35 }}>
+                              {item.tipo}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-soft)' }}>
+                            {PREPAGAS.find((p) => p.id === item.prepagaId)?.nombre ?? 'Prepaga'}
+                          </div>
+                          <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--accent-ink)' }} className="tabular">
+                            {formatCurrency(item.monto)}
+                          </div>
                         </div>
                       </div>
-                      <div className="text-sm font-medium tabular shrink-0">{formatCurrency(item.monto)}</div>
+                    ))}
+
+                  {selected.items.length > 6 ? (
+                    <div style={{ marginTop: 10, display: 'flex', justifyContent: 'flex-end' }}>
+                      <span style={{ fontSize: 12, color: 'var(--text-soft)' }}>
+                        +{selected.items.length - 6} más en esta fecha
+                      </span>
                     </div>
-                  ))}
+                  ) : null}
+                </div>
               </div>
-            </PopoverContent>
+            </div>
+          ) : (
+            <div className="empty" style={{ border: 'none' }}>
+              <div className="empty-title">Elegí una fecha</div>
+              <div>Seleccioná un día para ver el detalle de cobros estimados.</div>
+            </div>
           )}
-        </Popover>
-      </CardContent>
-      <CardFooter>
-        <Button variant="ghost" size="sm" className="ml-auto text-primary hover:text-primary hover:bg-primary/10">
-          Conocer más
-          <ArrowRight className="ml-1 h-3 w-3" />
-        </Button>
-      </CardFooter>
-    </Card>
+        </div>
+      </div>
+    </section>
   );
 }
 

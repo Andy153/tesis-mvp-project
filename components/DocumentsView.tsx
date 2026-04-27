@@ -39,14 +39,14 @@ function CobroStatusBadge({ item }: { item: HistoryItem }) {
   const className =
     (
       {
-        borrador: 'bg-muted text-muted-foreground border-border',
-        con_errores: 'bg-destructive/10 text-destructive border-destructive/30',
-        listo_para_presentar: 'bg-primary/10 text-primary border-primary/30',
-        presentado: 'bg-blue-100 text-blue-800 border-blue-300',
-        cobrado: 'bg-primary text-primary-foreground border-transparent',
-        rechazado: 'bg-destructive/10 text-destructive border-destructive/30',
+        borrador: 'bg-transparent text-muted-foreground border-transparent',
+        con_errores: 'bg-transparent text-destructive border-transparent',
+        listo_para_presentar: 'bg-transparent text-primary border-transparent',
+        presentado: 'bg-transparent text-blue-400 border-transparent',
+        cobrado: 'bg-transparent text-primary-foreground border-transparent',
+        rechazado: 'bg-transparent text-destructive border-transparent',
       } as const
-    )[estado] ?? 'bg-muted text-muted-foreground';
+    )[estado] ?? 'bg-transparent text-muted-foreground border-transparent';
 
   return (
     <Badge variant="outline" className={className}>

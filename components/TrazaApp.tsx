@@ -9,6 +9,7 @@ import { ErrorsView } from './ErrorsView';
 import { CalendarView } from './CalendarView';
 import { DocumentsView } from './DocumentsView';
 import { ProfileView } from './ProfileView';
+import { DashboardView } from './DashboardView';
 import type { AuthState, FileEntry } from '@/lib/types';
 import { loadHistory, saveHistory } from '@/lib/history';
 import { buildSwissCxRow } from '@/lib/swissCxExport';
@@ -16,7 +17,7 @@ import { applyThemeMode, loadProfile } from '@/lib/profile';
 
 export default function TrazaApp() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [active, setActive] = useState<string>('upload');
+  const [active, setActive] = useState<string>('dashboard');
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [authStates, setAuthStates] = useState<Record<string, AuthState | undefined>>({});
@@ -251,6 +252,7 @@ export default function TrazaApp() {
         }}
       />
       <main className="main">
+        {active === 'dashboard' && <DashboardView onNavigate={(view) => setActive(view)} />}
         {active === 'upload' && (
           <UploadView
             files={files}

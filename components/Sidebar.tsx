@@ -26,11 +26,11 @@ interface Item {
 
 export function Sidebar({ active, setActive, errorCount, mobileOpen, onCloseMobile, user }: SidebarProps) {
   const items: Item[] = [
+    { id: 'dashboard', label: 'Resumen general', icon: 'dashboard', section: 'work' },
     { id: 'upload', label: 'Agregar documentos', icon: 'upload', section: 'work' },
     { id: 'documents', label: 'Mis documentos', icon: 'file', section: 'work' },
     { id: 'calendar', label: 'Vista por fechas', icon: 'calendar', section: 'work' },
     { id: 'errors', label: 'Qué conviene revisar', icon: 'alert', section: 'work', badge: errorCount },
-    { id: 'dashboard', label: 'Resumen general', icon: 'dashboard', section: 'soon', disabled: true },
     { id: 'alerts', label: 'Avisos', icon: 'bell', section: 'soon', disabled: true },
     { id: 'projection', label: 'Proyección de cobro', icon: 'chart', section: 'soon', disabled: true },
   ];

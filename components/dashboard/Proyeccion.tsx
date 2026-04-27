@@ -102,7 +102,7 @@ export function Proyeccion() {
         </div>
       </CardContent>
       <CardFooter>
-        <Button variant="ghost" size="sm" className="ml-auto text-muted-foreground">
+        <Button variant="ghost" size="sm" className="ml-auto text-primary hover:text-primary hover:bg-primary/10">
           Conocer más
           <ArrowRight className="ml-1 h-3 w-3" />
         </Button>

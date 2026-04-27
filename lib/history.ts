@@ -1,8 +1,30 @@
 import type { Analysis, AuthState, FileEntry } from './types';
 import { analyzeDocument, TRAZA_ANALYZER_REVISION } from './analyzer';
+import { getMockHistory } from './mock-history';
 
 const STORAGE_KEY = 'traza.history.v1';
 const TEXT_CAP = 180_000;
+
+export type EstadoCobro =
+  | 'borrador'
+  | 'listo_para_presentar'
+  | 'presentado'
+  | 'cobrado'
+  | 'rechazado';
+
+export type TrackingCobro = {
+  estado: EstadoCobro;
+  fechaPresentacion?: string; // ISO date
+  fechaCobroEstimada?: string; // ISO date — calculada como fechaPresentacion + 60 días
+  fechaCobroReal?: string; // ISO date
+  /** Monto "base" de la intervención (para proyección). */
+  montoOriginal?: number;
+  montoCobrado?: number;
+  motivoRechazo?: string;
+  notas?: string;
+};
+
+export type HistoryItem = FileEntry & { tracking?: TrackingCobro };
 
 type PersistedFinding = {
   severity: 'error' | 'warn' | 'ok' | 'info';
@@ -20,6 +42,7 @@ export type PersistedFileEntry = Omit<
 > & {
   analysis?: PersistedAnalysis;
   text?: string;
+  tracking?: TrackingCobro;
 };
 
 export type PersistedAuthState =
@@ -89,6 +112,7 @@ export function saveHistory(files: FileEntry[], authStates: Record<string, AuthS
           method: f.method,
           errorMessage: f.errorMessage,
           exports: f.exports,
+          tracking: (f as any).tracking,
           text: f.text ? f.text.slice(0, TEXT_CAP) : undefined,
           pageTexts: f.pageTexts,
           raw_text: f.raw_text ? f.raw_text.slice(0, TEXT_CAP) : undefined,
@@ -107,7 +131,7 @@ export function saveHistory(files: FileEntry[], authStates: Record<string, AuthS
   }
 }
 
-function persistedToFileEntry(f: PersistedFileEntry, savedRevision: number): FileEntry {
+function persistedToFileEntry(f: PersistedFileEntry, savedRevision: number): HistoryItem {
   const needReanalyze =
     f.status === 'analyzed' && Boolean(f.text) && savedRevision !== TRAZA_ANALYZER_REVISION;
   const analysis: Analysis | undefined =
@@ -116,7 +140,8 @@ function persistedToFileEntry(f: PersistedFileEntry, savedRevision: number): Fil
       : f.analysis
         ? ({ ...f.analysis, findings: f.analysis.findings as Analysis['findings'] } as Analysis)
         : undefined;
-    return {
+  const tracking: TrackingCobro | undefined = f.tracking ?? { estado: 'borrador' };
+  return {
     id: f.id,
     name: f.name,
     size: f.size,
@@ -136,10 +161,11 @@ function persistedToFileEntry(f: PersistedFileEntry, savedRevision: number): Fil
     method: f.method,
     errorMessage: f.errorMessage,
     exports: f.exports,
+    tracking,
   };
 }
 
-export function loadHistory(): { files: FileEntry[]; authStates: Record<string, PersistedAuthState | undefined> } {
+export function loadHistory(): { files: HistoryItem[]; authStates: Record<string, PersistedAuthState | undefined> } {
   if (typeof window === 'undefined') return { files: [], authStates: {} };
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -157,4 +183,49 @@ export function loadHistory(): { files: FileEntry[]; authStates: Record<string, 
   } catch {
     return { files: [], authStates: {} };
   }
+}
+
+export function loadHistoryWithFallback(): { files: HistoryItem[] } {
+  const real = loadHistory();
+  const files = real.files || [];
+  if (files.length === 0) return { files: getMockHistory() };
+
+  // Dashboard fallback for demo: if the user has history but no tracking data yet,
+  // show mock data so cards don't look empty.
+  const hasAnyTracking = files.some((f) => {
+    const s = f.tracking?.estado;
+    return s === 'presentado' || s === 'cobrado' || s === 'rechazado' || s === 'listo_para_presentar';
+  });
+  if (!hasAnyTracking) return { files: getMockHistory() };
+
+  return { files };
+}
+
+export function getEstadoEfectivo(item: HistoryItem): {
+  estado: EstadoCobro | 'con_errores';
+  label: string;
+  variant: 'default' | 'secondary' | 'destructive' | 'outline';
+} {
+  const hasError = Boolean(item.analysis?.findings?.some((f) => f.severity === 'error'));
+  if (hasError) {
+    return { estado: 'con_errores', label: 'Con errores', variant: 'destructive' };
+  }
+
+  const hasPlanilla = Boolean(item.exports?.swissCx?.files?.interventionId);
+  const tracking = item.tracking;
+
+  if (tracking?.estado) {
+    const estado = tracking.estado;
+    if (estado === 'borrador') return { estado, label: 'Borrador', variant: 'secondary' };
+    if (estado === 'listo_para_presentar') return { estado, label: 'Listo para presentar', variant: 'outline' };
+    if (estado === 'presentado') return { estado, label: 'Presentado', variant: 'default' };
+    if (estado === 'cobrado') return { estado, label: 'Cobrado', variant: 'default' };
+    if (estado === 'rechazado') return { estado, label: 'Rechazado', variant: 'destructive' };
+  }
+
+  if (hasPlanilla) {
+    return { estado: 'listo_para_presentar', label: 'Listo para presentar', variant: 'outline' };
+  }
+
+  return { estado: 'borrador', label: 'Borrador', variant: 'secondary' };
 }

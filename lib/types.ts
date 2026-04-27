@@ -2,6 +2,24 @@ import type { ParteQuirurgicoExtract } from './ai/schemas';
 
 export type Severity = 'error' | 'warn' | 'ok' | 'info';
 
+export type EstadoCobro =
+  | 'borrador'
+  | 'listo_para_presentar'
+  | 'presentado'
+  | 'cobrado'
+  | 'rechazado';
+
+export type TrackingCobro = {
+  estado: EstadoCobro;
+  fechaPresentacion?: string;
+  fechaCobroEstimada?: string;
+  fechaCobroReal?: string;
+  montoOriginal?: number;
+  montoCobrado?: number;
+  motivoRechazo?: string;
+  notas?: string;
+};
+
 export interface BBox {
   x0: number;
   y0: number;
@@ -166,6 +184,7 @@ export interface FileEntry {
       };
     };
   };
+  tracking?: TrackingCobro;
 }
 
 export interface ExtractionResult {

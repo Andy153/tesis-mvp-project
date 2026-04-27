@@ -7,8 +7,6 @@ import { crossCheck, extractStructured, requiresAuthorization } from '@/lib/auth
 import { TRAZA_NOMENCLADOR_FULL } from '@/lib/nomenclador.js';
 import { applyPlanillaValidationFindings } from '@/lib/swissCxExport';
 import type { AuthState, FileEntry, Finding, Span, Thumbnail } from '@/lib/types';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 
 const NOMEN_FOR_EXTRACT = TRAZA_NOMENCLADOR_FULL as Record<string, { entries?: Array<{ desc: string }> }>;
 const PIPE = '[TRAZA_PIPELINE]';
@@ -568,19 +566,6 @@ export function UploadView({
           </div>
         </div>
       )}
-
-      <div className="mt-8 p-4 border rounded-lg bg-card">
-        <p className="text-sm text-muted-foreground mb-2">Sanity check shadcn (borrar después):</p>
-        <div className="flex gap-2 flex-wrap">
-          <Button>Primary</Button>
-          <Button variant="secondary">Secondary</Button>
-          <Button variant="outline">Outline</Button>
-          <Button variant="ghost">Ghost</Button>
-          <Badge>Badge</Badge>
-          <Badge variant="secondary">Secondary</Badge>
-          <Badge variant="destructive">Destructive</Badge>
-        </div>
-      </div>
     </div>
   );
 }

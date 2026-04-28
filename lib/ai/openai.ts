@@ -139,7 +139,7 @@ function mergeAbortSignals(timeoutController: AbortController, upstream?: AbortS
  */
 export async function callOpenAI(params: CallOpenAIParams) {
   const startedAt = Date.now();
-  const images = (params.imagesBase64 && params.imagesBase64.length ? params.imagesBase64 : [params.imageBase64]).slice(0, 3);
+  const images = (params.imagesBase64 && params.imagesBase64.length ? params.imagesBase64 : [params.imageBase64]).slice(0, 5);
   console.log(
     `${PIPE} openai:call start docType=${params.documentType} model=${OPENAI_MODEL} images=${images.length} img_lens=${images.map((s) => s.length).join(',')}`,
   );

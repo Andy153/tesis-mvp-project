@@ -585,7 +585,7 @@ async function fetchParteExtractionFromOpenAI(imagesDataUrl: string | string[]):
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        imagesBase64: images.slice(0, 3),
+        imagesBase64: images.slice(0, 5),
         imageBase64: images[0],
         documentType: 'parte_quirurgico',
       }),
@@ -631,7 +631,7 @@ async function tryOverlayOpenAiParteText(
   }
   const prefValid =
     preferredPages && preferredPages.length
-      ? preferredPages.filter((p) => Number.isFinite(p) && p >= 0 && p < result.thumbnails.length).slice(0, 3)
+      ? preferredPages.filter((p) => Number.isFinite(p) && p >= 0 && p < result.thumbnails.length).slice(0, 5)
       : null;
 
   const ranked =
@@ -644,8 +644,14 @@ async function tryOverlayOpenAiParteText(
       ? 'internal_ranking'
       : 'fallback';
 
+  const thumbCount = result.thumbnails.length;
+  const uniquePages = (xs: number[]) => Array.from(new Set(xs));
   const pagesToSend =
-    selectedPages && selectedPages.length ? selectedPages.slice(0, 3) : first ? [0] : [];
+    thumbCount <= 2
+      ? uniquePages([0, 1].filter((p) => p >= 0 && p < thumbCount))
+      : uniquePages([0, ...((selectedPages && selectedPages.length ? selectedPages : [0]) as number[])])
+          .filter((p) => p >= 0 && p < thumbCount)
+          .slice(0, 5);
   const imagesToSend = pagesToSend.map((p) => result.thumbnails[p]?.dataUrl).filter(Boolean) as string[];
   console.log(
     `${PIPE} overlay_openai:selection preferred_pages=${JSON.stringify(preferredPages || [])} selection_source=${selection_source} selected_pages=${JSON.stringify(selectedPages || [])} images_sent_to_openai=${imagesToSend.length} sent_pages=${JSON.stringify(pagesToSend)}`,
@@ -674,6 +680,21 @@ async function tryOverlayOpenAiParteText(
   if (!openaiInst && textInst) {
     source = 'fallback_text';
     finalData = { ...(data as any), sanatorio: textInst } as ParteQuirurgicoExtract;
+  }
+  {
+    const rawName = (finalData as any)?.paciente?.apellido_nombre;
+    const cleaned = normalizePacienteApellidoNombre(rawName);
+    if (cleaned !== null && String(rawName || '').trim() !== cleaned) {
+      finalData = {
+        ...(finalData as any),
+        paciente: { ...((finalData as any).paciente || {}), apellido_nombre: cleaned },
+      } as ParteQuirurgicoExtract;
+    } else if (cleaned === null && rawName != null && String(rawName).trim() !== '') {
+      finalData = {
+        ...(finalData as any),
+        paciente: { ...((finalData as any).paciente || {}), apellido_nombre: null },
+      } as ParteQuirurgicoExtract;
+    }
   }
   const finalInst = String((finalData as any)?.sanatorio || '').trim();
   console.log(`${PIPE} openai_institution="${safePreview(openaiInst, 120)}"`);
@@ -1120,6 +1141,52 @@ function cropTopDataUrl(dataUrl: string, ratio: number): Promise<string> {
 
 function stripAccents(s: string) {
   return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function normalizePacienteApellidoNombre(raw: string | null | undefined): string | null {
+  const s0 = String(raw || '').replace(/\s+/g, ' ').trim();
+  if (!s0) return null;
+  let s = s0.replace(/^paciente\s*[:\-]\s*/i, '').trim();
+  if (!s) return null;
+
+  const stop = new Set([
+    'pariente',
+    'familiar',
+    'acompanante',
+    'acompañante',
+    'responsable',
+    'tutor',
+    'padre',
+    'madre',
+  ]);
+
+  const lowerToken = (x: string) => stripAccents(x.trim().toLowerCase());
+  const addCommaIfLooksLikeFullName = (x: string) => {
+    const t = x.replace(/\s+/g, ' ').trim();
+    if (!t) return t;
+    if (t.includes(',')) return t;
+    const parts = t.split(' ').filter(Boolean);
+    if (parts.length >= 2 && parts.length <= 5) return `${parts[0]}, ${parts.slice(1).join(' ')}`;
+    return t;
+  };
+
+  if (s.includes(',')) {
+    const [a, ...rest] = s.split(',');
+    const head = a.trim();
+    const tail = rest.join(',').trim();
+    if (stop.has(lowerToken(head))) {
+      const cleaned = tail.replace(/^[:,\-]\s*/, '').trim();
+      return cleaned ? addCommaIfLooksLikeFullName(cleaned) : null;
+    }
+  }
+
+  const parts = s.split(' ').filter(Boolean);
+  if (parts.length >= 2 && stop.has(lowerToken(parts[0]))) {
+    s = parts.slice(1).join(' ').trim();
+    if (!s) return null;
+  }
+
+  return addCommaIfLooksLikeFullName(s);
 }
 
 function escapeRegExp(s: string) {

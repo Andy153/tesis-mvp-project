@@ -78,6 +78,67 @@ export function extractStructured(
   text: string,
   nomenclador: Record<string, { entries?: Array<{ desc: string }> }>,
 ): StructuredDoc {
+  const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const stripAccents = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const normalizePaciente = (raw: string | null): string | null => {
+    if (!raw) return null;
+    let s = raw.trim().replace(/\s+/g, ' ');
+    // Some scans put "Pariente:" in the same slot we interpret as paciente.
+    s = s.replace(/^\s*pariente\s*[:\-–—]\s*/i, '').trim();
+    s = s.replace(/^\s*familiar\s*[:\-–—]\s*/i, '').trim();
+    if (!s) return null;
+
+    // If we captured "APELLIDO," and the name is on the next line, merge it.
+    if (/,\s*$/.test(s) || (s.includes(',') && s.split(',').pop()?.trim() === '')) {
+      try {
+        const re = new RegExp(`${escapeRegExp(s)}\\s*(?:\\r?\\n)+\\s*([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑa-záéíóúñ]{2,}(?:\\s+[A-ZÁÉÍÓÚÑa-záéíóúñ]{2,}){0,2})\\b`, 'm');
+        const m = text.match(re);
+        if (m && m[1]) {
+          const next = m[1].trim().replace(/\s+/g, ' ');
+          if (next && !s.toLowerCase().includes(next.toLowerCase())) s = `${s} ${next}`.replace(/\s+/g, ' ').trim();
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    // If no comma but looks like "APELLIDO NOMBRE", add comma after first token.
+    if (!s.includes(',')) {
+      const parts = s.split(' ').filter(Boolean);
+      if (parts.length >= 2 && parts.length <= 5) s = `${parts[0]}, ${parts.slice(1).join(' ')}`;
+    }
+
+    // Final clean: drop lingering role-like prefixes that OCR sometimes prepends without colon.
+    const first = stripAccents(s.split(/[,\s]+/)[0]?.toLowerCase() || '');
+    if (first === 'pariente' || first === 'familiar') {
+      s = s.replace(/^(pariente|familiar)\s+/i, '').trim();
+    }
+
+    // Drop common OCR noise tokens at the end (e.g. "io", "os").
+    // Keep tokens that look name-like (>=3 letters) and preserve comma.
+    {
+      const keepToken = (tok: string) => {
+        const t = tok.trim();
+        if (!t) return false;
+        if (t === ',') return true;
+        const letters = stripAccents(t).replace(/[^a-zA-ZÁÉÍÓÚÜÑáéíóúüñ]/g, '');
+        if (letters.length < 3) return false;
+        return true;
+      };
+      const rawTokens = s
+        .replace(/,/g, ' , ')
+        .split(/\s+/)
+        .filter(Boolean);
+      // Trim only the tail noise; don't over-clean the whole string.
+      let end = rawTokens.length;
+      while (end > 0 && !keepToken(rawTokens[end - 1])) end--;
+      const trimmed = rawTokens.slice(0, end).join(' ').replace(/\s+,/g, ',').replace(/,\s+/g, ', ').trim();
+      if (trimmed) s = trimmed;
+    }
+
+    return s || null;
+  };
+
   const result: StructuredDoc = {
     dni: null,
     afiliado: null,
@@ -118,6 +179,7 @@ export function extractStructured(
       if (s.length >= 3 && s.length <= 120) result.paciente = s;
     }
   }
+  result.paciente = normalizePaciente(result.paciente);
 
   const fechaRegex = /(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/g;
   const fechas: Array<{ str: string; date: Date; context: string }> = [];

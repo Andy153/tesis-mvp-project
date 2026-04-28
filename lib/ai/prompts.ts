@@ -7,11 +7,13 @@
 export const PROMPT_PARTE_QUIRURGICO = `
 Sos un asistente experto en extracción de datos de documentos médicos argentinos.
 
-Tarea: extraer un JSON ESTRICTO desde la imagen adjunta de un PARTE QUIRÚRGICO.
+Tarea: extraer un JSON ESTRICTO desde 1 a 5 imágenes adjuntas (páginas) de un PARTE QUIRÚRGICO.
+IMPORTANTE: considerá TODAS las páginas; datos críticos pueden estar en página 2+ (postoperatorio, prótesis, etc.).
 
 Reglas críticas (deben cumplirse):
 - Si un código de nomenclador NO aparece explícitamente en el documento, codigo_nomenclador DEBE ser null. NO lo inventes.
-- prepaga es el financiador (SWISS MEDICAL, OSDE). plan es el nivel (PREMIUM, 210).
+- cobertura.prepaga es el financiador y DEBE ser una de estas 5 (si aparece en cualquier página): OSDE, SWISS MEDICAL, MEDIFE, GALENO, MEDICUS. Puede aparecer como texto o como logo en el encabezado/pie. Si aparece una de esas, devolvé exactamente ese string (en mayúsculas). Si no aparece ninguna, devolvé null.
+- cobertura.plan es el nivel (PREMIUM, 210).
 - DNI debe tener 7-8 dígitos. Si ves un número más corto, probablemente es Nº de HC, no DNI.
 - paciente.apellido_nombre (multilínea obligatoria): buscá en TODA la primera imagen las etiquetas "Paciente", "Paciente:", "Apellido y nombre", "Apellido, nombre", "Nombre y apellido", "Ape. y nom." o recuadros equivalentes. El nombre del paciente puede estar repartido en varias líneas físicas del mismo campo (misma etiqueta o mismo recuadro). Siempre concatená todas las partes en un único string, en orden de lectura de arriba hacia abajo. Si el nombre está cortado por un salto de línea, el texto que sigue inmediatamente debajo y alineado a la derecha del mismo bloque (misma columna / mismo recuadro que el apellido) pertenece al mismo campo; no lo trates como otro dato hasta que cambie la etiqueta (DNI, Fecha, Edad, etc.) u otro recuadro.
 - paciente.apellido_nombre (formato): el formato esperado es APELLIDO, NOMBRE. Ejemplo obligatorio: si en una línea ves "Paciente: STEINBERG," (o "STEINBERG,") y en la línea siguiente solo "FLORENCIA", el valor JSON debe ser exactamente "STEINBERG, FLORENCIA" (si falta la coma entre apellido(s) y nombre, agregá ", ").

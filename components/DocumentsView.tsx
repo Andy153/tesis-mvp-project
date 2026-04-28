@@ -37,6 +37,21 @@ export function DocumentsView({
   files: FileEntry[];
   onOpenFile: (id: string) => void;
 }) {
+  const normalizePrepaga = (raw: string | null | undefined) => {
+    const s = String(raw || '').trim();
+    if (!s) return null;
+    const n = s
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+    if (n.includes('osde')) return 'OSDE';
+    if (n.includes('swiss') || n.includes('smm') || n.includes('smg') || n.includes('medical')) return 'SWISS MEDICAL';
+    if (n.includes('medife') || n.includes('medife')) return 'MEDIFE';
+    if (n.includes('galeno')) return 'GALENO';
+    if (n.includes('medicus')) return 'MEDICUS';
+    return s.toUpperCase();
+  };
+
   const [filter, setFilter] = useState<FilterKey>('all');
   const [q, setQ] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
@@ -136,7 +151,13 @@ export function DocumentsView({
             <tbody>
               {filtered.map((f) => {
                 const a = f.analysis;
-                const prepaga = a?.detected?.prepagas?.[0] || '—';
+                const prepaga =
+                  normalizePrepaga(f.aiParteExtract?.cobertura?.prepaga) ||
+                  normalizePrepaga(a?.detected?.prepagas?.[0]) ||
+                  normalizePrepaga(f.raw_text_light) ||
+                  normalizePrepaga(f.raw_text) ||
+                  normalizePrepaga(f.text) ||
+                  '—';
                 const codigo = a?.detected?.codes?.[0] || null;
                 const itemAsHistory = f as unknown as HistoryItem;
                 return (

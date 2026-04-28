@@ -3,12 +3,7 @@ export const TRAZA_PREPAGAS = [
   'OSDE',
   'Galeno',
   'Medicus',
-  'Omint',
   'Medifé',
-  'Sancor Salud',
-  'Hospital Italiano',
-  'Hospital Británico',
-  'Prevención Salud',
 ];
 
 export const TRAZA_SANATORIOS = [

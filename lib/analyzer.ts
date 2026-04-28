@@ -682,6 +682,21 @@ async function tryOverlayOpenAiParteText(
     finalData = { ...(data as any), sanatorio: textInst } as ParteQuirurgicoExtract;
   }
   {
+    const rawPrepaga = (finalData as any)?.cobertura?.prepaga;
+    const inferred =
+      inferPrepagaFromText(rawPrepaga) ||
+      inferPrepagaFromText(result.raw_text_light) ||
+      inferPrepagaFromText(result.raw_text) ||
+      inferPrepagaFromText(result.text) ||
+      null;
+    if (!String(rawPrepaga || '').trim() && inferred) {
+      finalData = {
+        ...(finalData as any),
+        cobertura: { ...((finalData as any).cobertura || {}), prepaga: inferred },
+      } as ParteQuirurgicoExtract;
+    }
+  }
+  {
     const rawName = (finalData as any)?.paciente?.apellido_nombre;
     const cleaned = normalizePacienteApellidoNombre(rawName);
     if (cleaned !== null && String(rawName || '').trim() !== cleaned) {
@@ -1187,6 +1202,18 @@ function normalizePacienteApellidoNombre(raw: string | null | undefined): string
   }
 
   return addCommaIfLooksLikeFullName(s);
+}
+
+function inferPrepagaFromText(raw: string | null | undefined): string | null {
+  const s = String(raw || '').trim();
+  if (!s) return null;
+  const n = stripAccents(s.toLowerCase());
+  if (n.includes('osde')) return 'OSDE';
+  if (n.includes('swiss') || n.includes('smm') || n.includes('smg') || n.includes('medical')) return 'SWISS MEDICAL';
+  if (n.includes('medife') || n.includes('medifé')) return 'MEDIFE';
+  if (n.includes('galeno')) return 'GALENO';
+  if (n.includes('medicus')) return 'MEDICUS';
+  return null;
 }
 
 function escapeRegExp(s: string) {

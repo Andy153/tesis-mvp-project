@@ -78,7 +78,7 @@ export function Atencion({
   const openGrupo = useMemo(() => grupos.find((g) => g.itemId === openDocId) ?? null, [grupos, openDocId]);
 
   return (
-    <section className="panel" style={{ padding: 16 }}>
+    <section className="panel" style={{ padding: 24 }}>
       <div style={{ marginBottom: 12 }}>
         <div style={{ fontWeight: 800, fontSize: 15, lineHeight: 1.25, color: 'var(--text)' }}>
           Documentos que requieren atención
@@ -98,7 +98,7 @@ export function Atencion({
           <div
             className="panel"
             style={{
-              padding: 8,
+              padding: 12,
               background: 'var(--bg-sunken)',
               maxHeight: 320,
               overflow: 'auto',

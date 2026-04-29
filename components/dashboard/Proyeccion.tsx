@@ -26,14 +26,14 @@ export function Proyeccion() {
   const swissMonto = swissDatos?.monto ?? 0;
 
   return (
-    <section className="panel mt-[15px] mb-[15px]" style={{ padding: 16 }}>
+    <section className="panel mt-[15px] mb-[15px]" style={{ padding: 24 }}>
       <div style={{ marginBottom: 12 }}>
         <div style={{ fontWeight: 800, fontSize: 15, lineHeight: 1.25, color: 'var(--text)' }}>Proyección de cobro</div>
         <div style={{ marginTop: 6, fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.45 }}>{mesCapitalizado}</div>
       </div>
       <div>
         <div className="proj-summary-grid">
-          <div className="panel" style={{ padding: 12, background: 'var(--bg-sunken)' }}>
+          <div className="panel" style={{ padding: 16, background: 'var(--bg-sunken)' }}>
             <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-soft)', fontWeight: 700 }}>
               Cobrado
             </div>
@@ -44,7 +44,7 @@ export function Proyeccion() {
               de <span className="tabular">{formatCurrency(proyeccion.total)}</span> totales
             </div>
           </div>
-          <div className="panel" style={{ padding: 12, background: 'var(--bg-sunken)' }}>
+          <div className="panel" style={{ padding: 16, background: 'var(--bg-sunken)' }}>
             <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-soft)', fontWeight: 700 }}>
               Pendiente
             </div>
@@ -82,7 +82,7 @@ export function Proyeccion() {
             className="panel"
             data-proj-prepaga-row
             style={{
-              padding: 12,
+              padding: 16,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
@@ -140,7 +140,7 @@ export function Proyeccion() {
             className="panel"
             data-proj-prepaga-row
             style={{
-              padding: 12,
+              padding: 16,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',

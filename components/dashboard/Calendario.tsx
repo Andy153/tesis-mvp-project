@@ -69,7 +69,7 @@ export function Calendario() {
         </div>
       </div>
 
-      <div className="stats-empty" style={{ marginBottom: 14 }}>
+      <div className="stats-empty" style={{ marginBottom: 18 }}>
         Este mes tenés <b className="tabular">{cantidadCobros}</b> cobro(s) estimados por un total de{' '}
         <b className="tabular">{formatCurrency(totalEstimado)}</b>.
       </div>
@@ -128,7 +128,7 @@ export function Calendario() {
 
         <div className="panel cal-list" style={{ width: '100%', minHeight: rightMinHeight }}>
           {selected ? (
-            <div className="cal-items">
+            <div className="cal-items" style={{ padding: 20 }}>
               <div className="cal-day-block">
                 <div className="cal-day-label">
                   {selected.date.toLocaleDateString('es-AR', { weekday: 'short', day: '2-digit', month: 'short' })}
@@ -138,7 +138,7 @@ export function Calendario() {
                   </span>
                 </div>
 
-                <div className="cal-card" style={{ padding: 14 }}>
+                <div className="cal-card" style={{ padding: 18 }}>
                   {selected.items
                     .slice()
                     .sort((a, b) => b.monto - a.monto)

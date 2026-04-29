@@ -37,7 +37,7 @@ export function Indicadores({
   const empty = ready.length === 0;
 
   return (
-    <section className="panel" style={{ padding: 16, marginBottom: 16 }}>
+    <section className="panel" style={{ padding: 24, marginBottom: 20 }}>
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div>
           <div style={{ fontWeight: 800, fontSize: 15, lineHeight: 1.25, color: 'var(--text)' }}>Indicadores</div>
@@ -109,7 +109,7 @@ export function Indicadores({
             </div>
           </div>
 
-          <div className="panel" style={{ padding: 12, background: 'var(--bg-sunken)' }}>
+          <div className="panel" style={{ padding: 16, background: 'var(--bg-sunken)' }}>
             <div
               style={{
                 display: 'grid',

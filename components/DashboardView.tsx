@@ -17,7 +17,7 @@ export function DashboardView({ onNavigate, onOpenFile }: DashboardViewProps) {
 
   return (
     <div className="px-6 md:px-10 pt-6 pb-10 max-w-[1600px] mx-auto">
-      <div className="page-head mb-20">
+      <div className="page-head mb-16">
         <div>
           <h1 className="page-title">Resumen general</h1>
           <p className="page-subtitle">
@@ -26,20 +26,18 @@ export function DashboardView({ onNavigate, onOpenFile }: DashboardViewProps) {
         </div>
       </div>
 
-      <div className="mb-20">
+      <div className="space-y-20">
         <Indicadores onNavigate={onNavigate} />
-      </div>
 
-      {/* Calendario + Proyección (60/40) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-16 mb-20">
-        <div className="lg:col-span-2">
-          <Calendario />
+        {/* Calendario + Proyección (60/40) */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-16">
+          <div className="lg:col-span-2">
+            <Calendario />
+          </div>
+          <Proyeccion />
         </div>
-        <Proyeccion />
-      </div>
 
-      {/* Atención — full width */}
-      <div className="mb-16">
+        {/* Atención — full width */}
         <Atencion onNavigate={onNavigate} onOpenFile={onOpenFile} />
       </div>
     </div>

@@ -2,9 +2,22 @@ import type { HistoryItem } from './history';
 import { requiresAuthorization } from './authz';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
+import {
+  estimarFechaCobro,
+  estimarMontoCobro,
+  proximaFechaFacturacion,
+} from '@/data/cobros-estimaciones';
+import {
+  getCodigoFromItem,
+  getFechaPracticaFromItem,
+  getObraSocialFromItem,
+  getPlanFromItem,
+  getTipoFromItem,
+  type ObraSocial,
+} from '@/lib/item-extractors';
 
 export type PrepagaInfo = {
-  id: 'swiss' | 'osde' | 'galeno' | 'medicus' | 'omint' | 'medife';
+  id: 'swiss' | 'osde' | 'galeno' | 'medicus' | 'omint' | 'medife' | 'unknown';
   nombre: string;
   colorHex: string;
   disponible: boolean;
@@ -17,6 +30,7 @@ export const PREPAGAS: PrepagaInfo[] = [
   { id: 'medicus', nombre: 'Medicus', colorHex: '#EA580C', disponible: false },
   { id: 'omint', nombre: 'Omint', colorHex: '#DB2777', disponible: false },
   { id: 'medife', nombre: 'Medifé', colorHex: '#16A34A', disponible: false },
+  { id: 'unknown', nombre: 'Desconocida', colorHex: '#64748B', disponible: false },
 ];
 
 export type ProyeccionMensual = {
@@ -47,14 +61,72 @@ function parseISODate(s: string | undefined): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-function getMontoOriginal(item: HistoryItem): number {
-  return item.tracking?.montoOriginal ?? item.tracking?.montoCobrado ?? 0;
+function prepagaFromObraSocial(obra: ObraSocial): PrepagaInfo {
+  if (obra === 'OSDE') return PREPAGAS.find((p) => p.id === 'osde') ?? PREPAGAS[1]!;
+  if (obra === 'Swiss Medical') return PREPAGAS.find((p) => p.id === 'swiss') ?? PREPAGAS[0]!;
+  return PREPAGAS.find((p) => p.id === 'unknown') ?? PREPAGAS[PREPAGAS.length - 1]!;
 }
 
-function getPrepagaInfoFromItem(item: HistoryItem): PrepagaInfo {
-  const detected = item.analysis?.detected?.prepagas || [];
-  const hasSwiss = detected.some((p) => String(p || '').toLowerCase().includes('swiss'));
-  return hasSwiss ? PREPAGAS[0] : PREPAGAS[0];
+function calcularCobroRuntime(it: HistoryItem): {
+  fechaCobro: Date | null;
+  monto: number | null;
+  esEstimado: boolean;
+  motivo?: string;
+  obraSocial: ObraSocial;
+  prepaga: PrepagaInfo;
+} {
+  const obraSocial = getObraSocialFromItem(it);
+  const prepaga = prepagaFromObraSocial(obraSocial);
+
+  const t = it.tracking;
+  if (t?.estado === 'cobrado' && typeof t.montoCobrado === 'number' && t.fechaCobroReal) {
+    const fechaCobro = parseISODate(t.fechaCobroReal);
+    return {
+      fechaCobro,
+      monto: t.montoCobrado,
+      esEstimado: false,
+      obraSocial,
+      prepaga,
+    };
+  }
+
+  const fechaPractica = getFechaPracticaFromItem(it);
+  const codigo = getCodigoFromItem(it);
+  const { plan, esEstimado: planEstimado } = getPlanFromItem(it);
+  const tipoAtencion = getTipoFromItem(it);
+
+  const fechaFacturacion =
+    (t?.fechaPresentacion ? parseISODate(t.fechaPresentacion) : null) ??
+    (fechaPractica ? proximaFechaFacturacion(fechaPractica) : null);
+  const fechaCobro = fechaFacturacion ? estimarFechaCobro(fechaFacturacion, obraSocial) : null;
+
+  if (!codigo || !fechaPractica) {
+    return {
+      fechaCobro,
+      monto: null,
+      esEstimado: true,
+      motivo: !codigo ? 'Falta código de práctica' : 'Falta fecha de práctica',
+      obraSocial,
+      prepaga,
+    };
+  }
+
+  const montoRes = estimarMontoCobro({
+    codigo,
+    obraSocial,
+    plan,
+    tipo: tipoAtencion,
+    fechaPractica,
+  });
+
+  return {
+    fechaCobro,
+    monto: montoRes.monto,
+    esEstimado: montoRes.esEstimado || planEstimado,
+    motivo: montoRes.motivo,
+    obraSocial,
+    prepaga,
+  };
 }
 
 export function getProyeccionDelMes(items: HistoryItem[], mes?: Date): ProyeccionMensual {
@@ -71,9 +143,10 @@ export function getProyeccionDelMes(items: HistoryItem[], mes?: Date): Proyeccio
   for (const it of items || []) {
     const t = it.tracking;
     if (!t) continue;
-    const est = parseISODate(t.fechaCobroEstimada);
+    const calc = calcularCobroRuntime(it);
+    const est = calc.fechaCobro;
     if (!est || !inMonth(est, month)) continue;
-    const prepaga = getPrepagaInfoFromItem(it);
+    const prepaga = calc.prepaga;
 
     const ensure = () => {
       const k = prepaga.id;
@@ -82,19 +155,23 @@ export function getProyeccionDelMes(items: HistoryItem[], mes?: Date): Proyeccio
     };
 
     if (t.estado === 'cobrado') {
-      const m = t.montoCobrado ?? getMontoOriginal(it);
+      const m = typeof calc.monto === 'number' ? calc.monto : 0;
       cobrado += m;
       cantidadCobrada += 1;
       const g = ensure();
       g.cantidad += 1;
       g.monto += m;
     } else if (t.estado === 'presentado') {
-      const m = getMontoOriginal(it);
-      pendiente += m;
+      if (typeof calc.monto === 'number') {
+        pendiente += calc.monto;
+        const g = ensure();
+        g.cantidad += 1;
+        g.monto += calc.monto;
+      } else {
+        const g = ensure();
+        g.cantidad += 1;
+      }
       cantidadPendiente += 1;
-      const g = ensure();
-      g.cantidad += 1;
-      g.monto += m;
     }
   }
 
@@ -117,8 +194,11 @@ export type CobroEnCalendario = {
     id: string;
     pacienteIniciales: string;
     tipo: string;
-    monto: number;
+    monto: number | null;
+    esEstimado: boolean;
+    motivo?: string;
     prepagaId: string;
+    obraSocial: ObraSocial;
   }>;
 };
 
@@ -128,20 +208,26 @@ export function getCobrosDelMesPorDia(items: HistoryItem[], mes?: Date): CobroEn
 
   for (const it of items || []) {
     const t = it.tracking;
-    if (!t || t.estado !== 'presentado') continue;
-    const est = parseISODate(t.fechaCobroEstimada);
+    if (!t) continue;
+    if (t.estado !== 'presentado' && t.estado !== 'cobrado') continue;
+
+    const calc = calcularCobroRuntime(it);
+    const est = calc.fechaCobro;
     if (!est || !inMonth(est, month)) continue;
     const dayKey = est.toISOString().slice(0, 10); // YYYY-MM-DD
     if (!map.has(dayKey)) map.set(dayKey, { fecha: dayKey, items: [] });
     const entry = map.get(dayKey)!;
     const row = it.exports?.swissCx?.row;
-    const prepaga = getPrepagaInfoFromItem(it);
+    const prepaga = calc.prepaga;
     entry.items.push({
       id: it.id,
       pacienteIniciales: row?.socioDesc || '—',
       tipo: row?.detalle || it.analysis?.detected?.procedureGuess?.desc || 'Intervención',
-      monto: getMontoOriginal(it),
+      monto: calc.monto,
+      esEstimado: calc.esEstimado,
+      motivo: calc.motivo,
       prepagaId: prepaga.id,
+      obraSocial: calc.obraSocial,
     });
   }
 

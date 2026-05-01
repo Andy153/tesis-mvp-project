@@ -12,8 +12,13 @@ export function Calendario() {
   const cobrosPorDia = getCobrosDelMesPorDia(files);
 
   const cantidadCobros = cobrosPorDia.reduce((acc, dia) => acc + dia.items.length, 0);
+  const cantidadAConfirmar = cobrosPorDia.reduce(
+    (acc, dia) => acc + dia.items.filter((it) => it.monto === null).length,
+    0,
+  );
+  const cantidadConMonto = cantidadCobros - cantidadAConfirmar;
   const totalEstimado = cobrosPorDia.reduce(
-    (acc, dia) => acc + dia.items.reduce((sum, item) => sum + item.monto, 0),
+    (acc, dia) => acc + dia.items.reduce((sum, item) => sum + (item.monto ?? 0), 0),
     0,
   );
 
@@ -33,7 +38,7 @@ export function Calendario() {
 
   const selected = topDias.find((d) => d.fecha === selectedKey) ?? topDias[0] ?? null;
   const totalDelDia = selected
-    ? selected.items.reduce((acc, item) => acc + item.monto, 0)
+    ? selected.items.reduce((acc, item) => acc + (item.monto ?? 0), 0)
     : 0;
 
   const leftRef = React.useRef<HTMLDivElement | null>(null);
@@ -70,8 +75,18 @@ export function Calendario() {
       </div>
 
       <div className="stats-empty" style={{ marginBottom: 18 }}>
-        Este mes tenés <b className="tabular">{cantidadCobros}</b> cobro(s) estimados por un total de{' '}
-        <b className="tabular">{formatCurrency(totalEstimado)}</b>.
+        {cantidadAConfirmar > 0 ? (
+          <>
+            Este mes tenés <b className="tabular">{cantidadConMonto}</b> cobro(s) estimados +{' '}
+            <b className="tabular">{cantidadAConfirmar}</b> a confirmar por un total de{' '}
+            <b className="tabular">{formatCurrency(totalEstimado)}</b>.
+          </>
+        ) : (
+          <>
+            Este mes tenés <b className="tabular">{cantidadCobros}</b> cobro(s) estimados por un total de{' '}
+            <b className="tabular">{formatCurrency(totalEstimado)}</b>.
+          </>
+        )}
       </div>
 
       <div className="cal-shell">
@@ -84,7 +99,7 @@ export function Calendario() {
               </div>
             ) : (
               topDias.map((d) => {
-                const total = d.items.reduce((acc, item) => acc + item.monto, 0);
+                const total = d.items.reduce((acc, item) => acc + (item.monto ?? 0), 0);
                 const isSel = d.fecha === (selected?.fecha ?? '');
                 return (
                   <div
@@ -141,7 +156,7 @@ export function Calendario() {
                 <div className="cal-card" style={{ padding: 18 }}>
                   {selected.items
                     .slice()
-                    .sort((a, b) => b.monto - a.monto)
+                    .sort((a, b) => (b.monto ?? -1) - (a.monto ?? -1))
                     .slice(0, 6)
                     .map((item) => (
                       <div
@@ -172,6 +187,21 @@ export function Calendario() {
                             </div>
                             <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.35 }}>
                               {item.tipo}
+                              {item.esEstimado ? (
+                                <span
+                                  title={item.motivo || 'Valor estimado'}
+                                  style={{
+                                    marginLeft: 8,
+                                    fontSize: 11,
+                                    padding: '2px 6px',
+                                    borderRadius: 999,
+                                    border: '1px solid var(--border)',
+                                    color: 'var(--text-soft)',
+                                  }}
+                                >
+                                  estimado
+                                </span>
+                              ) : null}
                             </div>
                           </div>
                         </div>
@@ -181,7 +211,7 @@ export function Calendario() {
                             {PREPAGAS.find((p) => p.id === item.prepagaId)?.nombre ?? 'Prepaga'}
                           </div>
                           <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--accent-ink)' }} className="tabular">
-                            {formatCurrency(item.monto)}
+                            {item.monto === null ? 'Monto a confirmar' : formatCurrency(item.monto)}
                           </div>
                         </div>
                       </div>

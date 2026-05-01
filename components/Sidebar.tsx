@@ -7,12 +7,11 @@ import { Icon, type IconName } from './Icon';
 type TabId =
   | 'upload'
   | 'documents'
-  | 'calendar'
   | 'errors'
   | 'cobros'
   | 'dashboard'
   | 'alerts'
-  | 'projection'
+  | 'payments'
   | 'settings';
 
 interface SidebarProps {
@@ -38,11 +37,10 @@ export function Sidebar({ active, setActive, errorCount, mobileOpen, onCloseMobi
     { id: 'dashboard', label: 'Resumen general', icon: 'dashboard', section: 'work' },
     { id: 'upload', label: 'Agregar documentos', icon: 'upload', section: 'work' },
     { id: 'documents', label: 'Mis documentos', icon: 'file', section: 'work' },
-    { id: 'calendar', label: 'Vista por fechas', icon: 'calendar', section: 'work' },
     { id: 'errors', label: 'Qué conviene revisar', icon: 'alert', section: 'work', badge: errorCount },
     { id: 'cobros', label: 'Centro de cobros', icon: 'wallet', section: 'work' },
     { id: 'alerts', label: 'Avisos', icon: 'bell', section: 'soon', disabled: true },
-    { id: 'projection', label: 'Proyección de cobro', icon: 'chart', section: 'soon', disabled: true },
+    { id: 'payments', label: 'Pagos in-app', icon: 'creditcard', section: 'soon', disabled: true },
   ];
 
   return (
@@ -79,7 +77,7 @@ export function Sidebar({ active, setActive, errorCount, mobileOpen, onCloseMobi
               }
             }}
           >
-            <Icon name={item.icon} size={20} />
+            <Icon name={item.icon} size={18} />
             <span>{item.label}</span>
             {item.badge && item.badge > 0 ? <span className="nav-badge">{item.badge}</span> : null}
           </div>
@@ -89,7 +87,7 @@ export function Sidebar({ active, setActive, errorCount, mobileOpen, onCloseMobi
         .filter((i) => i.section === 'soon')
         .map((item) => (
           <div key={item.id} className="nav-item disabled">
-            <Icon name={item.icon} size={20} />
+            <Icon name={item.icon} size={18} />
             <span className="nav-item__label">{item.label}</span>
             <span className="nav-item__soon">Próximo</span>
           </div>

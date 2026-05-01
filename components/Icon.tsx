@@ -9,6 +9,7 @@ type IconName =
   | 'bell'
   | 'chart'
   | 'wallet'
+  | 'creditcard'
   | 'settings'
   | 'file'
   | 'check'
@@ -77,6 +78,13 @@ const paths: Record<IconName, ReactElement> = {
       <path d="M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2H6a3 3 0 0 0 0 6h15v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
       <path d="M21 11v6H6a2 2 0 0 1 0-4h15z" />
       <circle cx="16.5" cy="14" r="1" />
+    </>
+  ),
+  creditcard: (
+    <>
+      <rect x="2" y="6" width="20" height="12" rx="2" />
+      <line x1="2" y1="10" x2="22" y2="10" />
+      <line x1="6" y1="14" x2="10" y2="14" />
     </>
   ),
   settings: (

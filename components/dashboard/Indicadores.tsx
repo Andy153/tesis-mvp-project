@@ -53,7 +53,7 @@ export function Indicadores({
           <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--accent)' }} onClick={() => onNavigate?.('errors')}>
             <AlertCircle size={16} /> Revisar
           </button>
-          <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--accent)' }} onClick={() => onNavigate?.('calendar')}>
+          <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--accent)' }} onClick={() => onNavigate?.('cobros')}>
             <CreditCard size={16} /> Cobros
           </button>
         </div>

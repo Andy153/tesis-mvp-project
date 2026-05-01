@@ -206,7 +206,7 @@ html[data-theme='dark'] .brand-logo__wordmark {
 .sidebar {
   background: var(--bg-panel);
   border-right: 1px solid var(--border);
-  padding: 22px 18px;
+  padding: 18px 16px;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -219,7 +219,7 @@ html[data-theme='dark'] .brand-logo__wordmark {
   align-items: center;
   justify-content: flex-start;
   gap: 12px;
-  padding: 0 4px 20px 4px;
+  padding: 0 4px 16px 4px;
   margin-bottom: 4px;
   border-bottom: 1px solid var(--border);
 }
@@ -245,26 +245,34 @@ html[data-theme='dark'] .brand-logo__wordmark {
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--text-soft);
-  padding: 18px 10px 8px 10px;
+  padding: 14px 10px 6px 10px;
   font-weight: 600;
 }
 .nav-item {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-height: var(--tap-min);
-  padding: 8px 12px;
+  min-height: 38px;
+  padding: 6px 10px;
   border-radius: var(--radius-sm);
   color: var(--text-muted);
   cursor: pointer;
   transition: background 0.12s, color 0.12s;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 13px;
   user-select: none;
   position: relative;
 }
 .nav-item > svg {
   flex-shrink: 0;
+}
+.nav-item > span,
+.nav-item__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.2;
 }
 .nav-item:hover { background: var(--bg-sunken); color: var(--text); }
 .nav-item:focus-visible {

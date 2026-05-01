@@ -4,9 +4,17 @@ import * as React from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { loadHistoryWithFallback } from '@/lib/history';
 import { getCobrosDelMes, PREPAGAS, type CobroItem } from '@/lib/dashboard-data';
 import { formatCurrency } from '@/lib/utils';
+import { Proyeccion } from '@/components/dashboard/Proyeccion';
+import { Calendario } from '@/components/dashboard/Calendario';
 
 type PrepagaFiltro = 'OSDE' | 'Swiss Medical' | 'Desconocida';
 type EstadoFiltro = 'Pendiente' | 'Cobrado' | 'A confirmar' | 'Rechazado';
@@ -196,6 +204,30 @@ export function CobrosView() {
     return next;
   };
 
+  const chipStyle = (active: boolean): React.CSSProperties => ({
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 8,
+    paddingInline: 10,
+    paddingBlock: 6,
+    borderRadius: 999,
+    border: `1px solid ${active ? 'rgba(42,107,82,0.35)' : 'var(--border)'}`,
+    background: active ? 'rgba(42,107,82,0.10)' : 'var(--bg-panel)',
+    color: active ? 'var(--text)' : 'var(--text-soft)',
+    fontSize: 12,
+    fontWeight: 800,
+    cursor: 'pointer',
+    userSelect: 'none',
+  });
+
+  const sectionLabelStyle: React.CSSProperties = {
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: '0.08em',
+    color: 'var(--text-soft)',
+    fontWeight: 800,
+  };
+
   const sortHeader = (label: string, key: SortKey) => {
     const active = sort.key === key;
     const arrow = !active ? '' : sort.dir === 'asc' ? ' ↑' : ' ↓';
@@ -233,35 +265,45 @@ export function CobrosView() {
       : 'No hay cobros que coincidan con los filtros seleccionados.';
 
   return (
-    <div className="px-6 md:px-10 pt-6 pb-10 max-w-[1600px] mx-auto">
-      <div className="page-head mb-16">
-        <div>
-          <h1 className="page-title">Centro de cobros</h1>
-          <p className="page-subtitle">Detalle de todos los cobros estimados y registrados</p>
+    <TooltipProvider>
+      <div className="px-6 md:px-10 pt-6 pb-10 max-w-[1600px] mx-auto">
+        <div className="page-head mb-10">
+          <div style={{ display: 'grid', gap: 6 }}>
+            <div style={{ fontWeight: 900, fontSize: 26, lineHeight: 1.15, color: 'var(--text)' }}>
+              Centro de cobros
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.45 }}>
+              Detalle de todos los cobros estimados y registrados
+            </div>
+          </div>
         </div>
-      </div>
 
-      <section className="panel" style={{ padding: 24 }}>
-        <div style={{ display: 'grid', gap: 12 }}>
-          <div
-            className="panel"
-            style={{
-              padding: 12,
-              background: 'var(--bg-sunken)',
-              borderColor: 'var(--border)',
-              display: 'grid',
-              gap: 12,
-            }}
-          >
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 10 }}>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
-                <label style={{ fontSize: 12, color: 'var(--text-soft)', fontWeight: 800 }}>
-                  Mes{' '}
+        <div style={{ display: 'grid', gap: 18 }}>
+          <div style={{ display: 'grid', gap: 18 }}>
+            <Proyeccion showMoreLink={false} />
+            <Calendario />
+          </div>
+
+          {/* Controles */}
+          <section className="panel" style={{ padding: 18, background: 'var(--bg-panel)' }}>
+            <div style={{ display: 'grid', gap: 14 }}>
+              {/* fila superior */}
+              <div
+                style={{
+                  display: 'flex',
+                  gap: 12,
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                }}
+              >
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <span style={sectionLabelStyle}>Mes</span>
                   <select
                     value={mesKey}
                     onChange={(e) => setMesKey(e.target.value)}
                     className="input"
-                    style={{ marginLeft: 8, minWidth: 200 }}
+                    style={{ minWidth: 190, maxWidth: '100%' }}
                   >
                     {mesesOpciones.map((m) => (
                       <option key={m.key} value={m.key}>
@@ -271,35 +313,7 @@ export function CobrosView() {
                   </select>
                 </label>
 
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-                  <span style={{ fontSize: 12, color: 'var(--text-soft)', fontWeight: 800 }}>Prepaga</span>
-                  {(['OSDE', 'Swiss Medical', 'Desconocida'] as PrepagaFiltro[]).map((p) => (
-                    <label key={p} style={{ display: 'inline-flex', gap: 6, alignItems: 'center', fontSize: 12 }}>
-                      <input
-                        type="checkbox"
-                        checked={prepagaSel.has(p)}
-                        onChange={() => setPrepagaSel((s) => toggleSet(s, p))}
-                      />
-                      <span style={{ color: 'var(--text)' }}>{p}</span>
-                    </label>
-                  ))}
-                </div>
-
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-                  <span style={{ fontSize: 12, color: 'var(--text-soft)', fontWeight: 800 }}>Estado</span>
-                  {(['Pendiente', 'Cobrado', 'A confirmar', 'Rechazado'] as EstadoFiltro[]).map((st) => (
-                    <label key={st} style={{ display: 'inline-flex', gap: 6, alignItems: 'center', fontSize: 12 }}>
-                      <input
-                        type="checkbox"
-                        checked={estadoSel.has(st)}
-                        onChange={() => setEstadoSel((s) => toggleSet(s, st))}
-                      />
-                      <span style={{ color: 'var(--text)' }}>{st}</span>
-                    </label>
-                  ))}
-                </div>
-
-                <div style={{ marginLeft: 'auto', minWidth: 240 }}>
+                <div style={{ flex: '1 1 280px', minWidth: 0, maxWidth: 520 }}>
                   <input
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
@@ -309,48 +323,92 @@ export function CobrosView() {
                   />
                 </div>
               </div>
+
+              {/* fila inferior: filtros */}
+              <div style={{ display: 'grid', gap: 10 }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+                  <span style={sectionLabelStyle}>Prepaga</span>
+                  {(['OSDE', 'Swiss Medical', 'Desconocida'] as PrepagaFiltro[]).map((p) => {
+                    const active = prepagaSel.has(p);
+                    return (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setPrepagaSel((s) => toggleSet(s, p))}
+                        style={chipStyle(active)}
+                        aria-pressed={active}
+                      >
+                        {p}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+                  <span style={sectionLabelStyle}>Estado</span>
+                  {(['Pendiente', 'Cobrado', 'A confirmar', 'Rechazado'] as EstadoFiltro[]).map((st) => {
+                    const active = estadoSel.has(st);
+                    return (
+                      <button
+                        key={st}
+                        type="button"
+                        onClick={() => setEstadoSel((s) => toggleSet(s, st))}
+                        style={chipStyle(active)}
+                        aria-pressed={active}
+                      >
+                        {st}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
-          </div>
+          </section>
 
-          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+          {/* Resumen */}
+          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
             Mostrando <b className="tabular">{sorted.length}</b> cobros · Total:{' '}
-            <b className="tabular">{formatCurrency(total)}</b> ·{' '}
-            <b className="tabular">{aConfirmar}</b> a confirmar
+            <b className="tabular" style={{ color: 'var(--text)', fontWeight: 800 }}>
+              {formatCurrency(total)}
+            </b>{' '}
+            · <b className="tabular">{aConfirmar}</b> a confirmar
           </div>
 
-          <div className="panel" style={{ padding: 12, background: 'var(--bg-panel)' }}>
+          {/* Tabla */}
+          <section className="panel" style={{ padding: 0, overflow: 'hidden' }}>
             {sorted.length === 0 ? (
-              <div className="empty" style={{ border: 'none' }}>
+              <div className="empty" style={{ border: 'none', padding: 18 }}>
                 <div className="empty-title">{emptyMessage}</div>
               </div>
             ) : (
               <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 980 }}>
                   <thead>
-                    <tr>
-                      <th style={{ textAlign: 'left', padding: 10, borderBottom: '1px solid var(--border)' }}>
+                    <tr style={{ background: 'var(--bg-sunken)' }}>
+                      <th style={{ textAlign: 'left', padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
                         {sortHeader('Paciente', 'paciente')}
                       </th>
-                      <th style={{ textAlign: 'left', padding: 10, borderBottom: '1px solid var(--border)' }}>
+                      <th style={{ textAlign: 'left', padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
                         {sortHeader('Práctica', 'practica')}
                       </th>
-                      <th style={{ textAlign: 'left', padding: 10, borderBottom: '1px solid var(--border)' }}>
+                      <th style={{ textAlign: 'left', padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
                         {sortHeader('Prepaga', 'prepaga')}
                       </th>
-                      <th style={{ textAlign: 'right', padding: 10, borderBottom: '1px solid var(--border)' }}>
+                      <th style={{ textAlign: 'right', padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
                         {sortHeader('Monto', 'monto')}
                       </th>
-                      <th style={{ textAlign: 'left', padding: 10, borderBottom: '1px solid var(--border)' }}>
+                      <th style={{ textAlign: 'right', padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
                         {sortHeader('Fecha práctica', 'fechaPractica')}
                       </th>
-                      <th style={{ textAlign: 'left', padding: 10, borderBottom: '1px solid var(--border)' }}>
+                      <th style={{ textAlign: 'right', padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
                         {sortHeader('Fecha cobro estimada', 'fechaCobro')}
                       </th>
-                      <th style={{ textAlign: 'left', padding: 10, borderBottom: '1px solid var(--border)' }}>
+                      <th style={{ textAlign: 'left', padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
                         {sortHeader('Estado', 'estado')}
                       </th>
                     </tr>
                   </thead>
+
                   <tbody>
                     {sorted.map((it) => {
                       const isConfirmar = it.monto === null;
@@ -361,40 +419,91 @@ export function CobrosView() {
                           style={{
                             background: isConfirmar ? 'rgba(148,163,184,0.08)' : 'transparent',
                           }}
+                          onMouseEnter={(e) => {
+                            (e.currentTarget as HTMLElement).style.backgroundColor = isConfirmar
+                              ? 'rgba(148,163,184,0.12)'
+                              : 'rgba(148,163,184,0.06)';
+                          }}
+                          onMouseLeave={(e) => {
+                            (e.currentTarget as HTMLElement).style.backgroundColor = isConfirmar
+                              ? 'rgba(148,163,184,0.08)'
+                              : 'transparent';
+                          }}
                         >
-                          <td style={{ padding: 10, borderBottom: '1px dashed var(--border)', fontWeight: 800 }}>
+                          <td style={{ padding: '12px 16px', borderBottom: '1px solid rgba(148,163,184,0.25)', fontWeight: 800 }}>
                             {it.paciente}
                           </td>
-                          <td style={{ padding: 10, borderBottom: '1px dashed var(--border)' }}>{it.practica}</td>
-                          <td style={{ padding: 10, borderBottom: '1px dashed var(--border)' }}>
+
+                          <td style={{ padding: '12px 16px', borderBottom: '1px solid rgba(148,163,184,0.25)' }}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span
+                                  style={{
+                                    display: 'inline-block',
+                                    maxWidth: 360,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                    verticalAlign: 'bottom',
+                                  }}
+                                >
+                                  {it.practica}
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent sideOffset={6}>{it.practica}</TooltipContent>
+                            </Tooltip>
+                          </td>
+
+                          <td style={{ padding: '12px 16px', borderBottom: '1px solid rgba(148,163,184,0.25)' }}>
                             {prepagaBadge(it.prepaga)}
                           </td>
+
                           <td
                             style={{
-                              padding: 10,
-                              borderBottom: '1px dashed var(--border)',
+                              padding: '12px 16px',
+                              borderBottom: '1px solid rgba(148,163,184,0.25)',
                               textAlign: 'right',
                               fontFamily: 'var(--font-mono)',
                               color: isConfirmar ? 'var(--text-soft)' : 'var(--accent-ink)',
                               fontWeight: 900,
+                              whiteSpace: 'nowrap',
                             }}
                             className="tabular"
                           >
                             {it.monto === null ? 'A confirmar' : formatCurrency(it.monto)}
                           </td>
-                          <td style={{ padding: 10, borderBottom: '1px dashed var(--border)', color: 'var(--text-muted)' }}>
+
+                          <td
+                            style={{
+                              padding: '12px 16px',
+                              borderBottom: '1px solid rgba(148,163,184,0.25)',
+                              textAlign: 'right',
+                              color: 'var(--text-muted)',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
                             {formatDDMMYYYY(it.fechaPractica)}
                           </td>
-                          <td style={{ padding: 10, borderBottom: '1px dashed var(--border)', color: 'var(--text-muted)' }}>
+
+                          <td
+                            style={{
+                              padding: '12px 16px',
+                              borderBottom: '1px solid rgba(148,163,184,0.25)',
+                              textAlign: 'right',
+                              color: 'var(--text-muted)',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
                             {it.estado === 'cobrado' && it.fechaCobroReal ? (
-                              <span title="Cobro real">
-                                ✓ {formatDDMMYYYY(fechaCobro)}
-                              </span>
+                              <span title="Cobro real">✓ {formatDDMMYYYY(fechaCobro)}</span>
                             ) : (
                               formatDDMMYYYY(fechaCobro)
                             )}
                           </td>
-                          <td style={{ padding: 10, borderBottom: '1px dashed var(--border)' }}>{estadoBadge(it)}</td>
+
+                          <td style={{ padding: '12px 16px', borderBottom: '1px solid rgba(148,163,184,0.25)' }}>
+                            {estadoBadge(it)}
+                          </td>
                         </tr>
                       );
                     })}
@@ -402,10 +511,10 @@ export function CobrosView() {
                 </table>
               </div>
             )}
-          </div>
+          </section>
         </div>
-      </section>
-    </div>
+      </div>
+    </TooltipProvider>
   );
 }
 

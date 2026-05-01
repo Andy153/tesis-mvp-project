@@ -2,9 +2,7 @@
 
 import { formatDateLong, getSaludo } from '@/lib/utils';
 import { Indicadores } from '@/components/dashboard/Indicadores';
-import { Proyeccion } from '@/components/dashboard/Proyeccion';
-import { Calendario } from '@/components/dashboard/Calendario';
-import { Atencion } from '@/components/dashboard/Atencion';
+import { CalendarView } from '@/components/CalendarView';
 
 type DashboardViewProps = {
   onNavigate?: (view: string) => void;
@@ -29,16 +27,15 @@ export function DashboardView({ onNavigate, onOpenFile }: DashboardViewProps) {
       <div className="space-y-20">
         <Indicadores onNavigate={onNavigate} />
 
-        {/* Calendario + Proyección (60/40) */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-16">
-          <div className="lg:col-span-2">
-            <Calendario />
+        <section className="panel" style={{ padding: 24 }}>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontWeight: 800, fontSize: 15, lineHeight: 1.25, color: 'var(--text)' }}>Vista por fechas</div>
+            <div style={{ marginTop: 6, fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.45 }}>
+              Tus documentos agrupados por fecha de carga.
+            </div>
           </div>
-          <Proyeccion onNavigate={onNavigate} />
-        </div>
-
-        {/* Atención — full width */}
-        <Atencion onNavigate={onNavigate} onOpenFile={onOpenFile} />
+          <CalendarView embedded onOpenParte={onOpenFile} />
+        </section>
       </div>
     </div>
   );

@@ -10,7 +10,13 @@ import { loadHistoryWithFallback } from '@/lib/history';
 import { getProyeccionDelMes, PREPAGAS } from '@/lib/dashboard-data';
 import { formatCurrency } from '@/lib/utils';
 
-export function Proyeccion({ onNavigate }: { onNavigate?: (view: string) => void }) {
+export function Proyeccion({
+  onNavigate,
+  showMoreLink = true,
+}: {
+  onNavigate?: (view: string) => void;
+  showMoreLink?: boolean;
+}) {
   const { files } = loadHistoryWithFallback();
   const proyeccion = getProyeccionDelMes(files);
   const mesActual = format(new Date(), 'MMMM yyyy', { locale: es });
@@ -190,16 +196,18 @@ export function Proyeccion({ onNavigate }: { onNavigate?: (view: string) => void
           </div>
         </div>
       </div>
-      <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
-        <button
-          type="button"
-          className="btn btn-ghost btn-sm"
-          style={{ color: 'var(--accent)' }}
-          onClick={() => onNavigate?.('cobros')}
-        >
-          Conocer más <span aria-hidden>→</span>
-        </button>
-      </div>
+      {showMoreLink ? (
+        <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            style={{ color: 'var(--accent)' }}
+            onClick={() => onNavigate?.('cobros')}
+          >
+            Conocer más <span aria-hidden>→</span>
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 }

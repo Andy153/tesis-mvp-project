@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { Icon } from './Icon';
 import type { AuthState, FileEntry, Severity } from '@/lib/types';
+import { loadHistory } from '@/lib/history';
 
 type ViewMode = 'month' | 'week' | 'day';
 
@@ -113,14 +114,19 @@ function groupDocs(files: FileEntry[], authStates: Record<string, AuthState | un
 }
 
 export function CalendarView({
-  files,
-  authStates,
+  files: filesProp,
+  authStates: authStatesProp,
   onOpenParte,
+  embedded = false,
 }: {
-  files: FileEntry[];
-  authStates: Record<string, AuthState | undefined>;
-  onOpenParte: (id: string) => void;
+  files?: FileEntry[];
+  authStates?: Record<string, AuthState | undefined>;
+  onOpenParte?: (id: string) => void;
+  embedded?: boolean;
 }) {
+  const loaded = loadHistory();
+  const files = filesProp ?? (loaded.files as FileEntry[]);
+  const authStates = authStatesProp ?? (loaded.authStates as Record<string, AuthState | undefined>);
   const [mode, setMode] = useState<ViewMode>('month');
   const [anchor, setAnchor] = useState<Date>(new Date());
   const [selectedDay, setSelectedDay] = useState<string>(ymd(new Date()));
@@ -177,12 +183,14 @@ export function CalendarView({
 
   return (
     <div>
-      <div className="page-head">
-        <div>
-          <h1 className="page-title">Vista por fechas</h1>
-          <p className="page-subtitle">Los documentos agrupados por fecha de carga.</p>
+      {!embedded ? (
+        <div className="page-head">
+          <div>
+            <h1 className="page-title">Vista por fechas</h1>
+            <p className="page-subtitle">Los documentos agrupados por fecha de carga.</p>
+          </div>
         </div>
-      </div>
+      ) : null}
 
       <div className="cal-toolbar">
         <div className="cal-modes">
@@ -381,7 +389,12 @@ export function CalendarView({
                           )}
 
                           <div className="cal-card-actions">
-                            <button className="btn btn-sm btn-ghost" onClick={() => onOpenParte(g.parte.id)}>
+                            <button
+                              className="btn btn-sm btn-ghost"
+                              onClick={() => onOpenParte?.(g.parte.id)}
+                              disabled={!onOpenParte}
+                              title={!onOpenParte ? 'No disponible desde esta vista' : undefined}
+                            >
                               Ver detalle
                             </button>
                           </div>

@@ -6,7 +6,6 @@ import { Icon } from './Icon';
 import { Sidebar } from './Sidebar';
 import { UploadView } from './UploadView';
 import { ErrorsView } from './ErrorsView';
-import { CalendarView } from './CalendarView';
 import { DocumentsView } from './DocumentsView';
 import { ProfileView } from './ProfileView';
 import { DashboardView } from './DashboardView';
@@ -291,9 +290,6 @@ export default function TrazaApp() {
           />
         )}
         {active === 'documents' && <DocumentsView files={files} onOpenFile={openFile} />}
-        {active === 'calendar' && (
-          <CalendarView files={files} authStates={authStates} onOpenParte={openFile} />
-        )}
         {active === 'errors' && <ErrorsView files={files} onOpenFile={openFile} />}
         {active === 'settings' && <ProfileView />}
       </main>

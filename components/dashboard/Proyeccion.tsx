@@ -10,7 +10,7 @@ import { loadHistoryWithFallback } from '@/lib/history';
 import { getProyeccionDelMes, PREPAGAS } from '@/lib/dashboard-data';
 import { formatCurrency } from '@/lib/utils';
 
-export function Proyeccion() {
+export function Proyeccion({ onNavigate }: { onNavigate?: (view: string) => void }) {
   const { files } = loadHistoryWithFallback();
   const proyeccion = getProyeccionDelMes(files);
   const mesActual = format(new Date(), 'MMMM yyyy', { locale: es });
@@ -191,7 +191,12 @@ export function Proyeccion() {
         </div>
       </div>
       <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
-        <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--accent)' }}>
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm"
+          style={{ color: 'var(--accent)' }}
+          onClick={() => onNavigate?.('cobros')}
+        >
           Conocer más <span aria-hidden>→</span>
         </button>
       </div>

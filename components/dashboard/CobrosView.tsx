@@ -1,0 +1,411 @@
+'use client';
+
+import * as React from 'react';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
+
+import { loadHistoryWithFallback } from '@/lib/history';
+import { getCobrosDelMes, PREPAGAS, type CobroItem } from '@/lib/dashboard-data';
+import { formatCurrency } from '@/lib/utils';
+
+type PrepagaFiltro = 'OSDE' | 'Swiss Medical' | 'Desconocida';
+type EstadoFiltro = 'Pendiente' | 'Cobrado' | 'A confirmar' | 'Rechazado';
+
+function monthKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function monthFromKey(key: string): Date {
+  const m = String(key || '').match(/^(\d{4})-(\d{2})$/);
+  if (!m) return new Date();
+  return new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, 1, 12, 0, 0, 0);
+}
+
+function formatDDMMYYYY(d: Date | null | undefined): string {
+  if (!d) return '—';
+  return format(d, 'dd/MM/yyyy', { locale: es });
+}
+
+function estadoLabel(it: CobroItem): EstadoFiltro {
+  if (it.monto === null) return 'A confirmar';
+  if (it.estado === 'cobrado') return 'Cobrado';
+  if (it.estado === 'rechazado') return 'Rechazado';
+  return 'Pendiente';
+}
+
+function sortValue(it: CobroItem, key: SortKey): number | string {
+  const f = (d: Date | null | undefined) => (d ? d.getTime() : -1);
+  if (key === 'paciente') return it.paciente;
+  if (key === 'practica') return it.practica;
+  if (key === 'prepaga') return it.prepaga;
+  if (key === 'monto') return it.monto ?? -1;
+  if (key === 'fechaPractica') return f(it.fechaPractica);
+  if (key === 'fechaCobro') return f(it.fechaCobroReal ?? it.fechaCobroEstimada);
+  if (key === 'estado') return estadoLabel(it);
+  return f(it.fechaCobroReal ?? it.fechaCobroEstimada);
+}
+
+type SortKey =
+  | 'paciente'
+  | 'practica'
+  | 'prepaga'
+  | 'monto'
+  | 'fechaPractica'
+  | 'fechaCobro'
+  | 'estado';
+
+export function CobrosView() {
+  const { files } = loadHistoryWithFallback();
+
+  const [mesKey, setMesKey] = React.useState<string>(() => monthKey(new Date()));
+  const mes = React.useMemo(() => monthFromKey(mesKey), [mesKey]);
+
+  const [prepagaSel, setPrepagaSel] = React.useState<Set<PrepagaFiltro>>(
+    () => new Set<PrepagaFiltro>(['OSDE', 'Swiss Medical', 'Desconocida']),
+  );
+  const [estadoSel, setEstadoSel] = React.useState<Set<EstadoFiltro>>(
+    () => new Set<EstadoFiltro>(['Pendiente', 'Cobrado', 'A confirmar', 'Rechazado']),
+  );
+  const [q, setQ] = React.useState<string>('');
+
+  const [sort, setSort] = React.useState<{ key: SortKey; dir: 'asc' | 'desc' }>(() => ({
+    key: 'fechaCobro',
+    dir: 'asc',
+  }));
+
+  const all = React.useMemo(() => getCobrosDelMes(files as any, mes), [files, mes]);
+
+  const filtered = React.useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return all.filter((it) => {
+      const obra: PrepagaFiltro =
+        it.prepaga === 'OSDE' ? 'OSDE' : it.prepaga === 'Swiss Medical' ? 'Swiss Medical' : 'Desconocida';
+      if (!prepagaSel.has(obra)) return false;
+
+      const estado = estadoLabel(it);
+      if (!estadoSel.has(estado)) return false;
+
+      if (needle) {
+        const hay = `${it.paciente} ${it.practica}`.toLowerCase();
+        if (!hay.includes(needle)) return false;
+      }
+      return true;
+    });
+  }, [all, q, prepagaSel, estadoSel]);
+
+  const sorted = React.useMemo(() => {
+    const dir = sort.dir === 'asc' ? 1 : -1;
+    const key = sort.key;
+    const copy = [...filtered];
+    copy.sort((a, b) => {
+      const av = sortValue(a, key);
+      const bv = sortValue(b, key);
+      if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
+      return String(av).localeCompare(String(bv), 'es', { sensitivity: 'base' }) * dir;
+    });
+    return copy;
+  }, [filtered, sort]);
+
+  const total = React.useMemo(
+    () => sorted.reduce((acc, it) => acc + (it.monto ?? 0), 0),
+    [sorted],
+  );
+  const aConfirmar = React.useMemo(() => sorted.filter((it) => it.monto === null).length, [sorted]);
+
+  const mesesOpciones = React.useMemo(() => {
+    const base = new Date();
+    base.setDate(1);
+    base.setHours(12, 0, 0, 0);
+    const out: Array<{ key: string; label: string }> = [];
+    for (let delta = -12; delta <= 3; delta++) {
+      const d = new Date(base.getFullYear(), base.getMonth() + delta, 1, 12, 0, 0, 0);
+      out.push({ key: monthKey(d), label: format(d, 'MMMM yyyy', { locale: es }) });
+    }
+    return out;
+  }, []);
+
+  const prepagaBadge = (obra: CobroItem['prepaga']) => {
+    const info =
+      obra === 'OSDE'
+        ? PREPAGAS.find((p) => p.id === 'osde')
+        : obra === 'Swiss Medical'
+          ? PREPAGAS.find((p) => p.id === 'swiss')
+          : PREPAGAS.find((p) => p.id === 'unknown');
+    const nombre = obra === 'Desconocida' ? 'Desconocida' : obra;
+    const color = info?.colorHex ?? '#64748B';
+    return (
+      <span
+        className="badge"
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 8,
+          paddingInline: 10,
+          paddingBlock: 4,
+          borderRadius: 999,
+          border: '1px solid var(--border)',
+          background: 'var(--bg-sunken)',
+          color: 'var(--text)',
+          fontSize: 12,
+          fontWeight: 700,
+        }}
+      >
+        <span aria-hidden style={{ width: 8, height: 8, borderRadius: 999, background: color, opacity: 0.9 }} />
+        {nombre}
+      </span>
+    );
+  };
+
+  const estadoBadge = (it: CobroItem) => {
+    const st = estadoLabel(it);
+    const tone =
+      st === 'Cobrado'
+        ? { bg: 'rgba(34,197,94,0.12)', border: 'rgba(34,197,94,0.35)', text: 'rgb(22,101,52)' }
+        : st === 'Rechazado'
+          ? { bg: 'rgba(239,68,68,0.12)', border: 'rgba(239,68,68,0.35)', text: 'rgb(153,27,27)' }
+          : st === 'A confirmar'
+            ? { bg: 'rgba(148,163,184,0.12)', border: 'rgba(148,163,184,0.35)', text: 'rgb(71,85,105)' }
+            : { bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.35)', text: 'rgb(146,64,14)' };
+    return (
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 8,
+          paddingInline: 10,
+          paddingBlock: 4,
+          borderRadius: 999,
+          border: `1px solid ${tone.border}`,
+          background: tone.bg,
+          color: tone.text,
+          fontSize: 12,
+          fontWeight: 800,
+          whiteSpace: 'nowrap',
+        }}
+        title={it.motivo || undefined}
+      >
+        {st}
+      </span>
+    );
+  };
+
+  const toggleSet = <T,>(set: Set<T>, v: T) => {
+    const next = new Set(set);
+    if (next.has(v)) next.delete(v);
+    else next.add(v);
+    return next;
+  };
+
+  const sortHeader = (label: string, key: SortKey) => {
+    const active = sort.key === key;
+    const arrow = !active ? '' : sort.dir === 'asc' ? ' ↑' : ' ↓';
+    return (
+      <button
+        type="button"
+        onClick={() =>
+          setSort((s) =>
+            s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' },
+          )
+        }
+        style={{
+          all: 'unset',
+          cursor: 'pointer',
+          fontWeight: 800,
+          fontSize: 12,
+          color: active ? 'var(--text)' : 'var(--text-soft)',
+        }}
+        title="Ordenar"
+      >
+        {label}
+        {arrow}
+      </button>
+    );
+  };
+
+  const mesLabel = React.useMemo(() => {
+    const s = format(mes, 'MMMM yyyy', { locale: es });
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }, [mes]);
+
+  const emptyMessage =
+    all.length === 0
+      ? `No hay cobros registrados en ${mesLabel}.`
+      : 'No hay cobros que coincidan con los filtros seleccionados.';
+
+  return (
+    <div className="px-6 md:px-10 pt-6 pb-10 max-w-[1600px] mx-auto">
+      <div className="page-head mb-16">
+        <div>
+          <h1 className="page-title">Centro de cobros</h1>
+          <p className="page-subtitle">Detalle de todos los cobros estimados y registrados</p>
+        </div>
+      </div>
+
+      <section className="panel" style={{ padding: 24 }}>
+        <div style={{ display: 'grid', gap: 12 }}>
+          <div
+            className="panel"
+            style={{
+              padding: 12,
+              background: 'var(--bg-sunken)',
+              borderColor: 'var(--border)',
+              display: 'grid',
+              gap: 12,
+            }}
+          >
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 10 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+                <label style={{ fontSize: 12, color: 'var(--text-soft)', fontWeight: 800 }}>
+                  Mes{' '}
+                  <select
+                    value={mesKey}
+                    onChange={(e) => setMesKey(e.target.value)}
+                    className="input"
+                    style={{ marginLeft: 8, minWidth: 200 }}
+                  >
+                    {mesesOpciones.map((m) => (
+                      <option key={m.key} value={m.key}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                  <span style={{ fontSize: 12, color: 'var(--text-soft)', fontWeight: 800 }}>Prepaga</span>
+                  {(['OSDE', 'Swiss Medical', 'Desconocida'] as PrepagaFiltro[]).map((p) => (
+                    <label key={p} style={{ display: 'inline-flex', gap: 6, alignItems: 'center', fontSize: 12 }}>
+                      <input
+                        type="checkbox"
+                        checked={prepagaSel.has(p)}
+                        onChange={() => setPrepagaSel((s) => toggleSet(s, p))}
+                      />
+                      <span style={{ color: 'var(--text)' }}>{p}</span>
+                    </label>
+                  ))}
+                </div>
+
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                  <span style={{ fontSize: 12, color: 'var(--text-soft)', fontWeight: 800 }}>Estado</span>
+                  {(['Pendiente', 'Cobrado', 'A confirmar', 'Rechazado'] as EstadoFiltro[]).map((st) => (
+                    <label key={st} style={{ display: 'inline-flex', gap: 6, alignItems: 'center', fontSize: 12 }}>
+                      <input
+                        type="checkbox"
+                        checked={estadoSel.has(st)}
+                        onChange={() => setEstadoSel((s) => toggleSet(s, st))}
+                      />
+                      <span style={{ color: 'var(--text)' }}>{st}</span>
+                    </label>
+                  ))}
+                </div>
+
+                <div style={{ marginLeft: 'auto', minWidth: 240 }}>
+                  <input
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
+                    placeholder="Buscar paciente o práctica…"
+                    className="input"
+                    style={{ width: '100%' }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+            Mostrando <b className="tabular">{sorted.length}</b> cobros · Total:{' '}
+            <b className="tabular">{formatCurrency(total)}</b> ·{' '}
+            <b className="tabular">{aConfirmar}</b> a confirmar
+          </div>
+
+          <div className="panel" style={{ padding: 12, background: 'var(--bg-panel)' }}>
+            {sorted.length === 0 ? (
+              <div className="empty" style={{ border: 'none' }}>
+                <div className="empty-title">{emptyMessage}</div>
+              </div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: 'left', padding: 10, borderBottom: '1px solid var(--border)' }}>
+                        {sortHeader('Paciente', 'paciente')}
+                      </th>
+                      <th style={{ textAlign: 'left', padding: 10, borderBottom: '1px solid var(--border)' }}>
+                        {sortHeader('Práctica', 'practica')}
+                      </th>
+                      <th style={{ textAlign: 'left', padding: 10, borderBottom: '1px solid var(--border)' }}>
+                        {sortHeader('Prepaga', 'prepaga')}
+                      </th>
+                      <th style={{ textAlign: 'right', padding: 10, borderBottom: '1px solid var(--border)' }}>
+                        {sortHeader('Monto', 'monto')}
+                      </th>
+                      <th style={{ textAlign: 'left', padding: 10, borderBottom: '1px solid var(--border)' }}>
+                        {sortHeader('Fecha práctica', 'fechaPractica')}
+                      </th>
+                      <th style={{ textAlign: 'left', padding: 10, borderBottom: '1px solid var(--border)' }}>
+                        {sortHeader('Fecha cobro estimada', 'fechaCobro')}
+                      </th>
+                      <th style={{ textAlign: 'left', padding: 10, borderBottom: '1px solid var(--border)' }}>
+                        {sortHeader('Estado', 'estado')}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sorted.map((it) => {
+                      const isConfirmar = it.monto === null;
+                      const fechaCobro = it.fechaCobroReal ?? it.fechaCobroEstimada;
+                      return (
+                        <tr
+                          key={it.id}
+                          style={{
+                            background: isConfirmar ? 'rgba(148,163,184,0.08)' : 'transparent',
+                          }}
+                        >
+                          <td style={{ padding: 10, borderBottom: '1px dashed var(--border)', fontWeight: 800 }}>
+                            {it.paciente}
+                          </td>
+                          <td style={{ padding: 10, borderBottom: '1px dashed var(--border)' }}>{it.practica}</td>
+                          <td style={{ padding: 10, borderBottom: '1px dashed var(--border)' }}>
+                            {prepagaBadge(it.prepaga)}
+                          </td>
+                          <td
+                            style={{
+                              padding: 10,
+                              borderBottom: '1px dashed var(--border)',
+                              textAlign: 'right',
+                              fontFamily: 'var(--font-mono)',
+                              color: isConfirmar ? 'var(--text-soft)' : 'var(--accent-ink)',
+                              fontWeight: 900,
+                            }}
+                            className="tabular"
+                          >
+                            {it.monto === null ? 'A confirmar' : formatCurrency(it.monto)}
+                          </td>
+                          <td style={{ padding: 10, borderBottom: '1px dashed var(--border)', color: 'var(--text-muted)' }}>
+                            {formatDDMMYYYY(it.fechaPractica)}
+                          </td>
+                          <td style={{ padding: 10, borderBottom: '1px dashed var(--border)', color: 'var(--text-muted)' }}>
+                            {it.estado === 'cobrado' && it.fechaCobroReal ? (
+                              <span title="Cobro real">
+                                ✓ {formatDDMMYYYY(fechaCobro)}
+                              </span>
+                            ) : (
+                              formatDDMMYYYY(fechaCobro)
+                            )}
+                          </td>
+                          <td style={{ padding: 10, borderBottom: '1px dashed var(--border)' }}>{estadoBadge(it)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+

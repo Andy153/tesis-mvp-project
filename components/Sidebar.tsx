@@ -4,7 +4,16 @@ import { Logo } from './Logo';
 import { getInitials } from '@/lib/profile';
 import { Icon, type IconName } from './Icon';
 
-type TabId = 'upload' | 'documents' | 'calendar' | 'errors' | 'dashboard' | 'alerts' | 'projection' | 'settings';
+type TabId =
+  | 'upload'
+  | 'documents'
+  | 'calendar'
+  | 'errors'
+  | 'cobros'
+  | 'dashboard'
+  | 'alerts'
+  | 'projection'
+  | 'settings';
 
 interface SidebarProps {
   active: string;
@@ -31,6 +40,7 @@ export function Sidebar({ active, setActive, errorCount, mobileOpen, onCloseMobi
     { id: 'documents', label: 'Mis documentos', icon: 'file', section: 'work' },
     { id: 'calendar', label: 'Vista por fechas', icon: 'calendar', section: 'work' },
     { id: 'errors', label: 'Qué conviene revisar', icon: 'alert', section: 'work', badge: errorCount },
+    { id: 'cobros', label: 'Centro de cobros', icon: 'wallet', section: 'work' },
     { id: 'alerts', label: 'Avisos', icon: 'bell', section: 'soon', disabled: true },
     { id: 'projection', label: 'Proyección de cobro', icon: 'chart', section: 'soon', disabled: true },
   ];

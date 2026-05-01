@@ -10,6 +10,7 @@ import { CalendarView } from './CalendarView';
 import { DocumentsView } from './DocumentsView';
 import { ProfileView } from './ProfileView';
 import { DashboardView } from './DashboardView';
+import { CobrosView } from './dashboard/CobrosView';
 import type { AuthState, FileEntry } from '@/lib/types';
 import { loadHistory, saveHistory } from '@/lib/history';
 import { buildSwissCxRow } from '@/lib/swissCxExport';
@@ -253,6 +254,7 @@ export default function TrazaApp() {
       />
       <main className="main">
         {active === 'dashboard' && <DashboardView onNavigate={(view) => setActive(view)} onOpenFile={openFile} />}
+        {active === 'cobros' && <CobrosView />}
         {active === 'upload' && (
           <UploadView
             files={files}

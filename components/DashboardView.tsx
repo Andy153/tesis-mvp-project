@@ -34,7 +34,7 @@ export function DashboardView({ onNavigate, onOpenFile }: DashboardViewProps) {
           <div className="lg:col-span-2">
             <Calendario />
           </div>
-          <Proyeccion />
+          <Proyeccion onNavigate={onNavigate} />
         </div>
 
         {/* Atención — full width */}

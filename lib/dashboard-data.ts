@@ -1,4 +1,4 @@
-import type { HistoryItem } from './history';
+import type { EstadoCobro, HistoryItem } from './history';
 import { requiresAuthorization } from './authz';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -7,6 +7,7 @@ import {
   estimarMontoCobro,
   proximaFechaFacturacion,
 } from '@/data/cobros-estimaciones';
+import { OSDE_PRECIOS } from '@/data/osde-precios';
 import {
   getCodigoFromItem,
   getFechaPracticaFromItem,
@@ -15,6 +16,7 @@ import {
   getTipoFromItem,
   type ObraSocial,
 } from '@/lib/item-extractors';
+import { TRAZA_NOMENCLADOR_FULL } from './nomenclador.js';
 
 export type PrepagaInfo = {
   id: 'swiss' | 'osde' | 'galeno' | 'medicus' | 'omint' | 'medife' | 'unknown';
@@ -127,6 +129,80 @@ function calcularCobroRuntime(it: HistoryItem): {
     obraSocial,
     prepaga,
   };
+}
+
+export type CobroItem = {
+  id: string;
+  paciente: string;
+  practica: string;
+  codigo: string | null;
+  prepaga: ObraSocial;
+  plan: string | null;
+  tipo: 'Amb' | 'Int';
+  monto: number | null;
+  esEstimado: boolean;
+  motivo?: string;
+  fechaPractica: Date | null;
+  fechaCobroEstimada: Date | null;
+  fechaCobroReal?: Date | null;
+  estado: EstadoCobro;
+  prepagaInfo: PrepagaInfo;
+};
+
+export function getCobrosDelMes(items: HistoryItem[], mes: Date): CobroItem[] {
+  const month = new Date(mes);
+  const out: CobroItem[] = [];
+  const nomen: Record<string, any> = TRAZA_NOMENCLADOR_FULL as any;
+
+  for (const it of items || []) {
+    const t = it.tracking;
+    if (!t) continue;
+    if (t.estado !== 'presentado' && t.estado !== 'cobrado' && t.estado !== 'rechazado') continue;
+
+    const calc = calcularCobroRuntime(it);
+    const fechaCobro = calc.fechaCobro;
+    if (!fechaCobro || !inMonth(fechaCobro, month)) continue;
+
+    const codigo = getCodigoFromItem(it);
+    const fechaPractica = getFechaPracticaFromItem(it);
+    const planTxt = (it as any)?.aiParteExtract?.cobertura?.plan ?? null;
+    const tipo = getTipoFromItem(it);
+
+    const row = it.exports?.swissCx?.row;
+    const paciente = row?.socioDesc || '—';
+
+    const descTraza =
+      codigo && nomen?.[String(codigo)]?.entries?.[0]?.desc ? String(nomen[String(codigo)].entries[0].desc) : '';
+    const descOsde = codigo && calc.obraSocial === 'OSDE' ? (OSDE_PRECIOS[codigo]?.descripcion ?? '') : '';
+    const practica =
+      descTraza ||
+      row?.detalle ||
+      it.analysis?.detected?.procedureGuess?.desc ||
+      descOsde ||
+      'Intervención';
+
+    const fechaCobroReal = t.estado === 'cobrado' ? parseISODate(t.fechaCobroReal) : null;
+
+    out.push({
+      id: it.id,
+      paciente,
+      practica,
+      codigo,
+      prepaga: calc.obraSocial,
+      plan: typeof planTxt === 'string' ? planTxt : planTxt == null ? null : String(planTxt),
+      tipo,
+      monto: calc.monto,
+      esEstimado: calc.esEstimado,
+      motivo: calc.motivo,
+      fechaPractica,
+      fechaCobroEstimada: fechaCobro,
+      fechaCobroReal,
+      estado: t.estado,
+      prepagaInfo: calc.prepaga,
+    });
+  }
+
+  return out;
 }
 
 export function getProyeccionDelMes(items: HistoryItem[], mes?: Date): ProyeccionMensual {

@@ -2,7 +2,6 @@
 
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
-import { Lock } from 'lucide-react';
 import Image from 'next/image';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -24,6 +23,9 @@ export function Proyeccion() {
   const swissDatos = proyeccion.porPrepaga.find((p) => p.prepaga.id === 'swiss');
   const swissCantidad = swissDatos?.cantidad ?? 0;
   const swissMonto = swissDatos?.monto ?? 0;
+  const osdeDatos = proyeccion.porPrepaga.find((p) => p.prepaga.id === 'osde');
+  const osdeCantidad = osdeDatos?.cantidad ?? 0;
+  const osdeMonto = osdeDatos?.monto ?? 0;
 
   return (
     <section className="panel mt-[15px] mb-[15px]" style={{ padding: 24 }}>
@@ -135,7 +137,7 @@ export function Proyeccion() {
             </div>
           </div>
 
-          {/* OSDE (no disponible) */}
+          {/* OSDE */}
           <div
             className="panel"
             data-proj-prepaga-row
@@ -147,7 +149,6 @@ export function Proyeccion() {
               gap: 12,
               borderColor: 'var(--border)',
               background: 'var(--bg-panel)',
-              opacity: 0.55,
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
@@ -165,25 +166,25 @@ export function Proyeccion() {
                   flexShrink: 0,
                   overflow: 'hidden',
                 }}
-                title="OSDE (próximamente)"
+                title="OSDE"
               >
                 <Image src="/logos/osde.png" alt="OSDE" width={28} height={28} style={{ objectFit: 'contain' }} />
               </div>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontWeight: 800, fontSize: 13, color: 'var(--text)', lineHeight: 1.2, display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{osde.nombre}</span>
-                  <span aria-hidden style={{ width: 8, height: 8, borderRadius: 999, background: 'var(--text-soft)', opacity: 0.7 }} />
+                  <span aria-hidden style={{ width: 8, height: 8, borderRadius: 999, background: osde.colorHex, opacity: 0.8 }} />
                 </div>
-                <div style={{ marginTop: 3, fontSize: 12, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  <Lock size={14} /> Próximamente
+                <div style={{ marginTop: 3, fontSize: 12, color: 'var(--text-muted)' }}>
+                  <span className="tabular">{osdeCantidad}</span> {osdeCantidad === 1 ? 'intervención' : 'intervenciones'}
                 </div>
               </div>
             </div>
 
             <div style={{ textAlign: 'right', flexShrink: 0 }} data-proj-prepaga-right>
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-soft)' }}>Estimado</div>
-              <div style={{ fontWeight: 900, fontSize: 13, color: 'var(--text-soft)' }} className="tabular">
-                —
+              <div style={{ fontWeight: 900, fontSize: 13, color: 'var(--accent-ink)' }} className="tabular">
+                {formatCurrency(osdeMonto)}
               </div>
             </div>
           </div>

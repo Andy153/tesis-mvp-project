@@ -8,7 +8,7 @@ import { TRAZA_PREPAGAS, TRAZA_REQUIRED_FIELDS, TRAZA_SANATORIOS } from './traza
 import { matchScore } from './semantic';
 
 /** Incrementar al cambiar reglas de análisis para invalidar análisis guardados en `loadHistory`. */
-export const TRAZA_ANALYZER_REVISION = 18;
+export const TRAZA_ANALYZER_REVISION = 19;
 
 const PIPE = '[TRAZA_PIPELINE]';
 
@@ -1971,6 +1971,13 @@ export function analyzeDocument(
   }
   console.log(`${PIPE} nomenclador:stage ms=${Date.now() - tNomen0}`);
 
+  const prepagasDetectadas = TRAZA_PREPAGAS.filter((p) => lower.includes(stripAccents(p.toLowerCase())));
+  const sanatoriosDetectados = TRAZA_SANATORIOS.filter((s) => lower.includes(stripAccents(s.toLowerCase())));
+  if (prepagasDetectadas.length > 0) {
+    // If we already detected a prepaga by name, don't require the literal label "prepaga/obra social" to appear.
+    foundFields.prepaga = true;
+  }
+
   if (!isPartogram) {
     for (const field of TRAZA_REQUIRED_FIELDS) {
       if (field.key === 'codigo') continue;
@@ -1985,9 +1992,6 @@ export function analyzeDocument(
       }
     }
   }
-
-  const prepagasDetectadas = TRAZA_PREPAGAS.filter((p) => lower.includes(stripAccents(p.toLowerCase())));
-  const sanatoriosDetectados = TRAZA_SANATORIOS.filter((s) => lower.includes(stripAccents(s.toLowerCase())));
 
   const fechaRegex = /\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})\b/g;
   const fechas = Array.from(text.matchAll(fechaRegex)).map((m) => m[0]);

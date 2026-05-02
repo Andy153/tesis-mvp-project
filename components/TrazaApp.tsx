@@ -126,6 +126,10 @@ export default function TrazaApp() {
     });
   }
 
+  function updateFileTracking(id: string, updater: (item: FileEntry) => FileEntry) {
+    setFiles((prev) => prev.map((f) => (f.id === id ? updater(f) : f)));
+  }
+
   function openFile(id: string) {
     setActive('upload');
     setUploadVirgin(false);
@@ -154,6 +158,22 @@ export default function TrazaApp() {
     }
 
     try {
+      const prepagas = parte.analysis?.detected?.prepagas || [];
+      const isSwiss = prepagas.includes('Swiss Medical');
+      if (!isSwiss) {
+        // Para prepagas no-Swiss: permitir "Listo y guardar" sin generar planilla/export.
+        setFiles((prev) =>
+          prev.map((f) =>
+            f.id === parte.id
+              ? {
+                  ...f,
+                  tracking: { ...(f.tracking || { estado: 'borrador' }), estado: 'listo_para_presentar' },
+                }
+              : f,
+          ),
+        );
+        return;
+      }
       const auth = authStates[parte.id];
       const authErrors =
         auth?.status === 'checked' ? (auth.crossCheck || []).some((x) => x.severity === 'error') : false;
@@ -253,7 +273,7 @@ export default function TrazaApp() {
       />
       <main className="main">
         {active === 'dashboard' && <DashboardView onNavigate={(view) => setActive(view)} onOpenFile={openFile} />}
-        {active === 'cobros' && <CobrosView />}
+        {active === 'cobros' && <CobrosView files={files} onUpdateTracking={updateFileTracking} />}
         {active === 'upload' && (
           <UploadView
             files={files}
@@ -289,8 +309,8 @@ export default function TrazaApp() {
             }}
           />
         )}
-        {active === 'documents' && <DocumentsView files={files} onOpenFile={openFile} />}
-        {active === 'errors' && <ErrorsView files={files} onOpenFile={openFile} />}
+        {active === 'documents' && <DocumentsView files={files} onOpenFile={openFile} onUpdateTracking={updateFileTracking} />}
+        {active === 'errors' && <ErrorsView files={files} authStates={authStates} onOpenFile={openFile} />}
         {active === 'settings' && <ProfileView />}
       </main>
     </div>

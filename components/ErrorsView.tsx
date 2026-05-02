@@ -2,12 +2,14 @@
 
 import { useState } from 'react';
 import { Icon } from './Icon';
-import type { FileEntry, Severity } from '@/lib/types';
+import { requiresAuthorization } from '@/lib/authz';
+import type { AuthState, FileEntry, Severity } from '@/lib/types';
 
 type FilterKey = 'all' | 'error' | 'warn';
 
 interface Props {
   files: FileEntry[];
+  authStates?: Record<string, AuthState | undefined>;
   onOpenFile: (id: string) => void;
 }
 
@@ -23,12 +25,31 @@ interface FlatError {
   codigo: string | null;
 }
 
-export function ErrorsView({ files, onOpenFile }: Props) {
+export function ErrorsView({ files, authStates, onOpenFile }: Props) {
   const [filter, setFilter] = useState<FilterKey>('all');
 
   const allErrors: FlatError[] = [];
   for (const f of files) {
     if (!f.analysis) continue;
+
+    // Synthetic warning: authorization missing but required.
+    const auth = requiresAuthorization(f.analysis);
+    const status = authStates?.[f.id]?.status;
+    const userOverride = status === 'checked' || status === 'skipped';
+    if (auth.required && !userOverride) {
+      allErrors.push({
+        severity: 'warn',
+        title: 'Falta autorización previa',
+        body: 'Cargá el bono para evitar rechazos. Si no aplica, marcá “En este caso no hace falta” en la revisión.',
+        action: 'Abrir en revisión y definir el estado de la autorización.',
+        fileId: f.id,
+        fileName: f.name,
+        fileDate: f.addedAt,
+        prepaga: f.analysis.detected.prepagas[0] || '—',
+        codigo: f.analysis.detected.codes[0] || null,
+      });
+    }
+
     for (const finding of f.analysis.findings) {
       if (finding.severity === 'ok') continue;
       allErrors.push({
@@ -184,9 +205,11 @@ export function ErrorsView({ files, onOpenFile }: Props) {
                     )}
                   </td>
                   <td>
-                    <button className="btn btn-sm btn-ghost" onClick={() => onOpenFile(e.fileId)}>
-                      Abrir en revisión
-                    </button>
+                    {e.prepaga === 'Swiss Medical' ? (
+                      <button className="btn btn-sm btn-ghost" onClick={() => onOpenFile(e.fileId)}>
+                        Abrir en revisión
+                      </button>
+                    ) : null}
                   </td>
                 </tr>
               ))}

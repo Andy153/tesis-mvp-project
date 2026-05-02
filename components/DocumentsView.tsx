@@ -5,6 +5,7 @@ import { Icon } from './Icon';
 import type { FileEntry } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import { getEstadoEfectivo, loadHistory, type HistoryItem } from '@/lib/history';
+import { markAsPresented } from '@/lib/tracking';
 
 type FilterKey = 'all' | 'error' | 'warn' | 'ok';
 
@@ -33,9 +34,11 @@ function CobroStatusBadge({ item }: { item: HistoryItem }) {
 export function DocumentsView({
   files,
   onOpenFile,
+  onUpdateTracking,
 }: {
   files: FileEntry[];
   onOpenFile: (id: string) => void;
+  onUpdateTracking: (id: string, updater: (item: FileEntry) => FileEntry) => void;
 }) {
   const normalizePrepaga = (raw: string | null | undefined) => {
     const s = String(raw || '').trim();
@@ -56,6 +59,7 @@ export function DocumentsView({
   const [q, setQ] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
   const [localFiles, setLocalFiles] = useState<FileEntry[]>(files);
+  const [confirmPresentId, setConfirmPresentId] = useState<string | null>(null);
 
   useEffect(() => {
     // Keep in sync with parent-provided list (upload view mutates this).
@@ -160,6 +164,7 @@ export function DocumentsView({
                   '—';
                 const codigo = a?.detected?.codes?.[0] || null;
                 const itemAsHistory = f as unknown as HistoryItem;
+                const cobroEstado = getEstadoEfectivo(itemAsHistory).estado;
                 return (
                   <tr key={f.id}>
                     <td>
@@ -214,10 +219,36 @@ export function DocumentsView({
                       )}
                     </td>
                     <td>
-                      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                         <button className="btn btn-sm btn-ghost" onClick={() => onOpenFile(f.id)}>
                           Abrir revisión
                         </button>
+
+                        {cobroEstado === 'listo_para_presentar' ? (
+                          confirmPresentId === f.id ? (
+                            <>
+                              <span style={{ fontSize: 12, color: 'var(--text-soft)', alignSelf: 'center' }}>
+                                ¿Confirmar?
+                              </span>
+                              <button
+                                className="btn btn-sm btn-primary"
+                                onClick={() => {
+                                  onUpdateTracking(f.id, (it) => markAsPresented(it));
+                                  setConfirmPresentId(null);
+                                }}
+                              >
+                                Sí
+                              </button>
+                              <button className="btn btn-sm" onClick={() => setConfirmPresentId(null)}>
+                                Cancelar
+                              </button>
+                            </>
+                          ) : (
+                            <button className="btn btn-sm btn-primary" onClick={() => setConfirmPresentId(f.id)}>
+                              Marcar como presentado
+                            </button>
+                          )
+                        ) : null}
                       </div>
                     </td>
                   </tr>

@@ -4,6 +4,8 @@ import { useMemo, useState } from 'react';
 import { Icon } from './Icon';
 import type { AuthState, FileEntry, Severity } from '@/lib/types';
 import { loadHistory } from '@/lib/history';
+import { estimarFechaCobro } from '@/data/cobros-estimaciones';
+import { getObraSocialFromItem } from '@/lib/item-extractors';
 
 type ViewMode = 'month' | 'week' | 'day';
 
@@ -17,6 +19,12 @@ function ymd(d: Date) {
 function parseIso(iso: string) {
   const d = new Date(iso);
   return isNaN(d.getTime()) ? new Date() : d;
+}
+
+function parseIsoOrNull(iso: string | null | undefined): Date | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 function startOfWeek(date: Date) {
@@ -77,6 +85,7 @@ type DocGroup = {
   dateKey: string;
   at: string;
   parte: FileEntry;
+  bucketType: 'pendiente_de_presentar' | 'cobro_esperado' | 'rechazado';
   permiso:
     | null
     | {
@@ -90,7 +99,40 @@ function groupDocs(files: FileEntry[], authStates: Record<string, AuthState | un
   const groups: DocGroup[] = [];
   for (const f of files) {
     if (!f.addedAt) continue;
-    const dateKey = ymd(parseIso(f.addedAt));
+    const estado = (f as any)?.tracking?.estado as string | undefined;
+    if (estado === 'cobrado') continue; // no aparece en el calendario
+
+    let dateKey = ymd(parseIso(f.addedAt));
+    let bucketType: DocGroup['bucketType'] = 'pendiente_de_presentar';
+
+    if (estado === 'rechazado') {
+      bucketType = 'rechazado';
+    } else if (estado === 'presentado') {
+      bucketType = 'cobro_esperado';
+      const obraSocial = getObraSocialFromItem(f as any);
+      const fechaPresentacion = parseIsoOrNull((f as any)?.tracking?.fechaPresentacion);
+      if (!fechaPresentacion) {
+        console.warn('[CalendarView.groupDocs] Documento presentado sin fechaPresentacion. Fallback a addedAt.', {
+          id: f.id,
+          fileName: f.name,
+          estado,
+        });
+      } else {
+        const est = estimarFechaCobro(fechaPresentacion, obraSocial);
+        if (!est) {
+          console.warn('[CalendarView.groupDocs] No se pudo estimar fechaCobro. Fallback a addedAt.', {
+            id: f.id,
+            fileName: f.name,
+            estado,
+            obraSocial,
+            fechaPresentacion,
+          });
+        } else {
+          dateKey = ymd(est);
+        }
+      }
+    }
+
     const auth = authStates[f.id];
     let permiso: DocGroup['permiso'] = null;
     if (auth?.status === 'checked') {
@@ -107,6 +149,7 @@ function groupDocs(files: FileEntry[], authStates: Record<string, AuthState | un
       dateKey,
       at: f.addedAt,
       parte: f,
+      bucketType,
       permiso,
     });
   }
@@ -238,7 +281,9 @@ export function CalendarView({
               {monthGrid.map((d) => {
                 const gs = byDay[d.key] || [];
                 const totalDocs = gs.length + gs.filter((g) => g.permiso).length;
-                const totalErrors = gs.reduce((acc, g) => acc + (g.parte.analysis?.summary.error || 0), 0);
+                const hasPend = gs.some((g) => g.bucketType === 'pendiente_de_presentar');
+                const hasCobro = gs.some((g) => g.bucketType === 'cobro_esperado');
+                const hasRech = gs.some((g) => g.bucketType === 'rechazado');
                 const isSel = selectedDay === d.key;
                 return (
                   <div
@@ -252,7 +297,23 @@ export function CalendarView({
                     {totalDocs > 0 && (
                       <div className="cal-pill">
                         <span className="n">{totalDocs}</span>
-                        <span className={`dot ${totalErrors > 0 ? 'err' : ''}`} />
+                        <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+                          {hasPend && (
+                            <span className="cal-bucket-dot" style={{ width: 7, height: 7, borderRadius: 999, background: 'var(--ok)' }} />
+                          )}
+                          {hasCobro && (
+                            <span
+                              className="cal-bucket-dot"
+                              style={{ width: 7, height: 7, borderRadius: 999, background: 'var(--info)' }}
+                            />
+                          )}
+                          {hasRech && (
+                            <span
+                              className="cal-bucket-dot"
+                              style={{ width: 7, height: 7, borderRadius: 999, background: 'var(--danger)' }}
+                            />
+                          )}
+                        </span>
                       </div>
                     )}
                   </div>
@@ -265,7 +326,9 @@ export function CalendarView({
             <div className="cal-week">
               {weekDays.map((d) => {
                 const gs = byDay[d.key] || [];
-                const totalErrors = gs.reduce((acc, g) => acc + (g.parte.analysis?.summary.error || 0), 0);
+                const hasPend = gs.some((g) => g.bucketType === 'pendiente_de_presentar');
+                const hasCobro = gs.some((g) => g.bucketType === 'cobro_esperado');
+                const hasRech = gs.some((g) => g.bucketType === 'rechazado');
                 return (
                   <div
                     key={d.key}
@@ -282,7 +345,17 @@ export function CalendarView({
                     </div>
                     <div className="cal-weekday-right">
                       <span className="cal-count">{gs.length}</span>
-                      <span className={`cal-dot ${totalErrors > 0 ? 'err' : ''}`} />
+                      <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                        {hasPend && (
+                          <span style={{ width: 8, height: 8, borderRadius: 999, background: 'var(--ok)' }} title="Pendientes de presentar" />
+                        )}
+                        {hasCobro && (
+                          <span style={{ width: 8, height: 8, borderRadius: 999, background: 'var(--info)' }} title="Cobros esperados" />
+                        )}
+                        {hasRech && (
+                          <span style={{ width: 8, height: 8, borderRadius: 999, background: 'var(--danger)' }} title="Rechazados" />
+                        )}
+                      </span>
                     </div>
                   </div>
                 );
@@ -329,78 +402,120 @@ export function CalendarView({
                   {groups.length === 0 ? (
                     <div className="cal-empty-day">Sin documentos</div>
                   ) : (
-                    groups.map((g) => {
-                      const a = g.parte.analysis;
-                      const counts = a ? a.summary : { error: 0, warn: 0, ok: 0 };
-                      const prepaga = a?.detected.prepagas?.[0] || '—';
-                      const codigo = a?.detected.codes?.[0] || null;
-                      return (
-                        <div key={g.id} className="cal-card">
-                          <div className="cal-card-head">
-                            <div className="cal-card-title">
-                              <Icon name="file" size={14} /> {g.parte.name}
-                            </div>
-                            <div className="cal-card-badges">{badgeForCounts({ error: counts.error, warn: counts.warn })}</div>
-                          </div>
+                    (() => {
+                      const pend = groups.filter((g) => g.bucketType === 'pendiente_de_presentar');
+                      const cobro = groups.filter((g) => g.bucketType === 'cobro_esperado');
+                      const rech = groups.filter((g) => g.bucketType === 'rechazado');
+                      const sections = [
+                        { key: 'pend', title: 'Pendientes de presentar', color: 'var(--ok)', items: pend },
+                        { key: 'cobro', title: 'Cobros esperados', color: 'var(--info)', items: cobro },
+                        { key: 'rech', title: 'Rechazados', color: 'var(--danger)', items: rech },
+                      ].filter((s) => s.items.length > 0);
 
-                          <div className="cal-card-meta">
-                            <span>
-                              {parseIso(g.at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                            <span>·</span>
-                            <span>Prepaga: <b>{prepaga}</b></span>
-                            <span>·</span>
-                            <span>
-                              Código:{' '}
-                              {codigo ? (
-                                <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5 }}>{codigo}</code>
-                              ) : (
-                                <span style={{ color: 'var(--text-soft)' }}>—</span>
-                              )}
-                            </span>
-                          </div>
-
-                          {a?.findings?.filter((f) => f.severity !== 'ok').slice(0, 3).map((f, i) => (
-                            <div key={i} className={`cal-mini sev-${f.severity}`}>
-                              <div className="t">{f.title}</div>
-                              <div className="b">{f.action || f.body}</div>
-                            </div>
-                          ))}
-
-                          {g.permiso && (
-                            <div className="cal-linked">
-                              <div className="cal-linked-head">
-                                <Icon name="target" size={12} /> Permiso / Bono asociado
+                      const onlyOne = sections.length === 1;
+                      const renderCard = (g: DocGroup) => {
+                        const a = g.parte.analysis;
+                        const counts = a ? a.summary : { error: 0, warn: 0, ok: 0 };
+                        const prepaga = a?.detected.prepagas?.[0] || '—';
+                        const codigo = a?.detected.codes?.[0] || null;
+                        return (
+                          <div key={g.id} className="cal-card">
+                            <div className="cal-card-head">
+                              <div className="cal-card-title">
+                                <Icon name="file" size={14} /> {g.parte.name}
                               </div>
-                              <div className="cal-linked-row">
-                                <div className="cal-linked-name">{g.permiso.fileName}</div>
-                                {badgeForCounts({ error: g.permiso.summary.error, warn: g.permiso.summary.warn })}
-                              </div>
-                              {g.permiso.items
-                                .filter((x) => x.severity !== 'ok')
-                                .slice(0, 2)
-                                .map((x, i) => (
-                                  <div key={i} className={`cal-mini sev-${x.severity === 'error' ? 'error' : 'warn'}`}>
-                                    <div className="t">{x.title}</div>
-                                    <div className="b">{x.action || x.body}</div>
-                                  </div>
-                                ))}
+                              <div className="cal-card-badges">{badgeForCounts({ error: counts.error, warn: counts.warn })}</div>
                             </div>
-                          )}
 
-                          <div className="cal-card-actions">
-                            <button
-                              className="btn btn-sm btn-ghost"
-                              onClick={() => onOpenParte?.(g.parte.id)}
-                              disabled={!onOpenParte}
-                              title={!onOpenParte ? 'No disponible desde esta vista' : undefined}
-                            >
-                              Ver detalle
-                            </button>
+                            <div className="cal-card-meta">
+                              <span>
+                                {parseIso(g.at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                              <span>·</span>
+                              <span>
+                                Prepaga: <b>{prepaga}</b>
+                              </span>
+                              <span>·</span>
+                              <span>
+                                Código:{' '}
+                                {codigo ? (
+                                  <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5 }}>{codigo}</code>
+                                ) : (
+                                  <span style={{ color: 'var(--text-soft)' }}>—</span>
+                                )}
+                              </span>
+                            </div>
+
+                            {a?.findings
+                              ?.filter((f) => f.severity !== 'ok')
+                              .slice(0, 3)
+                              .map((f, i) => (
+                                <div key={i} className={`cal-mini sev-${f.severity}`}>
+                                  <div className="t">{f.title}</div>
+                                  <div className="b">{f.action || f.body}</div>
+                                </div>
+                              ))}
+
+                            {g.permiso && (
+                              <div className="cal-linked">
+                                <div className="cal-linked-head">
+                                  <Icon name="target" size={12} /> Permiso / Bono asociado
+                                </div>
+                                <div className="cal-linked-row">
+                                  <div className="cal-linked-name">{g.permiso.fileName}</div>
+                                  {badgeForCounts({ error: g.permiso.summary.error, warn: g.permiso.summary.warn })}
+                                </div>
+                                {g.permiso.items
+                                  .filter((x) => x.severity !== 'ok')
+                                  .slice(0, 2)
+                                  .map((x, i) => (
+                                    <div
+                                      key={i}
+                                      className={`cal-mini sev-${x.severity === 'error' ? 'error' : 'warn'}`}
+                                    >
+                                      <div className="t">{x.title}</div>
+                                      <div className="b">{x.action || x.body}</div>
+                                    </div>
+                                  ))}
+                              </div>
+                            )}
+
+                            <div className="cal-card-actions">
+                              <button
+                                className="btn btn-sm btn-ghost"
+                                onClick={() => onOpenParte?.(g.parte.id)}
+                                disabled={!onOpenParte}
+                                title={!onOpenParte ? 'No disponible desde esta vista' : undefined}
+                              >
+                                Ver detalle
+                              </button>
+                            </div>
                           </div>
+                        );
+                      };
+
+                      if (onlyOne) return sections[0]!.items.map(renderCard);
+
+                      return sections.map((s) => (
+                        <div key={s.key} style={{ marginTop: 10 }}>
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 8,
+                              fontSize: 12.5,
+                              color: 'var(--text-muted)',
+                              margin: '8px 2px',
+                            }}
+                          >
+                            <span style={{ width: 8, height: 8, borderRadius: 999, background: s.color }} />
+                            <span style={{ fontWeight: 600, color: 'var(--text)' }}>{s.title}</span>
+                            <span style={{ color: 'var(--text-muted)' }}>({s.items.length})</span>
+                          </div>
+                          {s.items.map(renderCard)}
                         </div>
-                      );
-                    })
+                      ));
+                    })()
                   )}
                 </div>
               ))}

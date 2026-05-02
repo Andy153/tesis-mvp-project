@@ -44,11 +44,35 @@ export function getObraSocialFromItem(item: FileEntry): ObraSocial {
   return 'Desconocida';
 }
 
-export function getCodigoFromItem(item: FileEntry): string | null {
-  const raw = (item as any)?.aiParteExtract?.procedimiento?.codigo_nomenclador;
+export type CodigoFromItem =
+  | { codigo: string; esEstimado: false }
+  | { codigo: string; esEstimado: true; motivo: string }
+  | { codigo: null; esEstimado: false };
+
+function normalizeCodigo(raw: unknown): string | null {
   if (raw == null) return null;
   const digits = String(raw).replace(/\D/g, '');
   return digits.length > 0 ? digits : null;
+}
+
+export function getCodigoFromItem(item: FileEntry): CodigoFromItem {
+  const motivo = 'Código sugerido por análisis de texto, confirmar manualmente';
+
+  // Prioridad 1: código explícito en el parte (no estimado)
+  const fromAi = normalizeCodigo((item as any)?.aiParteExtract?.procedimiento?.codigo_nomenclador);
+  if (fromAi) return { codigo: fromAi, esEstimado: false };
+
+  // Prioridad 2: sugerido por keywords del nomenclador interno (estimado)
+  const fromGuess = normalizeCodigo((item as any)?.analysis?.detected?.procedureGuess?.code);
+  if (fromGuess) return { codigo: fromGuess, esEstimado: true, motivo };
+
+  // Prioridad 3: detectado por regex en el texto (estimado)
+  const codes = (item as any)?.analysis?.detected?.codes as unknown;
+  const first = Array.isArray(codes) ? codes[0] : null;
+  const fromRegex = normalizeCodigo(first);
+  if (fromRegex) return { codigo: fromRegex, esEstimado: true, motivo };
+
+  return { codigo: null, esEstimado: false };
 }
 
 export function normalizarPlan(planTexto: string | null | undefined): { plan: PlanOsde; esEstimado: boolean } {

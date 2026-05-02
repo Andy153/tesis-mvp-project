@@ -27,5 +27,4 @@ export const TRAZA_REQUIRED_FIELDS: Array<{
   { key: 'procedimiento', labels: ['procedimiento', 'práctica', 'intervención', 'cirugía', 'operación'], severity: 'error' },
   { key: 'codigo', labels: ['código', 'codigo nomenclador', 'nomenclador', 'cod. nomenclador'], severity: 'error' },
   { key: 'sanatorio', labels: ['sanatorio', 'clínica', 'institución', 'centro asistencial'], severity: 'warn' },
-  { key: 'anestesia', labels: ['anestesia', 'tipo de anestesia'], severity: 'warn' },
 ];

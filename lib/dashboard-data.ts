@@ -5,6 +5,7 @@ import { es } from 'date-fns/locale';
 import {
   estimarFechaCobro,
   estimarMontoCobro,
+  obtenerDesglosePrecio,
   proximaFechaFacturacion,
 } from '@/data/cobros-estimaciones';
 import { OSDE_PRECIOS } from '@/data/osde-precios';
@@ -69,11 +70,60 @@ function prepagaFromObraSocial(obra: ObraSocial): PrepagaInfo {
   return PREPAGAS.find((p) => p.id === 'unknown') ?? PREPAGAS[PREPAGAS.length - 1]!;
 }
 
+function formatApellidoInicial(raw: unknown): string | null {
+  let s = String(raw ?? '').trim().replace(/\s+/g, ' ');
+  if (!s) return null;
+
+  // Limpieza de labels comunes que a veces aparecen dentro del string.
+  s = s
+    .replace(/^(paciente|pariente)\s*[:\-]\s*/i, '')
+    .replace(/^\s+/, '')
+    .trim();
+  if (!s) return null;
+
+  // Preferido: "APELLIDO, NOMBRE ..."
+  if (s.includes(',')) {
+    const [ap0, nom0] = s.split(',', 2);
+    const ap = String(ap0 ?? '').trim();
+    const nom = String(nom0 ?? '').trim();
+    const initial = nom ? `${nom[0]!.toUpperCase()}.` : '';
+    if (ap && initial) return `${ap} ${initial}`;
+    if (ap) return ap;
+  }
+
+  // Fallback: "Nombre Apellido" o variantes
+  const parts = s.split(' ').filter(Boolean);
+  if (parts.length >= 2) {
+    const apellido = parts[parts.length - 1]!;
+    const nombre = parts[0]!;
+    return `${apellido} ${nombre[0]!.toUpperCase()}.`;
+  }
+
+  return s;
+}
+
+function getPacienteForCobro(it: HistoryItem): string {
+  const fromAi = formatApellidoInicial((it as any)?.aiParteExtract?.paciente?.apellido_nombre);
+  if (fromAi) return fromAi;
+  const fromSwiss = formatApellidoInicial((it as any)?.exports?.swissCx?.row?.socioDesc);
+  if (fromSwiss) return fromSwiss;
+  const text = String((it as any)?.text || '');
+  if (text) {
+    const m = text.match(/\bpaciente\s*:\s*([^\n\r]{3,200})/i);
+    if (m?.[1]) {
+      const fromText = formatApellidoInicial(m[1]);
+      if (fromText) return fromText;
+    }
+  }
+  return '—';
+}
+
 function calcularCobroRuntime(it: HistoryItem): {
   fechaCobro: Date | null;
   monto: number | null;
   esEstimado: boolean;
   motivo?: string;
+  desglose?: ReturnType<typeof obtenerDesglosePrecio> | null;
   obraSocial: ObraSocial;
   prepaga: PrepagaInfo;
 } {
@@ -93,7 +143,8 @@ function calcularCobroRuntime(it: HistoryItem): {
   }
 
   const fechaPractica = getFechaPracticaFromItem(it);
-  const codigo = getCodigoFromItem(it);
+  const codigoRes = getCodigoFromItem(it);
+  const codigo = codigoRes.codigo;
   const { plan, esEstimado: planEstimado } = getPlanFromItem(it);
   const tipoAtencion = getTipoFromItem(it);
 
@@ -121,11 +172,23 @@ function calcularCobroRuntime(it: HistoryItem): {
     fechaPractica,
   });
 
+  const desgloseRes =
+    obraSocial === 'OSDE'
+      ? obtenerDesglosePrecio({
+          codigo,
+          obraSocial,
+          plan,
+          tipo: tipoAtencion,
+          fechaPractica,
+        })
+      : null;
+
   return {
     fechaCobro,
     monto: montoRes.monto,
-    esEstimado: montoRes.esEstimado || planEstimado,
-    motivo: montoRes.motivo,
+    esEstimado: montoRes.esEstimado || planEstimado || codigoRes.esEstimado,
+    motivo: montoRes.motivo || (codigoRes.esEstimado ? codigoRes.motivo : undefined),
+    desglose: desgloseRes,
     obraSocial,
     prepaga,
   };
@@ -142,6 +205,8 @@ export type CobroItem = {
   monto: number | null;
   esEstimado: boolean;
   motivo?: string;
+  desglose?: ReturnType<typeof obtenerDesglosePrecio> | null;
+  motivoRechazo?: string | null;
   fechaPractica: Date | null;
   fechaCobroEstimada: Date | null;
   fechaCobroReal?: Date | null;
@@ -163,13 +228,13 @@ export function getCobrosDelMes(items: HistoryItem[], mes: Date): CobroItem[] {
     const fechaCobro = calc.fechaCobro;
     if (!fechaCobro || !inMonth(fechaCobro, month)) continue;
 
-    const codigo = getCodigoFromItem(it);
+    const codigo = getCodigoFromItem(it).codigo;
     const fechaPractica = getFechaPracticaFromItem(it);
     const planTxt = (it as any)?.aiParteExtract?.cobertura?.plan ?? null;
     const tipo = getTipoFromItem(it);
 
     const row = it.exports?.swissCx?.row;
-    const paciente = row?.socioDesc || '—';
+    const paciente = getPacienteForCobro(it);
 
     const descTraza =
       codigo && nomen?.[String(codigo)]?.entries?.[0]?.desc ? String(nomen[String(codigo)].entries[0].desc) : '';
@@ -194,6 +259,8 @@ export function getCobrosDelMes(items: HistoryItem[], mes: Date): CobroItem[] {
       monto: calc.monto,
       esEstimado: calc.esEstimado,
       motivo: calc.motivo,
+      desglose: calc.desglose ?? null,
+      motivoRechazo: t.motivoRechazo ?? null,
       fechaPractica,
       fechaCobroEstimada: fechaCobro,
       fechaCobroReal,
@@ -353,6 +420,7 @@ function groupPriority(g: AtencionGrupo): number {
  */
 export function getDocumentosQueRequierenAtencionPorDocumento(
   items: HistoryItem[],
+  authStates: Record<string, { status?: string } | undefined>,
   opts?: { maxDocs?: number; maxFindingsPorDoc?: number },
 ): AtencionGrupo[] {
   const now = new Date();
@@ -380,7 +448,9 @@ export function getDocumentosQueRequierenAtencionPorDocumento(
     // Authorization: infer "bono cargado" if planilla has permisoUrl.
     const auth = requiresAuthorization(it.analysis);
     const permisoUrl = it.exports?.swissCx?.files?.permisoUrl;
-    if (auth.required && !permisoUrl) {
+    const authStateStatus = authStates?.[it.id]?.status;
+    const userOverride = authStateStatus === 'skipped' || authStateStatus === 'checked';
+    if (auth.required && !permisoUrl && !userOverride) {
       observaciones.push({
         id: `att_${it.id}_auth`,
         tipo: 'autorizacion',
@@ -462,6 +532,7 @@ export function getDocumentosQueRequierenAtencion(items: HistoryItem[], limit?: 
     // Authorization: infer "bono cargado" if planilla has permisoUrl.
     const auth = requiresAuthorization(it.analysis);
     const permisoUrl = it.exports?.swissCx?.files?.permisoUrl;
+    // NOTE: Esta versión no recibe authStates (solo se usa en legacy UI).
     if (auth.required && !permisoUrl) {
       out.push({
         id: `att_${it.id}_auth`,

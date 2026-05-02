@@ -9,9 +9,18 @@ import { addDays, lastDayOfMonth } from 'date-fns';
 import {
   OSDE_PRECIOS,
   OSDE_PLANES,
+  type OsdeDesglose,
   type TipoAtencion,
 } from '@/data/osde-precios';
 import { OBRAS_SOCIALES_PLAZOS } from '@/data/obras-sociales-plazos';
+
+export type ResultadoDesgloseOSDE = {
+  desglose: OsdeDesglose | null;
+  planUsado: string;
+  tipoUsado: TipoAtencion;
+  esEstimado: boolean;
+  motivo?: string;
+};
 
 export type ResultadoMonto = {
   /** Monto estimado, o null si no se pudo calcular. */
@@ -21,6 +30,99 @@ export type ResultadoMonto = {
   /** Mensaje para mostrar en la UI cuando monto es null o esEstimado es true. */
   motivo?: string;
 };
+
+function resolverDesgloseOSDE(params: {
+  codigo: string;
+  obraSocial: string;
+  plan: string;
+  tipo: TipoAtencion;
+  fechaPractica: Date;
+}): ResultadoDesgloseOSDE {
+  const { codigo, obraSocial, plan, tipo, fechaPractica } = params;
+
+  // Solo OSDE tiene nomenclador cargado por ahora
+  if (obraSocial !== 'OSDE') {
+    return {
+      desglose: null,
+      planUsado: plan,
+      tipoUsado: tipo,
+      esEstimado: true,
+      motivo: `Sin nomenclador cargado para ${obraSocial}`,
+    };
+  }
+
+  const entrada = OSDE_PRECIOS[codigo];
+  if (!entrada) {
+    return {
+      desglose: null,
+      planUsado: plan,
+      tipoUsado: tipo,
+      esEstimado: false,
+      motivo: 'Codigo no encontrado en nomenclador OSDE',
+    };
+  }
+
+  // Match de plan: exacto o fallback al plan mas bajo
+  let planUsado = plan;
+  let tipoUsado: TipoAtencion = tipo;
+  let esEstimado = false;
+
+  if (!entrada.precios[plan]) {
+    console.warn(
+      `[resolverDesgloseOSDE] Plan "${plan}" no encontrado para codigo ${codigo}. Fallback a "${OSDE_PLANES[0]}".`,
+    );
+    planUsado = OSDE_PLANES[0];
+    esEstimado = true;
+    if (!entrada.precios[planUsado]) {
+      return {
+        desglose: null,
+        planUsado,
+        tipoUsado,
+        esEstimado: true,
+        motivo: `Plan "${plan}" no disponible y fallback fallido`,
+      };
+    }
+  }
+
+  // Match de tipo: exacto o fallback a la otra variante si solo hay una
+  const preciosPlan = entrada.precios[planUsado];
+  let desglose = preciosPlan[tipo];
+  if (!desglose) {
+    const otroTipo: TipoAtencion = tipo === 'Amb' ? 'Int' : 'Amb';
+    desglose = preciosPlan[otroTipo];
+    if (desglose) {
+      esEstimado = true;
+      tipoUsado = otroTipo;
+    } else {
+      return {
+        desglose: null,
+        planUsado,
+        tipoUsado,
+        esEstimado: false,
+        motivo: `Tipo ${tipo} no disponible para esta practica`,
+      };
+    }
+  }
+
+  // Si total es null, hay desglose pero el total requiere confirmación.
+  if (desglose.total === null) {
+    return {
+      desglose,
+      planUsado,
+      tipoUsado,
+      esEstimado: false,
+      motivo: 'Monto a confirmar',
+    };
+  }
+
+  // Verificar si la vigencia es valida para la fecha de la practica
+  const vigenciaDate = new Date(entrada.vigencia);
+  if (vigenciaDate > fechaPractica) {
+    esEstimado = true;
+  }
+
+  return { desglose, planUsado, tipoUsado, esEstimado };
+}
 
 /**
  * Estima el monto que va a cobrar la prestadora por una practica.
@@ -39,79 +141,25 @@ export function estimarMontoCobro(params: {
   tipo: TipoAtencion;
   fechaPractica: Date;
 }): ResultadoMonto {
-  const { codigo, obraSocial, plan, tipo, fechaPractica } = params;
-
-  // Solo OSDE tiene nomenclador cargado por ahora
-  if (obraSocial !== 'OSDE') {
-    return {
-      monto: null,
-      esEstimado: true,
-      motivo: `Sin nomenclador cargado para ${obraSocial}`,
-    };
+  const res = resolverDesgloseOSDE(params);
+  if (!res.desglose || res.desglose.total === null) {
+    return { monto: null, esEstimado: res.esEstimado, motivo: res.motivo };
   }
-
-  const entrada = OSDE_PRECIOS[codigo];
-  if (!entrada) {
-    return {
-      monto: null,
-      esEstimado: false,
-      motivo: 'Codigo no encontrado en nomenclador OSDE',
-    };
-  }
-
-  // Match de plan: exacto o fallback al plan mas bajo
-  let planUsado = plan;
-  let esEstimado = false;
-  if (!entrada.precios[plan]) {
-    console.warn(
-      `[estimarMontoCobro] Plan "${plan}" no encontrado para codigo ${codigo}. Fallback a "${OSDE_PLANES[0]}".`
-    );
-    planUsado = OSDE_PLANES[0];
-    esEstimado = true;
-    if (!entrada.precios[planUsado]) {
-      return {
-        monto: null,
-        esEstimado: true,
-        motivo: `Plan "${plan}" no disponible y fallback fallido`,
-      };
-    }
-  }
-
-  // Match de tipo: exacto o fallback a la otra variante si solo hay una
-  const preciosPlan = entrada.precios[planUsado];
-  let desglose = preciosPlan[tipo];
-  if (!desglose) {
-    const otroTipo: TipoAtencion = tipo === 'Amb' ? 'Int' : 'Amb';
-    desglose = preciosPlan[otroTipo];
-    if (desglose) {
-      esEstimado = true;
-    } else {
-      return {
-        monto: null,
-        esEstimado: false,
-        motivo: `Tipo ${tipo} no disponible para esta practica`,
-      };
-    }
-  }
-
-  if (desglose.total === null) {
-    return {
-      monto: null,
-      esEstimado: false,
-      motivo: 'Monto a confirmar',
-    };
-  }
-
-  // Verificar si la vigencia es valida para la fecha de la practica
-  const vigenciaDate = new Date(entrada.vigencia);
-  if (vigenciaDate > fechaPractica) {
-    esEstimado = true;
-  }
-
   return {
-    monto: desglose.total,
-    esEstimado,
+    monto: res.desglose.total,
+    esEstimado: res.esEstimado,
+    motivo: res.motivo,
   };
+}
+
+export function obtenerDesglosePrecio(params: {
+  codigo: string;
+  obraSocial: string;
+  plan: string;
+  tipo: TipoAtencion;
+  fechaPractica: Date;
+}): ResultadoDesgloseOSDE {
+  return resolverDesgloseOSDE(params);
 }
 
 /**

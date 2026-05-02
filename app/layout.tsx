@@ -1,4 +1,6 @@
 import type { Metadata, Viewport } from 'next';
+import { ClerkProvider } from '@clerk/nextjs';
+import { esES } from '@clerk/localizations';
 import { Dela_Gothic_One, Unbounded, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 
@@ -40,11 +42,13 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html
-      lang="es"
-      className={`${delaGothicOne.variable} ${unbounded.variable} ${jetbrainsMono.variable}`}
-    >
-      <body>{children}</body>
-    </html>
+    <ClerkProvider localization={esES}>
+      <html
+        lang="es"
+        className={`${delaGothicOne.variable} ${unbounded.variable} ${jetbrainsMono.variable}`}
+      >
+        <body>{children}</body>
+      </html>
+    </ClerkProvider>
   );
 }

@@ -28,3 +28,6 @@ TRAZA APP/uploads/
 
 # Server-side persisted interventions (local dev)
 data/
+
+# clerk configuration (can include secrets)
+/.clerk/

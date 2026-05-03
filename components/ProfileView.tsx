@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from './Icon';
+import { PinManagementCard } from './profile/PinManagementCard';
 import type { ThemeMode, UserProfile } from '@/lib/profile';
 import {
   applyThemeMode,
@@ -283,6 +284,8 @@ export function ProfileView() {
           <div style={{ padding: 14, color: 'var(--text-soft)', fontSize: 12 }}>Todavía no agregaste obras sociales.</div>
         )}
       </div>
+
+      <PinManagementCard />
     </div>
   );
 }

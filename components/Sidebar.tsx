@@ -1,8 +1,13 @@
 'use client';
 
+import { UserButton, ClerkLoaded, ClerkLoading } from '@clerk/nextjs';
+import { Lock } from 'lucide-react';
 import { Logo } from './Logo';
 import { getInitials } from '@/lib/profile';
 import { Icon, type IconName } from './Icon';
+import { useUserRole } from '@/lib/use-user-role';
+import { LABELS_ROL } from '@/lib/roles';
+import { usePinSession } from '@/lib/use-pin-session';
 
 type TabId =
   | 'upload'
@@ -33,6 +38,9 @@ interface Item {
 }
 
 export function Sidebar({ active, setActive, errorCount, mobileOpen, onCloseMobile, user }: SidebarProps) {
+  const { rol, isLoaded } = useUserRole();
+  const pinUnlocked = usePinSession();
+
   const items: Item[] = [
     { id: 'dashboard', label: 'Resumen general', icon: 'dashboard', section: 'work' },
     { id: 'upload', label: 'Agregar documentos', icon: 'upload', section: 'work' },
@@ -63,25 +71,39 @@ export function Sidebar({ active, setActive, errorCount, mobileOpen, onCloseMobi
       <div className="nav-section">Menú principal</div>
       {items
         .filter((i) => i.section === 'work')
-        .map((item) => (
-          <div
-            key={item.id}
-            className={`nav-item ${active === item.id ? 'active' : ''}`}
-            onClick={() => setActive(item.id)}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                setActive(item.id);
-              }
-            }}
-          >
-            <Icon name={item.icon} size={18} />
-            <span>{item.label}</span>
-            {item.badge && item.badge > 0 ? <span className="nav-badge">{item.badge}</span> : null}
-          </div>
-        ))}
+        .map((item) => {
+          const mostrarCandado = item.id === 'cobros' && rol === 'secretaria' && !pinUnlocked;
+          return (
+            <div
+              key={item.id}
+              className={`nav-item ${active === item.id ? 'active' : ''}`}
+              onClick={() => setActive(item.id)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setActive(item.id);
+                }
+              }}
+            >
+              <Icon name={item.icon} size={18} />
+              <span>{item.label}</span>
+              {item.badge && item.badge > 0 ? <span className="nav-badge">{item.badge}</span> : null}
+              {mostrarCandado && (
+                <Lock
+                  size={14}
+                  style={{
+                    marginLeft: 'auto',
+                    opacity: 0.6,
+                    flexShrink: 0,
+                  }}
+                  aria-label="Requiere PIN"
+                />
+              )}
+            </div>
+          );
+        })}
       <div className="nav-section">Próximamente</div>
       {items
         .filter((i) => i.section === 'soon')
@@ -114,7 +136,38 @@ export function Sidebar({ active, setActive, errorCount, mobileOpen, onCloseMobi
           )}
         </div>
         <div>
+          <div style={{ marginBottom: 8, minHeight: 32 }}>
+            <ClerkLoading>
+              <div
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: '50%',
+                  backgroundColor: 'var(--bg-sunken)',
+                }}
+              />
+            </ClerkLoading>
+            <ClerkLoaded>
+              <UserButton />
+            </ClerkLoaded>
+          </div>
           <div className="user-name">{user?.displayName || 'Dra. M. Ferreira'}</div>
+          {isLoaded && (
+            <div
+              style={{
+                fontSize: 11,
+                fontWeight: 500,
+                padding: '2px 8px',
+                borderRadius: 6,
+                display: 'inline-block',
+                marginTop: 4,
+                backgroundColor: rol ? 'var(--accent-soft)' : 'var(--warn-soft)',
+                color: rol ? 'var(--accent-ink)' : 'var(--warn)',
+              }}
+            >
+              {rol ? LABELS_ROL[rol] : 'Sin rol asignado'}
+            </div>
+          )}
           <div className="user-role">{user?.profesion || 'Tocoginecología'}</div>
         </div>
       </div>

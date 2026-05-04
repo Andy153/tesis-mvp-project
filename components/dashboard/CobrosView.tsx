@@ -17,6 +17,7 @@ import { Proyeccion } from '@/components/dashboard/Proyeccion';
 import { Calendario } from '@/components/dashboard/Calendario';
 import type { FileEntry } from '@/lib/types';
 import { markAsPaid } from '@/lib/tracking';
+import { useMounted } from '@/lib/use-mounted';
 
 type PrepagaFiltro = 'OSDE' | 'Swiss Medical' | 'Desconocida';
 type EstadoFiltro = 'Pendiente' | 'Cobrado' | 'A confirmar' | 'Rechazado';
@@ -97,6 +98,7 @@ export function CobrosView({
   files?: FileEntry[];
   onUpdateTracking?: (id: string, updater: (item: FileEntry) => FileEntry) => void;
 }) {
+  const mounted = useMounted();
   const { files: fallbackFiles } = loadHistoryWithFallback();
   const files = (filesProp ?? fallbackFiles) as any;
 
@@ -662,6 +664,28 @@ export function CobrosView({
       </div>
     );
   };
+
+  if (!mounted) {
+    return (
+      <TooltipProvider>
+        <div className="px-6 md:px-10 pt-6 pb-10 max-w-[1600px] mx-auto">
+          <div className="page-head mb-10">
+            <div style={{ display: 'grid', gap: 6 }}>
+              <div style={{ fontWeight: 900, fontSize: 26, lineHeight: 1.15, color: 'var(--text)' }}>
+                Centro de cobros
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.45 }}>
+                Detalle de todos los cobros estimados y registrados
+              </div>
+            </div>
+          </div>
+          <div className="panel" style={{ padding: 24 }}>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.45 }}>Cargando información…</div>
+          </div>
+        </div>
+      </TooltipProvider>
+    );
+  }
 
   return (
     <TooltipProvider>

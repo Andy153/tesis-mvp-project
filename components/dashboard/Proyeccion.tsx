@@ -9,14 +9,17 @@ import { es } from 'date-fns/locale';
 import { loadHistoryWithFallback } from '@/lib/history';
 import { getProyeccionDelMes, PREPAGAS } from '@/lib/dashboard-data';
 import { formatCurrency } from '@/lib/utils';
+import { useMounted } from '@/lib/use-mounted';
 
-export function Proyeccion({
-  onNavigate,
-  showMoreLink = true,
-}: {
+type ProyeccionProps = {
   onNavigate?: (view: string) => void;
   showMoreLink?: boolean;
-}) {
+};
+
+function ProyeccionContent({
+  onNavigate,
+  showMoreLink = true,
+}: ProyeccionProps) {
   const { files } = loadHistoryWithFallback();
   const proyeccion = getProyeccionDelMes(files);
   const mesActual = format(new Date(), 'MMMM yyyy', { locale: es });
@@ -212,3 +215,18 @@ export function Proyeccion({
   );
 }
 
+export function Proyeccion(props: ProyeccionProps) {
+  const mounted = useMounted();
+  if (!mounted) {
+    return (
+      <section className="panel mt-[15px] mb-[15px]" style={{ padding: 24 }}>
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontWeight: 800, fontSize: 15, lineHeight: 1.25, color: 'var(--text)' }}>Proyección de cobro</div>
+          <div style={{ marginTop: 6, fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.45 }}>Cargando información…</div>
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--text-muted)', paddingBlock: 12 }}>Cargando información…</div>
+      </section>
+    );
+  }
+  return <ProyeccionContent {...props} />;
+}

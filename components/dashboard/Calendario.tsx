@@ -6,8 +6,9 @@ import { parseISO } from 'date-fns';
 import { loadHistoryWithFallback } from '@/lib/history';
 import { getCobrosDelMesPorDia, PREPAGAS } from '@/lib/dashboard-data';
 import { formatCurrency } from '@/lib/utils';
+import { useMounted } from '@/lib/use-mounted';
 
-export function Calendario() {
+function CalendarioContent() {
   const { files } = loadHistoryWithFallback();
   const cobrosPorDia = getCobrosDelMesPorDia(files);
 
@@ -239,3 +240,22 @@ export function Calendario() {
   );
 }
 
+export function Calendario() {
+  const mounted = useMounted();
+  if (!mounted) {
+    return (
+      <section>
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ fontWeight: 800, fontSize: 15, lineHeight: 1.25, color: 'var(--text)' }}>Próximos cobros</div>
+          <div style={{ marginTop: 6, fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.45 }}>
+            Resumen de cobros estimados según plazos de cada prepaga
+          </div>
+        </div>
+        <div className="stats-empty" style={{ marginBottom: 18, fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.45 }}>
+          Cargando información…
+        </div>
+      </section>
+    );
+  }
+  return <CalendarioContent />;
+}

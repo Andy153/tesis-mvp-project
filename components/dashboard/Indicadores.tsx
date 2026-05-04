@@ -5,6 +5,7 @@ import { AlertCircle, AlertTriangle, CircleCheck, CreditCard, FileText } from 'l
 
 import { loadHistory } from '@/lib/history';
 import { getEstadoEfectivo } from '@/lib/history';
+import { useMounted } from '@/lib/use-mounted';
 import { Progress } from '@/components/ui/progress';
 
 export function Indicadores({
@@ -12,6 +13,7 @@ export function Indicadores({
 }: {
   onNavigate?: (view: string) => void;
 }) {
+  const mounted = useMounted();
   const { files } = loadHistory();
 
   const ready = useMemo(() => (files || []).filter((f) => f.status !== 'analyzing'), [files]);
@@ -42,7 +44,15 @@ export function Indicadores({
         <div>
           <div style={{ fontWeight: 800, fontSize: 15, lineHeight: 1.25, color: 'var(--text)' }}>Indicadores</div>
           <div style={{ marginTop: 6, fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.45 }}>
-            {empty ? 'Todavía no cargaste documentos.' : 'Un vistazo rápido a tu estado actual.'}
+            {mounted ? (
+              empty ? (
+                'Todavía no cargaste documentos.'
+              ) : (
+                'Un vistazo rápido a tu estado actual.'
+              )
+            ) : (
+              'Cargando información…'
+            )}
           </div>
         </div>
 
@@ -59,7 +69,11 @@ export function Indicadores({
         </div>
       </div>
 
-      {empty ? (
+      {!mounted ? (
+        <div className="empty" style={{ border: 'none', paddingBlock: 34 }}>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.45 }}>Cargando información…</div>
+        </div>
+      ) : empty ? (
         <div className="empty" style={{ border: 'none', paddingBlock: 34 }}>
           <div className="empty-icon">
             <CircleCheck size={44} />

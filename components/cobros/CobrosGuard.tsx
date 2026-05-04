@@ -3,40 +3,38 @@
 import { useUserRole } from '@/lib/use-user-role';
 import { usePinSession } from '@/lib/use-pin-session';
 import { PinPromptScreen } from './PinPromptScreen';
+import { useMounted } from '@/lib/use-mounted';
 import type { ReactNode } from 'react';
 
 type Props = {
   children: ReactNode;
 };
 
+const loadingBlock = (
+  <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>Cargando...</div>
+);
+
 export function CobrosGuard({ children }: Props) {
+  const mounted = useMounted();
   const { rol, isLoaded } = useUserRole();
   const pinUnlocked = usePinSession();
 
-  if (!isLoaded) {
-    return (
-      <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>
-        Cargando...
-      </div>
-    );
+  if (!mounted || !isLoaded) {
+    return loadingBlock;
   }
 
-  // Médicos: acceso libre
   if (rol === 'medico') {
     return <>{children}</>;
   }
 
-  // Secretarías que ya ingresaron PIN: acceso libre
   if (rol === 'secretaria' && pinUnlocked) {
     return <>{children}</>;
   }
 
-  // Secretarías sin PIN ingresado: bloqueo (Fase 4.5 reemplazará esto por una pantalla bonita)
   if (rol === 'secretaria') {
     return <PinPromptScreen onUnlock={() => {}} />;
   }
 
-  // Sin rol asignado
   return (
     <div
       style={{

@@ -14,7 +14,7 @@ import { CobrosGuard } from '@/components/cobros/CobrosGuard';
 import type { AuthState, FileEntry } from '@/lib/types';
 import { loadHistory, saveHistory } from '@/lib/history';
 import { buildSwissCxRow } from '@/lib/swissCxExport';
-import { applyThemeMode, loadProfile } from '@/lib/profile';
+import { applyThemeMode, DEFAULT_PROFILE, loadProfile } from '@/lib/profile';
 
 export default function TrazaApp() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -23,8 +23,15 @@ export default function TrazaApp() {
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [authStates, setAuthStates] = useState<Record<string, AuthState | undefined>>({});
   const [uploadVirgin, setUploadVirgin] = useState(false);
-  const [userProfile, setUserProfile] = useState(() => loadProfile());
-  const [themeApplied, setThemeApplied] = useState(false);
+  // Mismo valor inicial en SSR y primer render del cliente (evita hydration mismatch:
+  // loadProfile() en el servidor usa DEFAULT_PROFILE; en el cliente lee localStorage).
+  const [userProfile, setUserProfile] = useState(DEFAULT_PROFILE);
+
+  useEffect(() => {
+    const p = loadProfile();
+    setUserProfile(p);
+    applyThemeMode(p.theme);
+  }, []);
 
   useEffect(() => {
     const loaded = loadHistory();
@@ -35,13 +42,6 @@ export default function TrazaApp() {
       setAuthStates(loaded.authStates as Record<string, AuthState | undefined>);
     }
   }, []);
-
-  useEffect(() => {
-    // Aplica el tema al cargar la app (aunque nunca se abra la pantalla de Perfil).
-    if (themeApplied) return;
-    applyThemeMode(userProfile.theme);
-    setThemeApplied(true);
-  }, [userProfile.theme, themeApplied]);
 
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { UserButton } from '@clerk/nextjs';
+import { UserButton, useUser } from '@clerk/nextjs';
 import { Lock } from 'lucide-react';
 import { Logo } from './Logo';
 import { getInitials } from '@/lib/profile';
@@ -40,8 +40,11 @@ interface Item {
 
 export function Sidebar({ active, setActive, errorCount, mobileOpen, onCloseMobile, user }: SidebarProps) {
   const mounted = useMounted();
+  const { user: clerkUser, isLoaded: clerkLoaded } = useUser();
   const { rol, isLoaded } = useUserRole();
   const pinUnlocked = usePinSession();
+
+  const clerkAvatarUrl = mounted && clerkLoaded ? clerkUser?.imageUrl : undefined;
 
   const items: Item[] = [
     { id: 'dashboard', label: 'Resumen general', icon: 'dashboard', section: 'work' },
@@ -123,7 +126,9 @@ export function Sidebar({ active, setActive, errorCount, mobileOpen, onCloseMobi
         title="Podés tocar aquí para abrir tu perfil y preferencias"
       >
         <div className="avatar" style={{ overflow: 'hidden' }}>
-          {user?.avatarDataUrl ? (
+          {mounted && clerkLoaded && clerkAvatarUrl ? (
+            <UserButton />
+          ) : user?.avatarDataUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={user.avatarDataUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           ) : (
@@ -131,9 +136,7 @@ export function Sidebar({ active, setActive, errorCount, mobileOpen, onCloseMobi
           )}
         </div>
         <div>
-          <div style={{ marginBottom: 8, minHeight: 32 }}>
-            {mounted ? <UserButton /> : null}
-          </div>
+          <div style={{ marginBottom: 8, minHeight: 32 }} />
           <div className="user-name">{user?.displayName || 'Dra. M. Ferreira'}</div>
           <div style={{ minHeight: 22, marginTop: 4 }}>
             {mounted && isLoaded && (

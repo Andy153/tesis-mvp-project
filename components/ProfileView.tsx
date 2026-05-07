@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useClerk } from '@clerk/nextjs';
 import { Icon } from './Icon';
 import { PinManagementCard } from './profile/PinManagementCard';
 import type { ThemeMode, UserProfile } from '@/lib/profile';
@@ -18,6 +19,7 @@ function sanitizeObra(v: string) {
 }
 
 export function ProfileView() {
+  const { signOut } = useClerk();
   const [profile, setProfile] = useState<UserProfile>(DEFAULT_PROFILE);
   const [hydrated, setHydrated] = useState(false);
   const [avatarBusy, setAvatarBusy] = useState(false);
@@ -184,6 +186,13 @@ export function ProfileView() {
                 }}
               >
                 Copiar JSON
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={() => signOut({ redirectUrl: '/sign-in' })}
+              >
+                <Icon name="x" size={18} /> Cerrar sesión
               </button>
             </div>
           </div>

@@ -72,6 +72,7 @@ export function PinManagementCard() {
             backgroundColor: "var(--bg-panel)",
             border: "1px solid var(--border)",
             borderRadius: "var(--radius)",
+            marginTop: 14,
             marginBottom: 16,
           }}
         >

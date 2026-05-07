@@ -44,6 +44,9 @@ export async function POST(req: Request) {
     const body = (await req.json()) as unknown;
     const parsed = BodySchema.safeParse(body);
     if (!parsed.success) {
+      console.log(
+        `${PIPE} api_extract:invalid_body body=${JSON.stringify(body)} issues=${JSON.stringify(parsed.error.issues)}`,
+      );
       return NextResponse.json(
         { ok: false, error: 'Invalid request body', errorCode: 'API_ERROR' },
         { status: 400 },

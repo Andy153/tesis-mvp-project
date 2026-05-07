@@ -585,7 +585,7 @@ async function fetchParteExtractionFromOpenAI(imagesDataUrl: string | string[]):
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        imagesBase64: images.slice(0, 5),
+        imagesBase64: images.slice(0, 3),
         imageBase64: images[0],
         documentType: 'parte_quirurgico',
       }),
@@ -631,7 +631,7 @@ async function tryOverlayOpenAiParteText(
   }
   const prefValid =
     preferredPages && preferredPages.length
-      ? preferredPages.filter((p) => Number.isFinite(p) && p >= 0 && p < result.thumbnails.length).slice(0, 5)
+      ? preferredPages.filter((p) => Number.isFinite(p) && p >= 0 && p < result.thumbnails.length).slice(0, 3)
       : null;
 
   const ranked =
@@ -651,7 +651,7 @@ async function tryOverlayOpenAiParteText(
       ? uniquePages([0, 1].filter((p) => p >= 0 && p < thumbCount))
       : uniquePages([0, ...((selectedPages && selectedPages.length ? selectedPages : [0]) as number[])])
           .filter((p) => p >= 0 && p < thumbCount)
-          .slice(0, 5);
+          .slice(0, 3);
   const imagesToSend = pagesToSend.map((p) => result.thumbnails[p]?.dataUrl).filter(Boolean) as string[];
   console.log(
     `${PIPE} overlay_openai:selection preferred_pages=${JSON.stringify(preferredPages || [])} selection_source=${selection_source} selected_pages=${JSON.stringify(selectedPages || [])} images_sent_to_openai=${imagesToSend.length} sent_pages=${JSON.stringify(pagesToSend)}`,

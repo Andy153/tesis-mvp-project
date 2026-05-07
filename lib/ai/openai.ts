@@ -222,6 +222,14 @@ export async function callOpenAI(params: CallOpenAIParams) {
       } satisfies OpenAIErr;
     }
 
+    // TEMP LOG: dump raw JSON before Zod validation
+    console.log(`${PIPE} openai:raw_json_before_zod ${JSON.stringify(dataUnknown, null, 2)}`);
+
+    const result = schema.safeParse(dataUnknown);
+    if (!result.success) {
+      console.log('[TRAZA_DEBUG] zod_errors:', JSON.stringify(result.error.issues, null, 2));
+    }
+
     const validated = schema.safeParse(dataUnknown);
     if (!validated.success) {
       return {

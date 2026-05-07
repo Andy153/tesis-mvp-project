@@ -38,7 +38,7 @@ const coerceInt = z.preprocess(
 export const ParteQuirurgicoSchema = z.object({
   paciente: z.object({
     apellido_nombre: z.string().nullable(),
-    dni: z.string().nullable(),
+    dni: z.union([z.string(), z.number()]).transform((v) => String(v)).nullable(),
     fecha_nacimiento: z.string().nullable(),
     edad: coerceNullableInt,
     sexo: z.string().nullable(),

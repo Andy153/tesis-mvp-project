@@ -1525,6 +1525,14 @@ html[data-theme='dark'] .cal-nav {
 .cal-cell.muted .cal-daynum {
   color: #b8c5be;
 }
+
+/* En modo oscuro: invertir legibilidad (mes corriente claro, otros meses apagados) */
+html[data-theme='dark'] .cal-daynum {
+  color: var(--text);
+}
+html[data-theme='dark'] .cal-cell.muted .cal-daynum {
+  color: var(--text-soft);
+}
 .cal-pill {
   position: absolute;
   right: 10px;

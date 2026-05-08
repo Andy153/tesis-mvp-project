@@ -75,6 +75,11 @@ export async function POST(req: Request) {
     const result = await callOpenAI({ imageBase64: images[0], imagesBase64: images, documentType });
 
     let persistedDocumentId: string | null = null
+    let saved: {
+      documentId: string
+      extractionId: string
+      storagePath: string
+    } | null = null
     if ((result as any)?.ok === true && (result as any)?.data) {
       try {
         const { auth } = await import('@clerk/nextjs/server')
@@ -84,7 +89,7 @@ export async function POST(req: Request) {
           const extraction = (result as any).data
           const prepaga = extraction?.cobertura?.prepaga ?? 'desconocida'
           const storagePath = `${userId}/${Date.now()}_${documentType}`
-          const saved = await saveDocumentAndExtraction(userId, {
+          saved = await saveDocumentAndExtraction(userId, {
             storagePath,
             nombreArchivo: `${documentType}_${Date.now()}`,
             tipo: documentType,
@@ -98,9 +103,13 @@ export async function POST(req: Request) {
       }
     }
 
-    // Agregar documentId a la respuesta para que el cliente pueda hacer PATCH
+    // Agregar documentId / extractionId a la respuesta para el cliente
     const responseData = persistedDocumentId
-      ? { ...(result as any), documentId: persistedDocumentId }
+      ? {
+          ...(result as any),
+          documentId: persistedDocumentId,
+          extractionId: saved?.extractionId ?? null,
+        }
       : result
     console.log(
       `${PIPE} api_extract:done ms_total=${Date.now() - tAll0} ms_openai_call=${Date.now() - t0} ok=${(result as any)?.ok === true} errorCode=${(result as any)?.errorCode || ''} tokensUsed=${(result as any)?.tokensUsed ?? ''} elapsedMs=${(result as any)?.elapsedMs ?? ''}`,
@@ -129,7 +138,7 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
     }
 
-    const { supabaseAdmin } = await import('@/lib/supabase')
+    const { supabaseAdmin } = await import('@/lib/supabase-admin')
     const { error } = await supabaseAdmin
       .from('ai_extractions')
       .update({ codigo_nomenclador: codigo_nomenclador_validado })

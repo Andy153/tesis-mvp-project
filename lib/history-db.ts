@@ -1,4 +1,4 @@
-import { supabaseAdmin } from './supabase'
+import { supabaseAdmin } from './supabase-admin'
 import type { PersistedFileEntry, TrackingCobro } from './history'
 
 export type LiquidacionDB = {

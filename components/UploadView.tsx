@@ -1,5 +1,6 @@
 'use client';
 
+import { useUser } from '@clerk/nextjs';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from './Icon';
 import { extractText, analyzeDocument, findSpans } from '@/lib/analyzer';
@@ -50,6 +51,7 @@ export function UploadView({
   onCloseVisualization,
   onEditUpload,
 }: Props) {
+  const { user } = useUser();
   const [drag, setDrag] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
@@ -88,6 +90,7 @@ export function UploadView({
         raw_text,
         raw_text_light,
         raw_pageTexts,
+        documentId: extractedDocumentId,
       } = await extractText(
         file.file,
         (p) => {
@@ -100,6 +103,17 @@ export function UploadView({
       const tAnalyze0 = Date.now();
       const analysis = analyzeDocument(text, file.name, ocrWords, pageTexts);
       console.log(`${PIPE} ui:reanalyze:analyze done ms=${Date.now() - tAnalyze0} overall=${analysis.overall}`);
+      const clerkUserId = user?.id ?? null;
+      const uploadFile = file.file;
+      if (extractedDocumentId && clerkUserId && uploadFile) {
+        import('@/lib/storage-upload').then(({ uploadDocumentToStorage }) => {
+          uploadDocumentToStorage(uploadFile, extractedDocumentId)
+            .then((path) => {
+              if (path) console.log('[TRAZA] File uploaded to storage:', path);
+            })
+            .catch(() => {});
+        });
+      }
       autoManualPrompted.current.delete(file.id);
       onAddFile({
         ...file,
@@ -168,6 +182,7 @@ export function UploadView({
           raw_text,
           raw_text_light,
           raw_pageTexts,
+          documentId: extractedDocumentId,
         } = await extractText(
           file,
           (p) => {
@@ -181,6 +196,17 @@ export function UploadView({
         const tAnalyze0 = Date.now();
         const analysis = analyzeDocument(text, file.name, ocrWords, pageTexts);
         console.log(`${PIPE} ui:upload:analyze done ms=${Date.now() - tAnalyze0} overall=${analysis.overall}`);
+
+        const clerkUserId = user?.id ?? null;
+        if (extractedDocumentId && clerkUserId && file) {
+          import('@/lib/storage-upload').then(({ uploadDocumentToStorage }) => {
+            uploadDocumentToStorage(file, extractedDocumentId)
+              .then((path) => {
+                if (path) console.log('[TRAZA] File uploaded to storage:', path);
+              })
+              .catch(() => {});
+          });
+        }
 
         onAddFile({
           ...entry,

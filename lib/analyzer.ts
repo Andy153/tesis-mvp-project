@@ -744,11 +744,21 @@ async function tryOverlayOpenAiParteText(
   };
 }
 
-export async function extractText(file: File, onProgress?: ProgressFn): Promise<ExtractionResult> {
+export async function extractText(
+  file: File,
+  onProgress?: ProgressFn,
+): Promise<ExtractionResult & { documentId: string | null }> {
   const type = file.type;
-  if (type === 'application/pdf') return extractFromPdf(file, onProgress);
-  if (type.startsWith('image/')) return extractFromImage(file, onProgress);
-  throw new Error('Formato no soportado: ' + type);
+  let result: ExtractionResult;
+  if (type === 'application/pdf') {
+    result = await extractFromPdf(file, onProgress);
+  } else if (type.startsWith('image/')) {
+    result = await extractFromImage(file, onProgress);
+  } else {
+    throw new Error('Formato no soportado: ' + type);
+  }
+  const documentIdForCaller = _pendingDocumentId;
+  return { ...result, documentId: documentIdForCaller };
 }
 
 async function loadPdfjs() {

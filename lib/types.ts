@@ -198,4 +198,6 @@ export interface ExtractionResult {
   raw_pageTexts?: string[];
   institution_from_text?: string;
   aiParteExtract?: ParteQuirurgicoExtract;
+  /** Rellenado por extractText desde persistencia OpenAI; null si aún no hay id */
+  documentId?: string | null;
 }

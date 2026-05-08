@@ -229,3 +229,41 @@ export function getEstadoEfectivo(item: HistoryItem): {
 
   return { estado: 'borrador', label: 'Borrador', variant: 'secondary' };
 }
+
+// ── Supabase integration ──────────────────────────────────────────────────────
+/**
+ * Carga liquidaciones desde Supabase. Devuelve array vacío si falla o no hay sesión.
+ * Se usa en el dashboard para mostrar datos reales en vez de mock.
+ */
+export async function fetchLiquidacionesFromAPI(): Promise<LiquidacionesAPIResponse[]> {
+  try {
+    const res = await fetch('/api/liquidaciones')
+    if (!res.ok) return []
+    const { liquidaciones } = await res.json()
+    return Array.isArray(liquidaciones) ? liquidaciones : []
+  } catch {
+    return []
+  }
+}
+
+export type LiquidacionesAPIResponse = {
+  id: string
+  prepaga: string
+  periodo: string | null
+  estado: 'pendiente' | 'presentado' | 'aprobado' | 'rechazado'
+  monto_galenos: number | null
+  motivo_rechazo: string | null
+  fecha_presentacion: string | null
+  created_at: string
+  documents?: {
+    nombre_archivo: string | null
+    tipo: string
+    ai_extractions?: {
+      paciente: string | null
+      codigo_nomenclador: string | null
+      descripcion_practica: string | null
+      cirujano: string | null
+      fecha_practica: string | null
+    }[]
+  } | null
+}

@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useEffect, useState } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -10,6 +11,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { fetchLiquidacionesFromAPI, type LiquidacionesAPIResponse } from '@/lib/history';
 import { loadHistoryWithFallback } from '@/lib/history';
 import { getCobrosDelMes, PREPAGAS, type CobroItem } from '@/lib/dashboard-data';
 import { formatCurrency } from '@/lib/utils';
@@ -100,7 +102,57 @@ export function CobrosView({
 }) {
   const mounted = useMounted();
   const { files: fallbackFiles } = loadHistoryWithFallback();
-  const files = (filesProp ?? fallbackFiles) as any;
+  const [dbLiquidaciones, setDbLiquidaciones] = useState<LiquidacionesAPIResponse[]>([]);
+  const [dbLoaded, setDbLoaded] = useState(false);
+
+  useEffect(() => {
+    fetchLiquidacionesFromAPI()
+      .then((data) => {
+        setDbLiquidaciones(data);
+        setDbLoaded(true);
+      })
+      .catch(() => setDbLoaded(true));
+  }, []);
+
+  const hasDbData = dbLoaded && dbLiquidaciones.length > 0;
+  const dbFiles = hasDbData
+    ? dbLiquidaciones.map((liq) => ({
+        id: liq.id,
+        name: liq.documents?.nombre_archivo ?? liq.id,
+        size: 0,
+        type: 'application/pdf',
+        addedAt: liq.created_at,
+        status: 'analyzed' as const,
+        analysis: undefined,
+        aiParteExtract: liq.documents?.ai_extractions?.[0]
+          ? {
+              paciente: { apellido_nombre: liq.documents.ai_extractions[0].paciente },
+              procedimiento: {
+                tipo_realizado: liq.documents.ai_extractions[0].descripcion_practica,
+                codigo_nomenclador: liq.documents.ai_extractions[0].codigo_nomenclador,
+              },
+              cobertura: { prepaga: liq.prepaga },
+            }
+          : undefined,
+        tracking: {
+          estado:
+            (liq.estado === 'aprobado'
+              ? 'cobrado'
+              : liq.estado === 'rechazado'
+                ? 'rechazado'
+                : liq.estado === 'presentado'
+                  ? 'presentado'
+                  : 'listo_para_presentar') as any,
+          fechaPresentacion: liq.fecha_presentacion ?? undefined,
+          fechaCobroEstimada: liq.fecha_presentacion
+            ? new Date(new Date(liq.fecha_presentacion).getTime() + 60 * 24 * 60 * 60 * 1000).toISOString()
+            : undefined,
+          montoOriginal: liq.monto_galenos ?? undefined,
+          motivoRechazo: liq.motivo_rechazo ?? undefined,
+        },
+      }))
+    : null;
+  const files = (filesProp ?? dbFiles ?? fallbackFiles) as any;
 
   const [mesKey, setMesKey] = React.useState<string>(() => monthKey(new Date()));
   const mes = React.useMemo(() => monthFromKey(mesKey), [mesKey]);

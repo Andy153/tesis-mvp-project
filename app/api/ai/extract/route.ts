@@ -73,10 +73,39 @@ export async function POST(req: Request) {
 
     const t0 = Date.now();
     const result = await callOpenAI({ imageBase64: images[0], imagesBase64: images, documentType });
+
+    let persistedDocumentId: string | null = null
+    if ((result as any)?.ok === true && (result as any)?.data) {
+      try {
+        const { auth } = await import('@clerk/nextjs/server')
+        const { saveDocumentAndExtraction } = await import('@/lib/history-db')
+        const { userId } = await auth()
+        if (userId) {
+          const extraction = (result as any).data
+          const prepaga = extraction?.cobertura?.prepaga ?? 'desconocida'
+          const storagePath = `${userId}/${Date.now()}_${documentType}`
+          const saved = await saveDocumentAndExtraction(userId, {
+            storagePath,
+            nombreArchivo: `${documentType}_${Date.now()}`,
+            tipo: documentType,
+            prepaga,
+            aiExtraction: extraction,
+          })
+          if (saved) persistedDocumentId = saved.documentId
+        }
+      } catch (persistErr) {
+        console.log(`${PIPE} api_extract:persist_warn`, persistErr)
+      }
+    }
+
+    // Agregar documentId a la respuesta para que el cliente pueda hacer PATCH
+    const responseData = persistedDocumentId
+      ? { ...(result as any), documentId: persistedDocumentId }
+      : result
     console.log(
       `${PIPE} api_extract:done ms_total=${Date.now() - tAll0} ms_openai_call=${Date.now() - t0} ok=${(result as any)?.ok === true} errorCode=${(result as any)?.errorCode || ''} tokensUsed=${(result as any)?.tokensUsed ?? ''} elapsedMs=${(result as any)?.elapsedMs ?? ''}`,
     );
-    return NextResponse.json(result, { status: 200 });
+    return NextResponse.json(responseData, { status: 200 });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.log(`${PIPE} api_extract:error ms_total=${Date.now() - tAll0} msg=${msg || 'unknown'}`);
@@ -84,6 +113,37 @@ export async function POST(req: Request) {
       { ok: false, error: msg || 'Unexpected server error', errorCode: 'API_ERROR' },
       { status: 500 },
     );
+  }
+}
+
+export async function PATCH(req: Request) {
+  try {
+    const { auth } = await import('@clerk/nextjs/server')
+    const { userId } = await auth()
+    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const body = await req.json()
+    const { document_id, codigo_nomenclador_validado } = body
+
+    if (!document_id || !codigo_nomenclador_validado) {
+      return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
+    }
+
+    const { supabaseAdmin } = await import('@/lib/supabase')
+    const { error } = await supabaseAdmin
+      .from('ai_extractions')
+      .update({ codigo_nomenclador: codigo_nomenclador_validado })
+      .eq('document_id', document_id)
+      .eq('clerk_user_id', userId)
+
+    if (error) {
+      console.error('Error updating codigo_nomenclador:', error)
+      return NextResponse.json({ error: 'DB error' }, { status: 500 })
+    }
+
+    return NextResponse.json({ ok: true })
+  } catch (e) {
+    return NextResponse.json({ error: 'Unexpected error' }, { status: 500 })
   }
 }
 

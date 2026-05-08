@@ -1,9 +1,10 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, AlertTriangle, CircleCheck, CreditCard, FileText } from 'lucide-react';
 
-import { loadHistory } from '@/lib/history';
+import type { LiquidacionesAPIResponse } from '@/lib/history';
+import { fetchLiquidacionesFromAPI, loadHistory } from '@/lib/history';
 import { getEstadoEfectivo } from '@/lib/history';
 import { useMounted } from '@/lib/use-mounted';
 import { Progress } from '@/components/ui/progress';
@@ -14,9 +15,57 @@ export function Indicadores({
   onNavigate?: (view: string) => void;
 }) {
   const mounted = useMounted();
-  const { files } = loadHistory();
+  const [dbLiquidaciones, setDbLiquidaciones] = useState<LiquidacionesAPIResponse[]>([]);
+  const [dbLoaded, setDbLoaded] = useState(false);
 
-  const ready = useMemo(() => (files || []).filter((f) => f.status !== 'analyzing'), [files]);
+  useEffect(() => {
+    fetchLiquidacionesFromAPI()
+      .then((data) => {
+        setDbLiquidaciones(data);
+        setDbLoaded(true);
+      })
+      .catch(() => setDbLoaded(true));
+  }, []);
+
+  const { files: localFiles } = loadHistory();
+  const hasDbData = dbLoaded && dbLiquidaciones.length > 0;
+
+  const ready = useMemo(() => {
+    if (hasDbData) {
+      return dbLiquidaciones.map((liq) => ({
+        id: liq.id,
+        name: liq.documents?.nombre_archivo ?? liq.id,
+        size: 0,
+        type: 'application/pdf',
+        addedAt: liq.created_at,
+        status: 'analyzed' as const,
+        analysis: undefined,
+        aiParteExtract: liq.documents?.ai_extractions?.[0]
+          ? {
+              paciente: { apellido_nombre: liq.documents.ai_extractions[0].paciente },
+              procedimiento: {
+                tipo_realizado: liq.documents.ai_extractions[0].descripcion_practica,
+                codigo_nomenclador: liq.documents.ai_extractions[0].codigo_nomenclador,
+              },
+            }
+          : undefined,
+        tracking: {
+          estado:
+            liq.estado === 'aprobado'
+              ? 'cobrado'
+              : liq.estado === 'rechazado'
+                ? 'rechazado'
+                : liq.estado === 'presentado'
+                  ? 'presentado'
+                  : 'listo_para_presentar',
+          fechaPresentacion: liq.fecha_presentacion ?? undefined,
+          montoOriginal: liq.monto_galenos ?? undefined,
+          motivoRechazo: liq.motivo_rechazo ?? undefined,
+        },
+      }));
+    }
+    return (localFiles || []).filter((f) => f.status !== 'analyzing');
+  }, [hasDbData, dbLiquidaciones, localFiles]);
   const analyzed = useMemo(() => ready.filter((f) => Boolean(f.analysis)), [ready]);
 
   const conErrores = useMemo(() => analyzed.filter((f) => f.analysis?.overall === 'error').length, [analyzed]);
@@ -46,7 +95,7 @@ export function Indicadores({
           <div style={{ marginTop: 6, fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.45 }}>
             {mounted ? (
               empty ? (
-                'Todavía no cargaste documentos.'
+                !dbLoaded ? 'Cargando desde la base de datos…' : 'Todavía no cargaste documentos.'
               ) : (
                 'Un vistazo rápido a tu estado actual.'
               )

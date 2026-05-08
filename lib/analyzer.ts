@@ -7,6 +7,8 @@ import { TRAZA_NOMENCLADOR_FULL, TRAZA_PROC_KEYWORDS } from './nomenclador.js';
 import { TRAZA_PREPAGAS, TRAZA_REQUIRED_FIELDS, TRAZA_SANATORIOS } from './traza-constants';
 import { matchScore } from './semantic';
 
+let _pendingDocumentId: string | null = null
+
 /** Incrementar al cambiar reglas de análisis para invalidar análisis guardados en `loadHistory`. */
 export const TRAZA_ANALYZER_REVISION = 19;
 
@@ -590,7 +592,8 @@ async function fetchParteExtractionFromOpenAI(imagesDataUrl: string | string[]):
         documentType: 'parte_quirurgico',
       }),
     });
-    const json = (await res.json()) as { ok?: boolean; data?: ParteQuirurgicoExtract };
+    const json = (await res.json()) as { ok?: boolean; data?: ParteQuirurgicoExtract; documentId?: string };
+    if (json?.documentId) _pendingDocumentId = json.documentId
     const dt = Date.now() - t0;
     console.log(`${PIPE} openai:client_fetch_ms=${dt} status=${res.status} ok=${json?.ok === true}`);
     if (!json || json.ok !== true || !json.data) return null;
@@ -2090,6 +2093,33 @@ export function analyzeDocument(
   console.log(
     `${PIPE} analyze:done overall=${overall} findings=${findings.length} ok=${summary.ok} warn=${summary.warn} error=${summary.error} total_ms=${Date.now() - tAll0}`,
   );
+
+  const codigoParaPatch = validCodes[0] ?? (typeof procedureGuess === 'object' && procedureGuess !== null ? (procedureGuess as any).code : procedureGuess) ?? null
+
+  if (typeof window !== 'undefined' && _pendingDocumentId && codigoParaPatch) {
+    const docId = _pendingDocumentId
+    _pendingDocumentId = null
+    console.log('[TRAZA_DEBUG] Disparando PATCH codigo_nomenclador:', { docId, codigo: codigoParaPatch, source: validCodes[0] ? 'validCodes' : 'procedureGuess' })
+    fetch('/api/ai/extract', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        document_id: docId,
+        codigo_nomenclador_validado: codigoParaPatch
+      })
+    })
+    .then(r => r.json())
+    .then(data => console.log('[TRAZA_DEBUG] PATCH response:', data))
+    .catch(err => console.log('[TRAZA_DEBUG] PATCH error:', err))
+  } else {
+    console.log('[TRAZA_DEBUG] PATCH no disparado:', {
+      pendingDocumentId: _pendingDocumentId,
+      codigoParaPatch,
+      validCodesLength: validCodes.length,
+      procedureGuess
+    })
+  }
+
   return {
     findings,
     summary,

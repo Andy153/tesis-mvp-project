@@ -22,21 +22,67 @@ export function ProfileView() {
   const { signOut } = useClerk();
   const [profile, setProfile] = useState<UserProfile>(DEFAULT_PROFILE);
   const [hydrated, setHydrated] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveOk, setSaveOk] = useState(false);
   const [avatarBusy, setAvatarBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    const p = loadProfile();
-    setProfile(p);
-    applyThemeMode(p.theme);
+    const local = loadProfile();
+    setProfile(local);
+    applyThemeMode(local.theme);
     setHydrated(true);
+
+    fetch('/api/profile')
+      .then((r) => r.json())
+      .then(({ profile: dbProfile }) => {
+        if (dbProfile) {
+          setProfile((p) => ({
+            ...p,
+            displayName: dbProfile.nombre ?? p.displayName,
+            profesion: dbProfile.especialidad ?? p.profesion,
+            obras:
+              Array.isArray(dbProfile.prepagas) && dbProfile.prepagas.length > 0
+                ? dbProfile.prepagas.map((name: string) => ({ obraSocial: name, codigo: '' }))
+                : p.obras,
+          }));
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
     if (!hydrated) return;
     applyThemeMode(profile.theme);
     saveProfile(profile);
-  }, [profile, hydrated]);
+  }, [profile.theme, profile.avatarDataUrl, hydrated]);
+
+  async function handleSave() {
+    setSaving(true);
+    setSaveError(null);
+    setSaveOk(false);
+    try {
+      const res = await fetch('/api/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nombre: profile.displayName,
+          especialidad: profile.profesion,
+          prepagas: profile.obras.map((o) => o.obraSocial).filter(Boolean),
+        }),
+      });
+      if (!res.ok) throw new Error('Error al guardar');
+      setSaveOk(true);
+      setTimeout(() => setSaveOk(false), 3000);
+    } catch (e) {
+      setSaveError('No se pudo guardar. Intentá de nuevo.');
+    } finally {
+      setSaving(false);
+    }
+  }
 
   const obraErrors = useMemo(() => {
     const errs: string[] = [];
@@ -94,6 +140,14 @@ export function ProfileView() {
             >
               Volver a los datos sugeridos
             </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={handleSave}
+              disabled={saving || loading}
+            >
+              {saving ? 'Guardando…' : saveOk ? '✓ Guardado' : 'Guardar cambios'}
+            </button>
           </div>
         </div>
 
@@ -140,6 +194,9 @@ export function ProfileView() {
               />
             </label>
           </div>
+          {saveError && (
+            <div style={{ color: 'var(--danger)', fontSize: 12, marginTop: 8 }}>{saveError}</div>
+          )}
         </div>
 
         <div className="panel" style={{ padding: 16 }}>

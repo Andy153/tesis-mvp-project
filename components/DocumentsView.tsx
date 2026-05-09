@@ -6,6 +6,7 @@ import type { FileEntry } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import { getEstadoEfectivo, loadHistory, type HistoryItem } from '@/lib/history';
 import { markAsPresented } from '@/lib/tracking';
+import { SwissMedicalCloseButton } from './SwissMedicalCloseButton';
 
 type FilterKey = 'all' | 'error' | 'warn' | 'ok';
 
@@ -104,6 +105,10 @@ export function DocumentsView({
           <h1 className="page-title">Mis documentos</h1>
           <p className="page-subtitle">Todo lo que cargaste, con el resultado del análisis.</p>
         </div>
+      </div>
+
+      <div style={{ marginBottom: 16 }}>
+        <SwissMedicalCloseButton onSent={() => setRefreshKey((k) => k + 1)} />
       </div>
 
       <div className="docs-toolbar">

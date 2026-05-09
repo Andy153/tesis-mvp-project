@@ -106,8 +106,12 @@ export function UploadView({
       const clerkUserId = user?.id ?? null;
       const uploadFile = file.file;
       if (extractedDocumentId && clerkUserId && uploadFile) {
+        // Extraemos la fecha de la operación del texto del parte (si está disponible).
+        const structuredForUpload = extractStructured(text, NOMEN_FOR_EXTRACT);
+        const operationDate = structuredForUpload?.fechaPractica ?? null;
+
         import('@/lib/storage-upload').then(({ uploadDocumentToStorage }) => {
-          uploadDocumentToStorage(uploadFile, extractedDocumentId)
+          uploadDocumentToStorage(uploadFile, extractedDocumentId, operationDate)
             .then((path) => {
               if (path) console.log('[TRAZA] File uploaded to storage:', path);
             })
@@ -199,8 +203,13 @@ export function UploadView({
 
         const clerkUserId = user?.id ?? null;
         if (extractedDocumentId && clerkUserId && file) {
+          // Extraemos la fecha de la operación del texto del parte (si está disponible).
+          // Si no se puede extraer, el upload va a la carpeta _pendiente/ como fallback.
+          const structuredForUpload = extractStructured(text, NOMEN_FOR_EXTRACT);
+          const operationDate = structuredForUpload?.fechaPractica ?? null;
+
           import('@/lib/storage-upload').then(({ uploadDocumentToStorage }) => {
-            uploadDocumentToStorage(file, extractedDocumentId)
+            uploadDocumentToStorage(file, extractedDocumentId, operationDate)
               .then((path) => {
                 if (path) console.log('[TRAZA] File uploaded to storage:', path);
               })

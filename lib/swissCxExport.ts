@@ -420,53 +420,68 @@ export function buildSwissCxRow(args: {
 
 export async function generateSwissCxFiles(args: {
   templateXlsx: ArrayBuffer;
-  row: Row;
+  /** Lista de filas a escribir. Preferido para multi-row. */
+  rows?: Row[];
+  /** Modo legacy: una sola fila. Si viene `rows`, se ignora. */
+  row?: Row;
 }): Promise<{ xlsx: Uint8Array; csv: string }> {
+  const rows: Row[] = args.rows && args.rows.length > 0 ? args.rows : args.row ? [args.row] : [];
+  if (rows.length === 0) {
+    throw new Error('generateSwissCxFiles: se requieren rows o row.');
+  }
+
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(args.templateXlsx);
   const ws = wb.worksheets[0];
   if (!ws) throw new Error('La plantilla no tiene hojas.');
 
-  const r = args.row;
-  ws.getCell('A5').value = r.fecha;
-  ws.getCell('B5').value = r.socio;
-  ws.getCell('C5').value = r.socioDesc;
-  ws.getCell('D5').value = r.codigo;
-  ws.getCell('E5').value = r.cant;
-  ws.getCell('F5').value = r.detalle;
-  ws.getCell('G5').value = r.institucion;
-  ws.getCell('H5').value = r.cir;
-  ws.getCell('I5').value = r.ayud;
-  ws.getCell('J5').value = r.inst;
-  ws.getCell('K5').value = r.urgencia;
-  ws.getCell('L5').value = r.gastos;
-  ws.getCell('M5').value = r.nroAutorizacion;
+  const FIRST_DATA_ROW = 5;
+  rows.forEach((r, i) => {
+    const rowNum = FIRST_DATA_ROW + i;
+    ws.getCell(`A${rowNum}`).value = r.fecha;
+    ws.getCell(`B${rowNum}`).value = r.socio;
+    ws.getCell(`C${rowNum}`).value = r.socioDesc;
+    ws.getCell(`D${rowNum}`).value = r.codigo;
+    ws.getCell(`E${rowNum}`).value = r.cant;
+    ws.getCell(`F${rowNum}`).value = r.detalle;
+    ws.getCell(`G${rowNum}`).value = r.institucion;
+    ws.getCell(`H${rowNum}`).value = r.cir;
+    ws.getCell(`I${rowNum}`).value = r.ayud;
+    ws.getCell(`J${rowNum}`).value = r.inst;
+    ws.getCell(`K${rowNum}`).value = r.urgencia;
+    ws.getCell(`L${rowNum}`).value = r.gastos;
+    ws.getCell(`M${rowNum}`).value = r.nroAutorizacion;
+  });
 
   const xlsxBuf = (await wb.xlsx.writeBuffer()) as ArrayBuffer;
   const xlsx = new Uint8Array(xlsxBuf);
-
-  const cols = [
-    r.fecha,
-    r.socio,
-    r.socioDesc,
-    r.codigo,
-    r.cant,
-    r.detalle,
-    r.institucion,
-    r.cir,
-    r.ayud,
-    r.inst,
-    r.urgencia,
-    r.gastos,
-    r.nroAutorizacion,
-  ];
 
   const esc = (v: string) => {
     const s = String(v ?? '');
     if (/[;"\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
     return s;
   };
-  const csv = cols.map(esc).join(';') + '\n';
+  const csv =
+    rows
+      .map((r) => {
+        const cols = [
+          r.fecha,
+          r.socio,
+          r.socioDesc,
+          r.codigo,
+          r.cant,
+          r.detalle,
+          r.institucion,
+          r.cir,
+          r.ayud,
+          r.inst,
+          r.urgencia,
+          r.gastos,
+          r.nroAutorizacion,
+        ];
+        return cols.map(esc).join(';');
+      })
+      .join('\n') + '\n';
 
   return { xlsx, csv };
 }

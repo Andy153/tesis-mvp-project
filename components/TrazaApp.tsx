@@ -11,6 +11,7 @@ import { ProfileView } from './ProfileView';
 import { DashboardView } from './DashboardView';
 import { CobrosView } from './dashboard/CobrosView';
 import { CobrosGuard } from '@/components/cobros/CobrosGuard';
+import { AutoAssignRole } from '@/components/auth/AutoAssignRole';
 import type { AuthState, FileEntry } from '@/lib/types';
 import { loadHistory, saveHistory } from '@/lib/history';
 import { buildSwissCxRow } from '@/lib/swissCxExport';
@@ -235,8 +236,10 @@ export default function TrazaApp() {
   }
 
   return (
-    <div className="app">
-      <header className="app-mob-header">
+    <>
+      <AutoAssignRole />
+      <div className="app">
+        <header className="app-mob-header">
         <div className="app-mob-header__brand">
           <Logo size={40} variant="dark" />
           <span className="brand__wordmark">Trazá</span>
@@ -319,5 +322,6 @@ export default function TrazaApp() {
         {active === 'settings' && <ProfileView />}
       </main>
     </div>
+    </>
   );
 }

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useClerk } from '@clerk/nextjs';
 import { Icon } from './Icon';
 import { PinManagementCard } from './profile/PinManagementCard';
+import { InvitacionSecretariaCard } from './profile/InvitacionSecretariaCard';
 import type { ThemeMode, UserProfile } from '@/lib/profile';
 import {
   applyThemeMode,
@@ -352,6 +353,7 @@ export function ProfileView() {
       </div>
 
       <PinManagementCard />
+      <InvitacionSecretariaCard />
     </div>
   );
 }

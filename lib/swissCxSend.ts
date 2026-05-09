@@ -13,6 +13,47 @@ export const MAIL_TO = 'tesisgrupo2026@gmail.com'
 export const MAIL_FROM = 'onboarding@resend.dev'
 const MAX_ATTACHMENTS_BYTES = 35 * 1024 * 1024
 
+function normalizeSupabaseStoragePath(
+  bucket: string,
+  rawPath: string | null | undefined,
+): string | null {
+  if (!rawPath) return null
+  const trimmed = String(rawPath).trim()
+  if (!trimmed) return null
+
+  // Accept either a plain path ("user/2026-05/uuid.pdf") or a full URL.
+  let candidate = trimmed
+  try {
+    if (/^https?:\/\//i.test(trimmed)) {
+      const u = new URL(trimmed)
+      candidate = decodeURIComponent(u.pathname)
+    }
+  } catch {
+    // If URL parsing fails, fall back to original.
+    candidate = trimmed
+  }
+
+  // Strip known supabase storage URL prefixes.
+  // Examples:
+  // - /storage/v1/object/public/<bucket>/<path>
+  // - /storage/v1/object/sign/<bucket>/<path>
+  const publicPrefix = `/storage/v1/object/public/${bucket}/`
+  const signPrefix = `/storage/v1/object/sign/${bucket}/`
+  if (candidate.startsWith(publicPrefix)) candidate = candidate.slice(publicPrefix.length)
+  if (candidate.startsWith(signPrefix)) candidate = candidate.slice(signPrefix.length)
+
+  // Some older records may have stored "<bucket>/<path>".
+  if (candidate.startsWith(`${bucket}/`)) candidate = candidate.slice(bucket.length + 1)
+
+  // Supabase storage paths should not start with "/".
+  candidate = candidate.replace(/^\/+/, '')
+
+  // Prevent accidental directory traversal.
+  if (candidate.includes('..')) return null
+
+  return candidate || null
+}
+
 export type SendResult =
   | {
       ok: true
@@ -204,17 +245,19 @@ export async function sendSwissMonthlyForUser(
     let totalBytes = xlsxBuffer.length
 
     for (const p of partes) {
-      if (!p.storage_path) {
+      const normalizedPath = normalizeSupabaseStoragePath(BUCKET_DOCUMENTOS, p.storage_path)
+      if (!normalizedPath) {
         partesSinPdf.push(p)
         continue
       }
       const { data: blob, error: dlErr } = await supabaseAdmin.storage
         .from(BUCKET_DOCUMENTOS)
-        .download(p.storage_path)
+        .download(normalizedPath)
       if (dlErr || !blob) {
         console.warn('[TRAZA] sendSwiss:pdf_download_failed', {
           document_id: p.document_id,
           storage_path: p.storage_path,
+          normalized_path: normalizedPath,
           error: dlErr?.message,
         })
         partesSinPdf.push(p)

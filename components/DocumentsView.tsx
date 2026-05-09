@@ -4,9 +4,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { Icon } from './Icon';
 import type { FileEntry } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
-import { getEstadoEfectivo, loadHistory, type HistoryItem } from '@/lib/history';
+import { getEstadoEfectivo, type HistoryItem } from '@/lib/history';
 import { markAsPresented } from '@/lib/tracking';
 import { SwissMedicalCloseButton } from './SwissMedicalCloseButton';
+import { ReviewModal } from './ReviewModal';
 
 type FilterKey = 'all' | 'error' | 'warn' | 'ok';
 
@@ -36,10 +37,12 @@ export function DocumentsView({
   files,
   onOpenFile,
   onUpdateTracking,
+  onRemoveFile,
 }: {
   files: FileEntry[];
   onOpenFile: (id: string) => void;
   onUpdateTracking: (id: string, updater: (item: FileEntry) => FileEntry) => void;
+  onRemoveFile: (id: string) => void;
 }) {
   const normalizePrepaga = (raw: string | null | undefined) => {
     const s = String(raw || '').trim();
@@ -59,20 +62,35 @@ export function DocumentsView({
   const [filter, setFilter] = useState<FilterKey>('all');
   const [q, setQ] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
-  const [localFiles, setLocalFiles] = useState<FileEntry[]>(files);
   const [confirmPresentId, setConfirmPresentId] = useState<string | null>(null);
-
+  const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
+  const [pending, setPending] = useState<any[]>([]);
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
   useEffect(() => {
-    // Keep in sync with parent-provided list (upload view mutates this).
-    setLocalFiles(files);
-  }, [files]);
-
-  useEffect(() => {
-    const data = loadHistory();
-    setLocalFiles(data.files as unknown as FileEntry[]);
+    fetch('/api/liquidaciones?estado_revision=bloqueado,en_revision')
+      .then((r) => r.json())
+      .then((d) => setPending(d.liquidaciones ?? []))
+      .catch(() => {});
   }, [refreshKey]);
 
-  const ready = useMemo(() => localFiles.filter((f) => f.status !== 'analyzing'), [localFiles]);
+  /** Una liquidación por documento (evita duplicados legacy: dos pasadas OpenAI en PDF). */
+  const pendingDeduped = useMemo(() => {
+    const list = pending;
+    const byDoc = new Map<string, any>();
+    for (const p of list) {
+      const key = p.document_id ? String(p.document_id) : String(p.id);
+      const prev = byDoc.get(key);
+      const pAt = p.created_at ? new Date(p.created_at).getTime() : 0;
+      const prevAt = prev?.created_at ? new Date(prev.created_at).getTime() : 0;
+      if (!prev || pAt >= prevAt) byDoc.set(key, p);
+    }
+    return Array.from(byDoc.values()).sort((a, b) =>
+      String(b.created_at ?? '').localeCompare(String(a.created_at ?? '')),
+    );
+  }, [pending]);
+
+  /** Misma lista que Carga / Cobros: solo el estado del padre (evita que loadHistory() pise un borrado reciente). */
+  const ready = useMemo(() => files.filter((f) => f.status !== 'analyzing'), [files]);
 
   const counts = useMemo(() => {
     return {
@@ -106,6 +124,88 @@ export function DocumentsView({
           <p className="page-subtitle">Todo lo que cargaste, con el resultado del análisis.</p>
         </div>
       </div>
+
+      {pendingDeduped.length > 0 && (
+        <div style={{ marginBottom: 16, padding: 12, border: '1px solid #e0b94a', background: '#fff4d6', borderRadius: 8 }}>
+          <strong style={{ color: '#7a5a00' }}>Pendientes de revisión: {pendingDeduped.length}</strong>
+          <ul style={{ margin: '8px 0 0 0', padding: 0, listStyle: 'none' }}>
+            {pendingDeduped.map((p) => (
+              <li key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '6px 0', borderTop: '1px solid #e0b94a' }}>
+                <span>{p.ai_extractions?.paciente ?? '—'} · {p.estado_revision === 'bloqueado' ? '🔴 Bloqueado' : '🟡 En revisión'}</span>
+                <span style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                  <button type="button" className="btn btn-sm" onClick={() => setReviewingId(p.id)}>Revisar</button>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-ghost"
+                    title="Elimina la liquidación en el servidor (útil si ya no tenés el archivo o quedó duplicada)"
+                    onClick={() => {
+                      if (!window.confirm('¿Eliminar este registro de liquidación en la nube? No se puede deshacer.')) return;
+                      void (async () => {
+                        try {
+                          const r = await fetch(`/api/liquidaciones/${p.id}`, { method: 'DELETE' });
+                          if (r.ok) setRefreshKey((k) => k + 1);
+                        } catch {
+                          /* ignore */
+                        }
+                      })();
+                    }}
+                  >
+                    Eliminar
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {reviewingId && (
+        <ReviewModal
+          liquidacionId={reviewingId}
+          onClose={() => setReviewingId(null)}
+          onSaved={() => { setReviewingId(null); setRefreshKey((k) => k + 1); }}
+        />
+      )}
+
+      {confirmRemoveId && (
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setConfirmRemoveId(null);
+          }}
+        >
+          <div className="modal-card" style={{ maxWidth: 480 }}>
+            <div className="modal-head">
+              <div style={{ fontWeight: 800 }}>¿Sacar este documento de Trazá?</div>
+              <button type="button" className="btn btn-sm btn-ghost" onClick={() => setConfirmRemoveId(null)}>
+                <Icon name="x" size={14} /> Cerrar
+              </button>
+            </div>
+            <div className="modal-body">
+              <p style={{ color: 'var(--text-muted)', fontSize: 14, margin: 0 }}>
+                Se quita del historial y, si corresponde, se elimina el registro en la nube (liquidación, parte y archivo).
+              </p>
+              <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                <button type="button" className="btn" onClick={() => setConfirmRemoveId(null)}>
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  onClick={() => {
+                    onRemoveFile(confirmRemoveId);
+                    setConfirmRemoveId(null);
+                    setRefreshKey((k) => k + 1);
+                  }}
+                >
+                  Sí, sacarlo
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div style={{ marginBottom: 16 }}>
         <SwissMedicalCloseButton onSent={() => setRefreshKey((k) => k + 1)} />
@@ -254,6 +354,9 @@ export function DocumentsView({
                             </button>
                           )
                         ) : null}
+                        <button type="button" className="btn btn-sm btn-ghost" onClick={() => setConfirmRemoveId(f.id)}>
+                          Sacar de Trazá
+                        </button>
                       </div>
                     </td>
                   </tr>

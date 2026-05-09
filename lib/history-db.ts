@@ -1,5 +1,6 @@
 import { supabaseAdmin } from './supabase-admin'
 import type { PersistedFileEntry, TrackingCobro } from './history'
+import { runChecks, checkInputsFromExtraction } from './checks'
 
 function parseDateToISO(dateStr: string | null | undefined): string | null {
   if (!dateStr || typeof dateStr !== 'string') return null
@@ -212,7 +213,26 @@ export async function saveDocumentAndExtraction(
     aiExtraction: Record<string, unknown>
   }
 ): Promise<{ documentId: string; extractionId: string; storagePath: string } | null> {
+  const ext = opts.aiExtraction as any
+
+  // ===========================================================================
+  // 0. Correr motor de chequeos ANTES de insertar nada.
+  // Esto nos dice si hay autoFilledCode (lo metemos al insert de ai_extractions)
+  // y nos da estado_revision + motivos_revision para la liquidación.
+  // ===========================================================================
+  const fechaPracticaISO = parseDateToISO(ext?.cirugia?.fecha)
+  const checkInputs = checkInputsFromExtraction(ext)
+  checkInputs.fechaPracticaISO = fechaPracticaISO
+  const checks = runChecks(checkInputs)
+
+  // Si el motor encontró un código por keywords (la IA no lo había devuelto),
+  // lo usamos en el INSERT de ai_extractions.
+  const codigoFinal =
+    ext?.procedimiento?.codigo_nomenclador ?? checks.autoFilledCode ?? null
+
+  // ===========================================================================
   // 1. Insertar documento
+  // ===========================================================================
   const { data: doc, error: docError } = await supabaseAdmin
     .from('documents')
     .insert({
@@ -231,23 +251,27 @@ export async function saveDocumentAndExtraction(
     return null
   }
 
-  // 2. Insertar extracción IA
-  const ext = opts.aiExtraction as any
+  // ===========================================================================
+  // 2. Insertar extracción IA (con código auto-completado si aplicable)
+  // ===========================================================================
   const { data: extraction, error: extError } = await supabaseAdmin
     .from('ai_extractions')
     .insert({
       document_id: doc.id,
       clerk_user_id: clerkUserId,
       paciente: ext?.paciente?.apellido_nombre ?? null,
-      codigo_nomenclador: ext?.procedimiento?.codigo_nomenclador ?? null,
+      codigo_nomenclador: codigoFinal,
       descripcion_practica: ext?.procedimiento?.tipo_realizado ?? null,
       cirujano: ext?.equipo_quirurgico?.cirujano ?? null,
-      fecha_practica: parseDateToISO(ext?.cirugia?.fecha),
+      fecha_practica: fechaPracticaISO,
       sanatorio: ext?.sanatorio ?? null,
       prepaga: ext?.cobertura?.prepaga ?? null,
       anestesia: ext?.anestesia?.tipo ?? null,
       datos_extras: ext ?? {},
       raw_response: ext ?? {},
+      // Si el motor auto-completó código, lo registramos como "editado por la app"
+      edited_by_user: false,
+      edited_fields: checks.autoFilledCode ? ['codigo_nomenclador_auto'] : [],
     })
     .select()
     .single()
@@ -257,11 +281,35 @@ export async function saveDocumentAndExtraction(
     return null
   }
 
-  // 3. Insertar liquidación con periodo y estado calculados
-  // Si falla, logueamos pero NO rompemos el flujo: el doc y la extraction
-  // ya se crearon correctamente. La liquidación se puede crear después.
-  const fechaPracticaISO = parseDateToISO(ext?.cirugia?.fecha)
-  const { periodo, estado } = calcularPeriodoYEstado(fechaPracticaISO)
+  // ===========================================================================
+  // 3. Insertar liquidación con período, estado, estado_revision y motivos.
+  // ===========================================================================
+  let periodo: string | null = null
+  let estado:
+    | 'pendiente'
+    | 'presentado'
+    | 'aprobado'
+    | 'rechazado'
+    | 'vencido'
+    | 'fuera_de_alcance' = 'pendiente'
+  let estadoRevision: 'bloqueado' | 'en_revision' | 'confirmado' | null = null
+
+  if (checks.isOutOfScope) {
+    // Prepaga distinta de Swiss → no entra al flujo Swiss.
+    estado = 'fuera_de_alcance'
+    periodo = null
+    estadoRevision = null
+  } else {
+    // Es Swiss (o falta prepaga, que el motor trató como bloqueado).
+    // Calculamos periodo/estado con la lógica vieja para mantener compatibilidad.
+    const calc = calcularPeriodoYEstado(fechaPracticaISO)
+    periodo = calc.periodo
+    estado = calc.estado
+    // estado_revision viene del motor de chequeos.
+    estadoRevision = checks.estado_revision
+  }
+
+  const motivos = [...checks.blockers, ...checks.warnings]
 
   const { error: liquidacionErr } = await supabaseAdmin
     .from('liquidaciones')
@@ -272,12 +320,18 @@ export async function saveDocumentAndExtraction(
       prepaga: ext?.cobertura?.prepaga ?? opts.prepaga ?? 'desconocida',
       periodo,
       estado,
+      estado_revision: estadoRevision,
+      motivos_revision: motivos,
     })
 
   if (liquidacionErr) {
     console.error('[TRAZA] Error inserting liquidacion (non-blocking):', liquidacionErr)
   } else {
-    console.log(`[TRAZA] Liquidación creada: periodo=${periodo}, estado=${estado}`)
+    console.log(
+      `[TRAZA] Liquidación creada: periodo=${periodo}, estado=${estado}, ` +
+        `estado_revision=${estadoRevision}, blockers=${checks.blockers.length}, ` +
+        `warnings=${checks.warnings.length}, autoFilledCode=${checks.autoFilledCode ?? 'no'}`,
+    )
   }
 
   return { documentId: doc.id, extractionId: extraction.id, storagePath: opts.storagePath }

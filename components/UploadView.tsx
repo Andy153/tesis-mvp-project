@@ -3,6 +3,7 @@
 import { useUser } from '@clerk/nextjs';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from './Icon';
+import { ReviewModal } from './ReviewModal';
 import { extractText, analyzeDocument, findSpans } from '@/lib/analyzer';
 import { crossCheck, extractStructured, requiresAuthorization } from '@/lib/authz';
 import { TRAZA_NOMENCLADOR_FULL } from '@/lib/nomenclador.js';
@@ -63,6 +64,7 @@ export function UploadView({
   const [finalizeBlocked, setFinalizeBlocked] = useState<string | null>(null);
   const [finalizeStep, setFinalizeStep] = useState<'idle' | 'needsConfirm' | 'saving' | 'saved'>('idle');
   const [reanalyzeBusy, setReanalyzeBusy] = useState(false);
+  const [reviewingLiqId, setReviewingLiqId] = useState<string | null>(null);
   const autoManualPrompted = useRef(new Set<string>());
 
   async function handleReanalyze(file: FileEntry) {
@@ -133,11 +135,20 @@ export function UploadView({
         raw_pageTexts,
         institution_from_text,
         aiParteExtract,
+        documentId: extractedDocumentId ?? null,
         manualChecks: undefined,
         analysis,
         errorMessage: undefined,
         file: file.file,
       });
+      if (extractedDocumentId) {
+        try {
+          const r = await fetch(`/api/liquidaciones?document_id=${extractedDocumentId}`);
+          const j = await r.json();
+          const liqId = j.liquidaciones?.[0]?.id;
+          if (liqId) setReviewingLiqId(liqId);
+        } catch {}
+      }
       console.log(`${PIPE} ui:reanalyze:done total_ms=${Date.now() - tAll0}`);
     } catch (err: unknown) {
       console.error(err);
@@ -231,8 +242,17 @@ export function UploadView({
           raw_pageTexts,
           institution_from_text,
           aiParteExtract,
+          documentId: extractedDocumentId ?? null,
           analysis,
         });
+        if (extractedDocumentId) {
+          try {
+            const r = await fetch(`/api/liquidaciones?document_id=${extractedDocumentId}`);
+            const j = await r.json();
+            const liqId = j.liquidaciones?.[0]?.id;
+            if (liqId) setReviewingLiqId(liqId);
+          } catch {}
+        }
         console.log(`${PIPE} ui:upload:done total_ms=${Date.now() - tAll0}`);
       } catch (err: unknown) {
         console.error(err);
@@ -600,6 +620,13 @@ export function UploadView({
             </div>
           </div>
         </div>
+      )}
+      {reviewingLiqId && (
+        <ReviewModal
+          liquidacionId={reviewingLiqId}
+          onClose={() => setReviewingLiqId(null)}
+          onSaved={() => setReviewingLiqId(null)}
+        />
       )}
     </div>
   );

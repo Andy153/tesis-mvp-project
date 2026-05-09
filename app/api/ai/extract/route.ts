@@ -10,10 +10,18 @@ const BodySchema = z
     // Backwards compatible: accept either a single image or multiple.
     imageBase64: z.string().min(1).optional(),
     imagesBase64: z.array(z.string().min(1)).min(1).max(3).optional(),
+    /** Si false, solo OpenAI: no crea filas en DB (evita duplicados en pipeline PDF de dos pasadas). */
+    persistToDb: z.boolean().optional(),
   })
   .refine((v) => Boolean(v.imageBase64 || (v.imagesBase64 && v.imagesBase64.length > 0)), {
     message: 'Missing imageBase64/imagesBase64',
   });
+
+const PersistOnlySchema = z.object({
+  persistOnly: z.literal(true),
+  documentType: z.enum(['parte_quirurgico', 'bono_autorizacion']),
+  data: z.any(),
+});
 
 function dataUrlApproxBytes(dataUrl: string) {
   // Expected: data:<mime>;base64,<payload>
@@ -42,6 +50,45 @@ export async function POST(req: Request) {
   const tAll0 = Date.now();
   try {
     const body = (await req.json()) as unknown;
+
+    const parsedPersist = PersistOnlySchema.safeParse(body);
+    if (parsedPersist.success) {
+      const { documentType, data } = parsedPersist.data;
+      const { auth } = await import('@clerk/nextjs/server');
+      const { saveDocumentAndExtraction } = await import('@/lib/history-db');
+      const { userId } = await auth();
+      if (!userId) {
+        return NextResponse.json({ ok: false, error: 'Unauthorized', errorCode: 'API_ERROR' }, { status: 401 });
+      }
+      const extraction = data;
+      const prepaga = extraction?.cobertura?.prepaga ?? 'desconocida';
+      const storagePath = `${userId}/${Date.now()}_${documentType}`;
+      let saved: { documentId: string; extractionId: string; storagePath: string } | null = null;
+      try {
+        saved = await saveDocumentAndExtraction(userId, {
+          storagePath,
+          nombreArchivo: `${documentType}_${Date.now()}`,
+          tipo: documentType,
+          prepaga,
+          aiExtraction: extraction,
+        });
+      } catch (persistErr) {
+        console.log(`${PIPE} api_extract:persist_only_warn`, persistErr);
+      }
+      if (!saved) {
+        return NextResponse.json(
+          { ok: false, error: 'No se pudo guardar la extracción', errorCode: 'API_ERROR' },
+          { status: 500 },
+        );
+      }
+      return NextResponse.json({
+        ok: true,
+        data: extraction,
+        documentId: saved.documentId,
+        extractionId: saved.extractionId,
+      });
+    }
+
     const parsed = BodySchema.safeParse(body);
     if (!parsed.success) {
       console.log(
@@ -53,10 +100,11 @@ export async function POST(req: Request) {
       );
     }
 
-    const { documentType, imageBase64, imagesBase64 } = parsed.data as {
+    const { documentType, imageBase64, imagesBase64, persistToDb = true } = parsed.data as {
       documentType: DocumentType;
       imageBase64?: string;
       imagesBase64?: string[];
+      persistToDb?: boolean;
     };
 
     const images = (imagesBase64 && imagesBase64.length ? imagesBase64 : imageBase64 ? [imageBase64] : []).slice(0, 3);
@@ -80,7 +128,7 @@ export async function POST(req: Request) {
       extractionId: string
       storagePath: string
     } | null = null
-    if ((result as any)?.ok === true && (result as any)?.data) {
+    if (persistToDb && (result as any)?.ok === true && (result as any)?.data) {
       try {
         const { auth } = await import('@clerk/nextjs/server')
         const { saveDocumentAndExtraction } = await import('@/lib/history-db')

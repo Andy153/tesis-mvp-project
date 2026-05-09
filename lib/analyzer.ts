@@ -579,7 +579,10 @@ const PROC_KEYWORDS = TRAZA_PROC_KEYWORDS as ProcKw[];
 
 type ProgressFn = (p: { progress: number; message: string }) => void;
 
-async function fetchParteExtractionFromOpenAI(imagesDataUrl: string | string[]): Promise<ParteQuirurgicoExtract | null> {
+async function fetchParteExtractionFromOpenAI(
+  imagesDataUrl: string | string[],
+  persistToDb = true,
+): Promise<ParteQuirurgicoExtract | null> {
   try {
     const t0 = Date.now();
     const images = Array.isArray(imagesDataUrl) ? imagesDataUrl : [imagesDataUrl];
@@ -590,10 +593,11 @@ async function fetchParteExtractionFromOpenAI(imagesDataUrl: string | string[]):
         imagesBase64: images.slice(0, 3),
         imageBase64: images[0],
         documentType: 'parte_quirurgico',
+        persistToDb,
       }),
     });
     const json = (await res.json()) as { ok?: boolean; data?: ParteQuirurgicoExtract; documentId?: string };
-    if (json?.documentId) _pendingDocumentId = json.documentId
+    if (persistToDb && json?.documentId) _pendingDocumentId = json.documentId
     const dt = Date.now() - t0;
     console.log(`${PIPE} openai:client_fetch_ms=${dt} status=${res.status} ok=${json?.ok === true}`);
     if (!json || json.ok !== true || !json.data) return null;
@@ -601,6 +605,29 @@ async function fetchParteExtractionFromOpenAI(imagesDataUrl: string | string[]):
   } catch {
     return null;
   }
+}
+
+/** Una sola fila en DB con el JSON ya obtenido (pipeline PDF: 1ª pasada OpenAI sin persist, luego esto). */
+async function persistParteQuirurgicoExtraction(data: ParteQuirurgicoExtract): Promise<string | null> {
+  try {
+    const res = await fetch('/api/ai/extract', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        persistOnly: true,
+        documentType: 'parte_quirurgico',
+        data,
+      }),
+    });
+    const json = (await res.json()) as { ok?: boolean; documentId?: string };
+    if (json?.ok === true && json.documentId) {
+      _pendingDocumentId = json.documentId;
+      return json.documentId;
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
 }
 
 /**
@@ -611,6 +638,7 @@ async function tryOverlayOpenAiParteText(
   result: ExtractionResult,
   onProgress?: ProgressFn,
   preferredPages?: number[],
+  persistToDb = true,
 ): Promise<ExtractionResult> {
   const first = result.thumbnails[0]?.dataUrl;
   const n = result.pageTexts.length;
@@ -668,7 +696,7 @@ async function tryOverlayOpenAiParteText(
     `${PIPE} overlay_openai:sending images=${imagesToSend.length} pages=${JSON.stringify(pagesToSend)} dataUrl_lens=${imagesToSend.map((s) => s.length).join(',')}`,
   );
   const t0 = Date.now();
-  const data = await fetchParteExtractionFromOpenAI(imagesToSend.length ? imagesToSend : first);
+  const data = await fetchParteExtractionFromOpenAI(imagesToSend.length ? imagesToSend : first, persistToDb);
   console.log(`${PIPE} overlay_openai:done ms=${Date.now() - t0} success=${Boolean(data)}`);
   if (!data) {
     onProgress?.({ progress: 1, message: 'Listo' });
@@ -932,7 +960,8 @@ async function extractFromPdf(file: File, onProgress?: ProgressFn): Promise<Extr
   };
 
   const tOpenAi0 = Date.now();
-  const overlaid = await tryOverlayOpenAiParteText(baseFast, onProgress, fastSelectedPages);
+  // persistToDb=false: si hay fallback OCR se vuelve a llamar OpenAI; solo la pasada final debe persistir.
+  const overlaid = await tryOverlayOpenAiParteText(baseFast, onProgress, fastSelectedPages, false);
   const openai_ms = Date.now() - tOpenAi0;
 
   const ai = overlaid.aiParteExtract as any;
@@ -943,6 +972,9 @@ async function extractFromPdf(file: File, onProgress?: ProgressFn): Promise<Extr
   const lowQuality = !aiOk || (!keyPaciente && !keyProc) || (!keyPaciente && !keyFecha);
 
   if (!lowQuality) {
+    if (overlaid.aiParteExtract) {
+      await persistParteQuirurgicoExtraction(overlaid.aiParteExtract as ParteQuirurgicoExtract);
+    }
     console.log(`${PIPE} pipeline_mode=fast_default ocr_skipped=true openai_ms=${openai_ms} total_ms=${Date.now() - pipelineStartedAt}`);
     console.log(
       `${PIPE} pdf:done method=pdf-text thumbs=${thumbnails.length} pages=${pdf.numPages} ocrPages=${ocrWords.length} total_ms=${Date.now() - tAll0}`,
@@ -1032,7 +1064,7 @@ async function extractFromPdf(file: File, onProgress?: ProgressFn): Promise<Extr
     raw_pageTexts: [...pageTexts],
   };
   const tOpenAi1 = Date.now();
-  const overlaid2 = await tryOverlayOpenAiParteText(baseOcr, onProgress);
+  const overlaid2 = await tryOverlayOpenAiParteText(baseOcr, onProgress, undefined, true);
   const openai_ms2 = Date.now() - tOpenAi1;
   console.log(
     `${PIPE} pipeline_mode=ocr_fallback ocr_skipped=false fallback_reason=${fallback_reason} ocr_ms=${ocrMs} openai_ms=${openai_ms2} total_ms=${Date.now() - pipelineStartedAt}`,

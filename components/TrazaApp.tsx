@@ -119,6 +119,21 @@ export default function TrazaApp() {
   }
 
   function removeFile(id: string) {
+    const victim = files.find((f) => f.id === id);
+    const docId = victim?.documentId;
+    if (docId) {
+      void (async () => {
+        try {
+          const r = await fetch(`/api/liquidaciones?document_id=${encodeURIComponent(docId)}`);
+          const j = await r.json();
+          for (const liq of j.liquidaciones ?? []) {
+            await fetch(`/api/liquidaciones/${liq.id}`, { method: 'DELETE' });
+          }
+        } catch {
+          /* ignore */
+        }
+      })();
+    }
     setFiles((prev) => prev.filter((f) => f.id !== id));
     if (selectedFileId === id) setSelectedFileId(null);
     setAuthStates((prev) => {
@@ -317,7 +332,9 @@ export default function TrazaApp() {
             }}
           />
         )}
-        {active === 'documents' && <DocumentsView files={files} onOpenFile={openFile} onUpdateTracking={updateFileTracking} />}
+        {active === 'documents' && (
+          <DocumentsView files={files} onOpenFile={openFile} onUpdateTracking={updateFileTracking} onRemoveFile={removeFile} />
+        )}
         {active === 'errors' && <ErrorsView files={files} authStates={authStates} onOpenFile={openFile} />}
         {active === 'settings' && <ProfileView />}
       </main>

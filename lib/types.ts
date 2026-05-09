@@ -166,6 +166,8 @@ export interface FileEntry {
   institution_from_text?: string;
   /** JSON GPT página 1; respaldo planilla si `text` serializado no trae nombre (regex). */
   aiParteExtract?: ParteQuirurgicoExtract;
+  /** Id del registro `documents` en Supabase tras /api/ai/extract (para borrar al sacar el archivo). */
+  documentId?: string | null;
   analysis?: Analysis;
   errorMessage?: string;
   exports?: {

@@ -56,6 +56,7 @@ export function SwissMedicalCloseButton({ onSent }: { onSent?: () => void }) {
   }, [])
 
   const selectedInfo = periods.find((p) => p.periodo === selected)
+  const hasAnySendable = periods.some((p) => !p.ya_enviado && p.cantidad_pendientes > 0)
   const canSend =
     !!selectedInfo &&
     !selectedInfo.ya_enviado &&
@@ -164,15 +165,38 @@ export function SwissMedicalCloseButton({ onSent }: { onSent?: () => void }) {
 
         <button
           type="button"
-          className="btn btn-primary"
+          className={canSend ? 'btn btn-primary' : 'btn'}
           onClick={() => {
             console.log('[Trazá UI] click en Cerrar y enviar', { selected, canSend })
             handleSend()
           }}
           disabled={!canSend}
+          style={
+            !canSend
+              ? {
+                  background: '#b8c4bc',
+                  borderColor: '#a8b4ac',
+                  color: '#f4f8f5',
+                  cursor: 'not-allowed',
+                  opacity: 0.95,
+                }
+              : undefined
+          }
         >
           {sending ? 'Enviando...' : 'Cerrar y enviar mes a Swiss Medical'}
         </button>
+
+        {!loadingPeriods && periods.length > 0 && !hasAnySendable && (
+          <span style={{ fontSize: 12, color: 'var(--text-soft, #6b7280)', maxWidth: 320, lineHeight: 1.35 }}>
+            No hay partes Swiss Medical válidos para enviar en los períodos mostrados (falta documento vinculado o ya fueron
+            enviados).
+          </span>
+        )}
+        {selectedInfo && !selectedInfo.ya_enviado && selectedInfo.cantidad_pendientes === 0 && hasAnySendable && (
+          <span style={{ fontSize: 12, color: 'var(--text-soft, #6b7280)', maxWidth: 280, lineHeight: 1.35 }}>
+            Este mes no tiene partes listos para adjuntar. Elegí otro período o completá las liquidaciones pendientes.
+          </span>
+        )}
 
         {selectedInfo?.ya_enviado && selectedInfo.enviado_en && (
           <span style={{ fontSize: 12, color: 'var(--text-soft, #6b7280)' }}>

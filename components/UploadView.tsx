@@ -301,7 +301,10 @@ export function UploadView({
     setManualOpen(true);
   }, [files, selectedFileId, showVirgin, isFinalized]);
 
+  const swissPlanillaRowReady = Boolean(selected?.exports?.swissCx?.row);
+
   const needsManualReview = useMemo(() => {
+    if (swissPlanillaRowReady) return false;
     if (!selected?.analysis) return false;
     if (!selected?.text) return false;
     const analysis = selected.analysis;
@@ -316,7 +319,7 @@ export function UploadView({
     if (required.length === 0) return false;
     const checks = selected.manualChecks || {};
     return required.some((id) => checks[id] === undefined);
-  }, [selected?.analysis, selected?.text, selected?.manualChecks]);
+  }, [selected?.analysis, selected?.text, selected?.manualChecks, swissPlanillaRowReady]);
 
   const finalizeBlockReason = useMemo(() => {
     if (!selected?.analysis || !selected?.text) return null;
@@ -347,7 +350,7 @@ export function UploadView({
     if (!row.codigo?.trim()) miss.push('código');
     if (miss.length) return `No se pudo generar la planilla porque falta: ${miss.join(', ')}.`;
     return null;
-  }, [selected?.analysis, selected?.text, selected?.manualChecks]);
+  }, [selected?.analysis, selected?.text, selected?.manualChecks, selected?.exports?.swissCx?.row]);
 
   return (
     <div>
@@ -497,10 +500,15 @@ export function UploadView({
             onUpsert={onAddFile}
             onReanalyze={selected.file ? () => handleReanalyze(selected) : undefined}
             reanalyzeBusy={reanalyzeBusy}
+            swissPlanillaActive={swissPlanillaRowReady}
             manualOpenExternal={manualOpen}
             onManualOpenChange={(v) => {
               setManualOpen(v);
               if (!v && pendingFinalize) {
+                if (swissPlanillaRowReady) {
+                  setFinalizeStep('needsConfirm');
+                  return;
+                }
                 // Continue finalize flow only if required checks were answered.
                 if (!selected.text || !selected.analysis) return;
                 const structured = extractStructured(selected.text, NOMEN_FOR_EXTRACT);
@@ -531,7 +539,7 @@ export function UploadView({
               }
             }}
             pendingFinalize={Boolean(pendingFinalize)}
-            allowManualReview={!isFinalized}
+            allowManualReview={!isFinalized && !swissPlanillaRowReady}
           />
         </>
       )}
@@ -1346,6 +1354,7 @@ function AnalysisDetail({
   onUpsert,
   onReanalyze,
   reanalyzeBusy,
+  swissPlanillaActive,
   manualOpenExternal,
   onManualOpenChange,
   pendingFinalize,
@@ -1355,6 +1364,8 @@ function AnalysisDetail({
   onUpsert: (entry: FileEntry) => void;
   onReanalyze?: () => void;
   reanalyzeBusy?: boolean;
+  /** Parte Swiss Medical / SMG con planilla: la revisión campo a campo reemplaza «datos incontrastables». */
+  swissPlanillaActive?: boolean;
   manualOpenExternal?: boolean;
   onManualOpenChange?: (v: boolean) => void;
   pendingFinalize?: boolean;
@@ -1369,6 +1380,13 @@ function AnalysisDetail({
     if (manualOpenExternal !== undefined) onManualOpenChange?.(v);
     else setManualOpenInternal(v);
   };
+
+  useEffect(() => {
+    if (!swissPlanillaActive) return;
+    setManualOpen(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo reacciona al activarse la planilla Swiss
+  }, [swissPlanillaActive]);
+
   const analysis = file.analysis!;
   const thumbnails = file.thumbnails || [];
 
@@ -1410,6 +1428,7 @@ function AnalysisDetail({
   }, [file.text]);
 
   const questions = useMemo(() => {
+    if (swissPlanillaActive) return [];
     const qs: Array<{ id: 'patient' | 'procedure'; title: string; detail: string; errorTitle: string; errorBody: string }> =
       [];
     if (structured?.paciente) {
@@ -1437,7 +1456,33 @@ function AnalysisDetail({
       });
     }
     return qs;
-  }, [structured?.paciente, analysis.detected.procedureGuess, analysis.detected.codes]);
+  }, [swissPlanillaActive, structured?.paciente, analysis.detected.procedureGuess, analysis.detected.codes]);
+
+  useEffect(() => {
+    if (!swissPlanillaActive || !file.analysis) return;
+    const findings = file.analysis.findings;
+    const manualCodes = new Set([
+      'MANUAL_CHECKS_PENDING',
+      'MANUAL_PATIENT_MISMATCH',
+      'MANUAL_PROCEDURE_MISMATCH',
+    ]);
+    const hadManual = findings.some((f) => manualCodes.has(f.code));
+    const hasManualAnswers = file.manualChecks && Object.keys(file.manualChecks).length > 0;
+    if (!hadManual && !hasManualAnswers) return;
+    const withoutManual = findings.filter((f) => !manualCodes.has(f.code));
+    const summary = {
+      ok: withoutManual.filter((f) => f.severity === 'ok').length,
+      warn: withoutManual.filter((f) => f.severity === 'warn').length,
+      error: withoutManual.filter((f) => f.severity === 'error').length,
+    };
+    const overall: 'error' | 'warn' | 'ok' = summary.error > 0 ? 'error' : summary.warn > 0 ? 'warn' : 'ok';
+    onUpsert({
+      ...file,
+      manualChecks: undefined,
+      analysis: { ...file.analysis, findings: withoutManual, summary, overall },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- incluir `file` completo re-dispara al pedo
+  }, [swissPlanillaActive, file.id, file.analysis, file.manualChecks, onUpsert]);
 
   function recomputeWithManual(nextChecks: FileEntry['manualChecks'], opts?: { warnIncomplete?: boolean }) {
     const baseFindings =
@@ -1583,17 +1628,19 @@ function AnalysisDetail({
         <div className="analysis-head">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
             <h3 style={{ margin: 0 }}>Resultado del análisis</h3>
-            <button
-              type="button"
-              className="btn btn-sm btn-ghost"
-              onClick={() => {
-                setManualOpen(true);
-              }}
-              disabled={questions.length === 0 || allowManualReview === false}
-              title={questions.length === 0 ? 'No se detectaron datos para revisar' : 'Revisar datos personales'}
-            >
-              <Icon name="info" size={12} /> Revisar datos incontrastables
-            </button>
+            {!swissPlanillaActive && (
+              <button
+                type="button"
+                className="btn btn-sm btn-ghost"
+                onClick={() => {
+                  setManualOpen(true);
+                }}
+                disabled={questions.length === 0 || allowManualReview === false}
+                title={questions.length === 0 ? 'No se detectaron datos para revisar' : 'Revisar datos personales'}
+              >
+                <Icon name="info" size={12} /> Revisar datos incontrastables
+              </button>
+            )}
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
             {analysis.detected.prepagas.length > 0 && (

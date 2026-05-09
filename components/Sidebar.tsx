@@ -46,6 +46,16 @@ export function Sidebar({ active, setActive, errorCount, mobileOpen, onCloseMobi
 
   const clerkAvatarUrl = mounted && clerkLoaded ? clerkUser?.imageUrl : undefined;
 
+  const clerkNombre =
+    [clerkUser?.firstName, clerkUser?.lastName].filter(Boolean).join(' ').trim() ||
+    clerkUser?.fullName?.trim() ||
+    '';
+  const nombreSidebar = (user?.displayName || '').trim() || clerkNombre || 'Tu cuenta';
+  const rolProfesionSidebar =
+    rol === 'secretaria'
+      ? LABELS_ROL.secretaria
+      : (user?.profesion || '').trim() || (rol === 'medico' ? 'Especialidad pendiente' : '—');
+
   const items: Item[] = [
     { id: 'dashboard', label: 'Resumen general', icon: 'dashboard', section: 'work' },
     { id: 'upload', label: 'Agregar documentos', icon: 'upload', section: 'work' },
@@ -132,12 +142,12 @@ export function Sidebar({ active, setActive, errorCount, mobileOpen, onCloseMobi
             // eslint-disable-next-line @next/next/no-img-element
             <img src={user.avatarDataUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           ) : (
-            getInitials(user?.displayName || 'Dra. M. Ferreira')
+            getInitials(nombreSidebar)
           )}
         </div>
         <div>
           <div style={{ marginBottom: 8, minHeight: 32 }} />
-          <div className="user-name">{user?.displayName || 'Dra. M. Ferreira'}</div>
+          <div className="user-name">{nombreSidebar}</div>
           <div style={{ minHeight: 22, marginTop: 4 }}>
             {mounted && isLoaded && (
               <div
@@ -156,7 +166,7 @@ export function Sidebar({ active, setActive, errorCount, mobileOpen, onCloseMobi
               </div>
             )}
           </div>
-          <div className="user-role">{user?.profesion || 'Tocoginecología'}</div>
+          <div className="user-role">{rolProfesionSidebar}</div>
         </div>
       </div>
     </aside>

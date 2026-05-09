@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useClerk } from '@clerk/nextjs';
+import { useClerk, useUser } from '@clerk/nextjs';
 import { Icon } from './Icon';
 import { PinManagementCard } from './profile/PinManagementCard';
 import { InvitacionSecretariaCard } from './profile/InvitacionSecretariaCard';
@@ -14,6 +14,25 @@ import {
   loadProfile,
   saveProfile,
 } from '@/lib/profile';
+import { useUserRole } from '@/lib/use-user-role';
+import { LABELS_ROL } from '@/lib/roles';
+import { ESPECIALIDADES_MEDICO, especialidadEnLista } from '@/lib/especialidades';
+
+function clerkPreferredDisplayName(user: ReturnType<typeof useUser>['user']): string {
+  if (!user) return '';
+  const fn = user.firstName?.trim() ?? '';
+  const ln = user.lastName?.trim() ?? '';
+  const combined = `${fn} ${ln}`.trim();
+  if (combined) return combined;
+  const full = user.fullName?.trim();
+  if (full) return full;
+  const email = user.primaryEmailAddress?.emailAddress;
+  if (email) {
+    const local = email.split('@')[0];
+    return local ? local.replace(/[._]/g, ' ').trim() : '';
+  }
+  return '';
+}
 
 function sanitizeObra(v: string) {
   return (v || '').trim().replace(/\s+/g, ' ');
@@ -21,13 +40,17 @@ function sanitizeObra(v: string) {
 
 export function ProfileView() {
   const { signOut } = useClerk();
+  const { user: clerkUser, isLoaded: clerkLoaded } = useUser();
+  const { rol } = useUserRole();
   const [profile, setProfile] = useState<UserProfile>(DEFAULT_PROFILE);
   const [hydrated, setHydrated] = useState(false);
+  const [hasDbProfile, setHasDbProfile] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveOk, setSaveOk] = useState(false);
   const [avatarBusy, setAvatarBusy] = useState(false);
+  const [medicoOtrosAbierto, setMedicoOtrosAbierto] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -39,6 +62,7 @@ export function ProfileView() {
     fetch('/api/profile')
       .then((r) => r.json())
       .then(({ profile: dbProfile }) => {
+        setHasDbProfile(Boolean(dbProfile));
         if (dbProfile) {
           setProfile((p) => ({
             ...p,
@@ -51,33 +75,85 @@ export function ProfileView() {
           }));
         }
       })
-      .catch(() => {})
+      .catch(() => {
+        setHasDbProfile(false);
+      })
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (hasDbProfile !== false || !clerkLoaded || !clerkUser) return;
+    setProfile((p) => {
+      const name = clerkPreferredDisplayName(clerkUser);
+      const nextName = p.displayName.trim() ? p.displayName : name;
+      const prof = rol === 'secretaria' ? LABELS_ROL.secretaria : p.profesion;
+      return { ...p, displayName: nextName, profesion: prof, updatedAt: new Date().toISOString() };
+    });
+  }, [hasDbProfile, clerkLoaded, clerkUser, rol]);
+
+  useEffect(() => {
+    if (rol !== 'secretaria') return;
+    setProfile((p) =>
+      p.profesion === LABELS_ROL.secretaria
+        ? p
+        : { ...p, profesion: LABELS_ROL.secretaria, updatedAt: new Date().toISOString() },
+    );
+  }, [rol]);
+
+  useEffect(() => {
+    if (rol !== 'medico') {
+      setMedicoOtrosAbierto(false);
+      return;
+    }
+    const p = profile.profesion.trim();
+    if (!p) return;
+    setMedicoOtrosAbierto(!especialidadEnLista(p));
+  }, [rol, profile.profesion]);
 
   useEffect(() => {
     if (!hydrated) return;
     applyThemeMode(profile.theme);
     saveProfile(profile);
+    // Solo reaccionar a tema y avatar; el resto del perfil no debe disparar persistencia local en cada tecla.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional narrow deps
   }, [profile.theme, profile.avatarDataUrl, hydrated]);
 
   async function handleSave() {
     setSaving(true);
     setSaveError(null);
     setSaveOk(false);
+    const especialidadFinal =
+      rol === 'secretaria' ? LABELS_ROL.secretaria : profile.profesion.trim();
+    if (rol === 'medico' && !especialidadFinal) {
+      setSaveError('Elegí o escribí tu especialidad.');
+      setSaving(false);
+      return;
+    }
+    if (!profile.displayName.trim()) {
+      setSaveError('Completá el nombre que querés mostrar.');
+      setSaving(false);
+      return;
+    }
     try {
       const res = await fetch('/api/profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          nombre: profile.displayName,
-          especialidad: profile.profesion,
+          nombre: profile.displayName.trim(),
+          especialidad: especialidadFinal,
           prepagas: profile.obras.map((o) => o.obraSocial).filter(Boolean),
         }),
       });
       if (!res.ok) throw new Error('Error al guardar');
+      setHasDbProfile(true);
       setSaveOk(true);
       setTimeout(() => setSaveOk(false), 3000);
+      saveProfile({
+        ...profile,
+        displayName: profile.displayName.trim(),
+        profesion: especialidadFinal,
+        updatedAt: new Date().toISOString(),
+      });
     } catch (e) {
       setSaveError('No se pudo guardar. Intentá de nuevo.');
     } finally {
@@ -93,6 +169,14 @@ export function ProfileView() {
     });
     return errs;
   }, [profile.obras]);
+
+  const especialidadSelectValue = useMemo(() => {
+    if (medicoOtrosAbierto) return 'Otros';
+    const p = profile.profesion.trim();
+    if (!p) return '';
+    if (especialidadEnLista(p)) return p;
+    return 'Otros';
+  }, [profile.profesion, medicoOtrosAbierto]);
 
   return (
     <div className="page">
@@ -135,11 +219,18 @@ export function ProfileView() {
             <button
               type="button"
               className="btn btn-ghost"
+              disabled={!clerkUser}
               onClick={() => {
-                setProfile({ ...DEFAULT_PROFILE, updatedAt: new Date().toISOString() });
+                const name = clerkPreferredDisplayName(clerkUser);
+                setProfile((p) => ({
+                  ...p,
+                  displayName: name || p.displayName,
+                  profesion: rol === 'secretaria' ? LABELS_ROL.secretaria : p.profesion,
+                  updatedAt: new Date().toISOString(),
+                }));
               }}
             >
-              Volver a los datos sugeridos
+              Usar nombre de mi cuenta
             </button>
             <button
               type="button"
@@ -187,12 +278,77 @@ export function ProfileView() {
             </label>
             <label className="field">
               <div className="field-label">Profesión / especialidad</div>
-              <input
-                className="docs-search"
-                value={profile.profesion}
-                onChange={(e) => setProfile((p) => ({ ...p, profesion: e.target.value, updatedAt: new Date().toISOString() }))}
-                placeholder="Ej: Tocoginecología"
-              />
+              {rol === 'secretaria' ? (
+                <>
+                  <input
+                    className="docs-search"
+                    value={LABELS_ROL.secretaria}
+                    readOnly
+                    disabled
+                    style={{ opacity: 0.85, cursor: 'not-allowed' }}
+                  />
+                  <div className="field-hint">Tu cuenta está registrada como secretaría; este dato no se puede cambiar acá.</div>
+                </>
+              ) : rol === 'medico' ? (
+                <>
+                  <select
+                    className="docs-search select-theme"
+                    value={especialidadSelectValue}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === 'Otros') {
+                        setMedicoOtrosAbierto(true);
+                        setProfile((p) => ({
+                          ...p,
+                          profesion: '',
+                          updatedAt: new Date().toISOString(),
+                        }));
+                        return;
+                      }
+                      setMedicoOtrosAbierto(false);
+                      setProfile((p) => ({
+                        ...p,
+                        profesion: v,
+                        updatedAt: new Date().toISOString(),
+                      }));
+                    }}
+                  >
+                    <option value="">Elegí una especialidad…</option>
+                    {ESPECIALIDADES_MEDICO.map((e) => (
+                      <option key={e} value={e}>
+                        {e}
+                      </option>
+                    ))}
+                  </select>
+                  {especialidadSelectValue === 'Otros' && (
+                    <input
+                      className="docs-search"
+                      style={{ marginTop: 8 }}
+                      value={profile.profesion}
+                      onChange={(e) =>
+                        setProfile((p) => ({
+                          ...p,
+                          profesion: e.target.value,
+                          updatedAt: new Date().toISOString(),
+                        }))
+                      }
+                      placeholder="Escribí tu especialidad"
+                    />
+                  )}
+                </>
+              ) : (
+                <>
+                  <input
+                    className="docs-search"
+                    value={profile.profesion}
+                    onChange={(e) =>
+                      setProfile((p) => ({ ...p, profesion: e.target.value, updatedAt: new Date().toISOString() }))
+                    }
+                    placeholder="Ej: Tocoginecología"
+                  />
+                  <div className="field-hint">Cuando se asigne tu rol en la cuenta, vas a ver opciones acordes.</div>
+                </>
+              )}
             </label>
           </div>
           {saveError && (

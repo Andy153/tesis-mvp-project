@@ -30,7 +30,8 @@ function toDDMMYYYY(dateStr: string | null | undefined): string {
   return `${dd}/${mm}/${yyyy}`
 }
 
-function isSwissMedical(prepaga: string | null | undefined): boolean {
+/** Swiss Medical / SMG — mismo criterio que en períodos y filtros de liquidación. */
+export function isSwissMedicalPrepaga(prepaga: string | null | undefined): boolean {
   if (!prepaga) return false
   const p = prepaga.toLowerCase().trim()
   return p.includes('swiss') || p.includes('smg') || p === 'sm'
@@ -95,7 +96,7 @@ export async function buildSwissRowsForPeriod(
     })
     .filter((e): e is NonNullable<typeof e> => e !== null)
 
-  const swissOnly = flattened.filter((e) => isSwissMedical(e.prepaga))
+  const swissOnly = flattened.filter((e) => isSwissMedicalPrepaga(e.prepaga))
 
   if (swissOnly.length === 0) {
     return {

@@ -107,7 +107,7 @@ export function ReviewModal({ liquidacionId, onClose, onSaved }: Props) {
       descripcionPractica: descripcion || null,
       fechaPracticaISO: fecha || null,
     })
-  }, [liq, paciente, numeroAfiliado, sanatorio, codigo, descripcion, fecha])
+  }, [liq, numeroAfiliado, sanatorio, codigo, descripcion, fecha])
 
   const canConfirm = !saving && !loading && checks.blockers.length === 0 && !checks.isOutOfScope
 

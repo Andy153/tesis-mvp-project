@@ -1,8 +1,11 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+import { useUser } from '@clerk/nextjs';
 import { formatDateLong, getSaludo } from '@/lib/utils';
 import { Indicadores } from '@/components/dashboard/Indicadores';
 import { CalendarView } from '@/components/CalendarView';
+import { loadProfile } from '@/lib/profile';
 
 type DashboardViewProps = {
   onNavigate?: (view: string) => void;
@@ -10,7 +13,17 @@ type DashboardViewProps = {
 };
 
 export function DashboardView({ onNavigate, onOpenFile }: DashboardViewProps) {
-  const saludo = getSaludo('Dra. Ferreira');
+  const { user, isLoaded } = useUser();
+  const [profileName, setProfileName] = useState('');
+  useEffect(() => {
+    setProfileName(loadProfile().displayName);
+  }, []);
+
+  const clerkNombre =
+    isLoaded && user
+      ? [user.firstName, user.lastName].filter(Boolean).join(' ').trim() || user.fullName?.trim() || ''
+      : '';
+  const saludo = getSaludo((profileName || '').trim() || clerkNombre);
   const fechaHoy = formatDateLong(new Date());
 
   return (

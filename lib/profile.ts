@@ -27,8 +27,8 @@ export function applyThemeMode(mode: ThemeMode) {
 }
 
 export const DEFAULT_PROFILE: UserProfile = {
-  displayName: 'Dra. M. Ferreira',
-  profesion: 'Tocoginecología',
+  displayName: '',
+  profesion: '',
   obras: [],
   theme: 'system',
   updatedAt: new Date().toISOString(),

@@ -56,17 +56,41 @@ export async function verificarPinDelMedico(pinIngresado: string): Promise<{ ok:
 
   const client = await clerkClient();
   const user = await client.users.getUser(userId);
-  const metadata = (user.publicMetadata ?? {}) as UserMetadata;
+  // medicoClerkId aún no está declarado en UserMetadata; se escribe desde
+  // assign-secretaria-role.ts. Lo leemos vía intersección local.
+  const metadata = (user.publicMetadata ?? {}) as UserMetadata & {
+    medicoClerkId?: string;
+  };
 
-  // Nota (fase 4.1): el PIN está guardado en la cuenta del médico.
-  // Para pruebas iniciales (1 cuenta), verificamos contra el usuario actual.
-  // En el futuro esto se moverá a un contexto "consultorio/organización".
+  let pinHash: string | undefined;
+  let pinSalt: string | undefined;
 
-  if (!metadata.pinHash || !metadata.pinSalt) {
+  if (metadata.rol === 'medico') {
+    pinHash = metadata.pinHash;
+    pinSalt = metadata.pinSalt;
+  } else if (metadata.rol === 'secretaria') {
+    const medicoClerkId = metadata.medicoClerkId;
+    if (!medicoClerkId) {
+      return { ok: false, error: 'Tu cuenta no está vinculada a ningún médico' };
+    }
+    try {
+      const medicoUser = await client.users.getUser(medicoClerkId);
+      const medicoMetadata = (medicoUser.publicMetadata ?? {}) as UserMetadata;
+      pinHash = medicoMetadata.pinHash;
+      pinSalt = medicoMetadata.pinSalt;
+    } catch (e) {
+      console.error('[verificarPinDelMedico] error fetching medico:', e);
+      return { ok: false, error: 'No se pudo encontrar al médico vinculado' };
+    }
+  } else {
+    return { ok: false, error: 'Tu cuenta no tiene un rol válido' };
+  }
+
+  if (!pinHash || !pinSalt) {
     return { ok: false, error: 'El médico aún no configuró un PIN' };
   }
 
-  const isValid = await verifyPin(pinIngresado, metadata.pinHash, metadata.pinSalt);
+  const isValid = await verifyPin(pinIngresado, pinHash, pinSalt);
 
   if (!isValid) {
     return { ok: false, error: 'PIN incorrecto' };

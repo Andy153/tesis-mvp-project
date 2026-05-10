@@ -969,7 +969,9 @@ async function extractFromPdf(file: File, onProgress?: ProgressFn): Promise<Extr
   const keyPaciente = String(ai?.paciente?.apellido_nombre || '').trim();
   const keyProc = String(ai?.procedimiento?.tipo_realizado || '').trim() || String(ai?.procedimiento?.descripcion_tecnica || '').trim();
   const keyFecha = String(ai?.cirugia?.fecha || '').trim();
-  const lowQuality = !aiOk || (!keyPaciente && !keyProc) || (!keyPaciente && !keyFecha);
+  // OpenAI es siempre preferido. Solo caemos al OCR si OpenAI falló completamente (error de red,
+  // timeout, o respuesta vacía). Si OpenAI devolvió algo — aunque sea parcial — lo usamos.
+  const lowQuality = !aiOk;
 
   if (!lowQuality) {
     if (overlaid.aiParteExtract) {

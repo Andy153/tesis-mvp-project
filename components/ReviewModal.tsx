@@ -229,7 +229,7 @@ export function ReviewModal({ liquidacionId, onClose, onSaved }: Props) {
                 <input style={inputStyle} value={paciente} onChange={(e) => setPaciente(e.target.value)} />
               </div>
               <div>
-                <label style={labelStyle}>Número de afiliado Swiss Medical</label>
+                <label style={labelStyle}>Número de afiliado</label>
                 <input style={inputStyle} value={numeroAfiliado} onChange={(e) => setNumeroAfiliado(e.target.value)} />
               </div>
               <div>

@@ -45,8 +45,8 @@ export const ParteQuirurgicoSchema = z.object({
   }),
   cobertura: z.object({
     prepaga: z.string().nullable(),
-    plan: z.string().nullable(),
-    numero_afiliado: z.string().nullable(),
+    plan: z.coerce.string().nullable(),
+    numero_afiliado: z.coerce.string().nullable(),
   }),
   sanatorio: z.string().nullable(),
   cirugia: z.object({
@@ -88,11 +88,11 @@ export type ParteQuirurgicoExtract = z.infer<typeof ParteQuirurgicoSchema>;
 export const BonoAutorizacionSchema = z.object({
   paciente: z.object({
     apellido_nombre: z.string().nullable(),
-    dni: z.string().nullable(),
+    dni: z.coerce.string().nullable(),
   }),
   cobertura: z.object({
     prepaga: z.string().nullable(),
-    numero_afiliado: z.string().nullable(),
+    numero_afiliado: z.coerce.string().nullable(),
   }),
   autorizacion: z.object({
     numero: z.string().nullable(),

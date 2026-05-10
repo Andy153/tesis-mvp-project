@@ -298,7 +298,8 @@ export function UploadView({
     if (!pending) return;
     if (autoManualPrompted.current.has(sel.id)) return;
     autoManualPrompted.current.add(sel.id);
-    setManualOpen(true);
+    // Modal de incontrastables desactivado: el ReviewModal de Trazá reemplaza este flujo.
+    // setManualOpen(true);
   }, [files, selectedFileId, showVirgin, isFinalized]);
 
   const swissPlanillaRowReady = Boolean(selected?.exports?.swissCx?.row);
@@ -312,22 +313,8 @@ export function UploadView({
   })();
 
   const needsManualReview = useMemo(() => {
-    if (swissPlanillaRowReady) return false;
-    if (!selected?.analysis) return false;
-    if (!selected?.text) return false;
-    const analysis = selected.analysis;
-    const structured = extractStructured(selected.text, NOMEN_FOR_EXTRACT);
-    const required: Array<'patient' | 'procedure'> = [];
-    if (structured?.paciente) required.push('patient');
-    const proc =
-      analysis.detected.procedureGuess?.desc ||
-      analysis.detected.procedureGuess?.keyword ||
-      (analysis.detected.codes[0] ? `Código ${analysis.detected.codes[0]}` : null);
-    if (proc) required.push('procedure');
-    if (required.length === 0) return false;
-    const checks = selected.manualChecks || {};
-    return required.some((id) => checks[id] === undefined);
-  }, [selected?.analysis, selected?.text, selected?.manualChecks, swissPlanillaRowReady]);
+    return false; // ReviewModal reemplaza el flujo de incontrastables para todas las prepagas.
+  }, []);
 
   const finalizeBlockReason = useMemo(() => {
     if (!selected?.analysis || !selected?.text) return null;
@@ -508,7 +495,7 @@ export function UploadView({
             onUpsert={onAddFile}
             onReanalyze={selected.file ? () => handleReanalyze(selected) : undefined}
             reanalyzeBusy={reanalyzeBusy}
-            swissPlanillaActive={swissPlanillaRowReady || selectedIsSwiss}
+            swissPlanillaActive={true}
             manualOpenExternal={manualOpen}
             onManualOpenChange={(v) => {
               setManualOpen(v);

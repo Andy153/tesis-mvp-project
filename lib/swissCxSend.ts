@@ -340,6 +340,8 @@ export async function sendSwissMonthlyForUser(
         resend_message_id: resendMessageId,
         partes_incluidos: partesIncluidos,
         error_message: null,
+        wizard_estado: 'esperando_comprobante',
+        wizard_paso: 1,
         updated_at: new Date().toISOString(),
       })
       .eq('id', submissionId)

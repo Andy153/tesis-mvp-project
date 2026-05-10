@@ -6,6 +6,7 @@ import type { FileEntry } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import { getEstadoEfectivo, type HistoryItem } from '@/lib/history';
 import { markAsPresented } from '@/lib/tracking';
+import { CobrosBanner } from './CobrosBadge';
 import { SwissMedicalCloseButton } from './SwissMedicalCloseButton';
 import { ReviewModal } from './ReviewModal';
 
@@ -207,6 +208,7 @@ export function DocumentsView({
         </div>
       )}
 
+      <CobrosBanner />
       <div style={{ marginBottom: 16 }}>
         <SwissMedicalCloseButton onSent={() => setRefreshKey((k) => k + 1)} />
       </div>

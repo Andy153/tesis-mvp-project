@@ -818,7 +818,7 @@ async function extractFromPdf(file: File, onProgress?: ProgressFn): Promise<Extr
     const tPage0 = Date.now();
     const page = await pdf.getPage(p);
     // Página 1 más nítida para OpenAI Vision y para OCR en esa hoja.
-    const SCALE = p === 1 ? 2.75 : 1.8;
+    const SCALE = 1.5;
     const viewport = page.getViewport({ scale: SCALE });
 
     const textContent = await page.getTextContent();
@@ -831,7 +831,7 @@ async function extractFromPdf(file: File, onProgress?: ProgressFn): Promise<Extr
     canvas.width = viewport.width;
     canvas.height = viewport.height;
     await page.render({ canvasContext: canvas.getContext('2d')!, viewport }).promise;
-    thumbnails.push({ dataUrl: canvas.toDataURL('image/png'), width: canvas.width, height: canvas.height });
+    thumbnails.push({ dataUrl: canvas.toDataURL('image/jpeg', 0.82), width: canvas.width, height: canvas.height });
 
     const pageWords: PageWords['words'] = [];
     for (const item of textContent.items as any[]) {
@@ -1192,7 +1192,7 @@ function cropTopDataUrl(dataUrl: string, ratio: number): Promise<string> {
       canvas.height = cropH;
       const ctx = canvas.getContext('2d')!;
       ctx.drawImage(img, 0, 0, w, cropH, 0, 0, w, cropH);
-      resolve(canvas.toDataURL('image/png'));
+      resolve(canvas.toDataURL('image/jpeg', 0.82));
     };
     img.onerror = () => resolve(dataUrl);
     img.src = dataUrl;

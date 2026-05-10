@@ -302,6 +302,14 @@ export function UploadView({
   }, [files, selectedFileId, showVirgin, isFinalized]);
 
   const swissPlanillaRowReady = Boolean(selected?.exports?.swissCx?.row);
+  const selectedIsSwiss = (() => {
+    const p = String(
+      selected?.aiParteExtract?.cobertura?.prepaga ||
+      selected?.analysis?.detected?.prepagas?.[0] ||
+      ''
+    ).toLowerCase().trim();
+    return p.includes('swiss') || p.includes('smg') || p === 'sm';
+  })();
 
   const needsManualReview = useMemo(() => {
     if (swissPlanillaRowReady) return false;
@@ -500,7 +508,7 @@ export function UploadView({
             onUpsert={onAddFile}
             onReanalyze={selected.file ? () => handleReanalyze(selected) : undefined}
             reanalyzeBusy={reanalyzeBusy}
-            swissPlanillaActive={swissPlanillaRowReady}
+            swissPlanillaActive={swissPlanillaRowReady || selectedIsSwiss}
             manualOpenExternal={manualOpen}
             onManualOpenChange={(v) => {
               setManualOpen(v);
@@ -1498,7 +1506,7 @@ function AnalysisDetail({
 
     const incomplete = questions.filter((q) => nextChecks?.[q.id] === undefined);
     const shouldWarnIncomplete = (opts?.warnIncomplete ?? manualIncompleteWarned) && incomplete.length > 0;
-    if (shouldWarnIncomplete) {
+    if (shouldWarnIncomplete && !swissPlanillaActive) {
       const missingLabel = incomplete.map((q) => (q.id === 'patient' ? 'paciente' : 'intervención')).join(', ');
       out.unshift({
         severity: 'warn',

@@ -49,6 +49,16 @@ function CompletarSecretariaInner() {
       return;
     }
 
+    const existingRol = (user.publicMetadata as { rol?: string } | undefined)?.rol;
+    if (existingRol) {
+      hasRun.current = true;
+      setErrorMessage(
+        'Esta cuenta ya tiene un rol asignado. El link de invitación solo puede usarse para crear una cuenta nueva.',
+      );
+      setPhase('error');
+      return;
+    }
+
     hasRun.current = true;
 
     let cancelled = false;

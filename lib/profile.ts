@@ -19,18 +19,35 @@ const STORAGE_KEY = 'traza.profile.v1';
 export function applyThemeMode(mode: ThemeMode) {
   if (typeof document === 'undefined') return;
   const root = document.documentElement;
-  if (mode === 'system') {
-    root.removeAttribute('data-theme');
+  const effective = mode === 'dark' ? 'dark' : 'light';
+
+  const prev = root.getAttribute('data-theme');
+  if (prev === effective || !prev) {
+    root.setAttribute('data-theme', effective);
     return;
   }
-  root.setAttribute('data-theme', mode);
+
+  if ('startViewTransition' in document && typeof (document as any).startViewTransition === 'function') {
+    (document as any).startViewTransition(() => {
+      root.setAttribute('data-theme', effective);
+    });
+    return;
+  }
+
+  document.body.style.transition = 'opacity 0.18s ease';
+  document.body.style.opacity = '0';
+  setTimeout(() => {
+    root.setAttribute('data-theme', effective);
+    document.body.style.opacity = '1';
+    setTimeout(() => { document.body.style.transition = ''; }, 350);
+  }, 180);
 }
 
 export const DEFAULT_PROFILE: UserProfile = {
   displayName: '',
   profesion: '',
   obras: [],
-  theme: 'system',
+  theme: 'light',
   updatedAt: new Date().toISOString(),
 };
 

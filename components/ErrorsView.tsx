@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Icon } from './Icon';
 import { requiresAuthorization } from '@/lib/authz';
 import type { AuthState, FileEntry, Severity } from '@/lib/types';
@@ -13,71 +13,86 @@ interface Props {
   onOpenFile: (id: string) => void;
 }
 
-interface FlatError {
+interface Finding {
   severity: Severity;
   title: string;
   body: string;
   action?: string;
+}
+
+interface FileGroup {
   fileId: string;
   fileName: string;
   fileDate: string;
   prepaga: string;
   codigo: string | null;
+  findings: Finding[];
+  hasError: boolean;
+  hasWarn: boolean;
 }
 
 export function ErrorsView({ files, authStates, onOpenFile }: Props) {
   const [filter, setFilter] = useState<FilterKey>('all');
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  const allErrors: FlatError[] = [];
-  for (const f of files) {
-    if (!f.analysis) continue;
+  const groups: FileGroup[] = useMemo(() => {
+    const result: FileGroup[] = [];
+    for (const f of files) {
+      if (!f.analysis) continue;
 
-    // Synthetic warning: authorization missing but required.
-    const auth = requiresAuthorization(f.analysis);
-    const status = authStates?.[f.id]?.status;
-    const userOverride = status === 'checked' || status === 'skipped';
-    if (auth.required && !userOverride) {
-      allErrors.push({
-        severity: 'warn',
-        title: 'Falta autorización previa',
-        body: 'Cargá el bono para evitar rechazos. Si no aplica, marcá “En este caso no hace falta” en la revisión.',
-        action: 'Abrir en revisión y definir el estado de la autorización.',
-        fileId: f.id,
-        fileName: f.name,
-        fileDate: f.addedAt,
-        prepaga: f.analysis.detected.prepagas[0] || '—',
-        codigo: f.analysis.detected.codes[0] || null,
-      });
+      const findings: Finding[] = [];
+
+      const auth = requiresAuthorization(f.analysis);
+      const status = authStates?.[f.id]?.status;
+      const userOverride = status === 'checked' || status === 'skipped';
+      if (auth.required && !userOverride) {
+        findings.push({
+          severity: 'warn',
+          title: 'Falta autorización previa',
+          body: 'Cargá el bono para evitar rechazos. Si no aplica, marcá “En este caso no hace falta” en la revisión.',
+          action: 'Abrir en revisión y definir el estado de la autorización.',
+        });
+      }
+
+      for (const finding of f.analysis.findings) {
+        if (finding.severity === 'ok') continue;
+        findings.push({
+          severity: finding.severity,
+          title: finding.title,
+          body: finding.body,
+          action: finding.action,
+        });
+      }
+
+      if (findings.length > 0) {
+        result.push({
+          fileId: f.id,
+          fileName: f.name,
+          fileDate: f.addedAt,
+          prepaga: f.analysis.detected.prepagas[0] || '—',
+          codigo: f.analysis.detected.codes[0] || null,
+          findings,
+          hasError: findings.some((fi) => fi.severity === 'error'),
+          hasWarn: findings.some((fi) => fi.severity === 'warn'),
+        });
+      }
     }
+    return result;
+  }, [files, authStates]);
 
-    for (const finding of f.analysis.findings) {
-      if (finding.severity === 'ok') continue;
-      allErrors.push({
-        severity: finding.severity,
-        title: finding.title,
-        body: finding.body,
-        action: finding.action,
-        fileId: f.id,
-        fileName: f.name,
-        fileDate: f.addedAt,
-        prepaga: f.analysis.detected.prepagas[0] || '—',
-        codigo: f.analysis.detected.codes[0] || null,
-      });
-    }
-  }
+  const allFindingsCount = groups.reduce((s, g) => s + g.findings.length, 0);
+  const errorCount = groups.reduce((s, g) => s + g.findings.filter((f) => f.severity === 'error').length, 0);
+  const warnCount = groups.reduce((s, g) => s + g.findings.filter((f) => f.severity === 'warn').length, 0);
 
-  const counts = {
-    all: allErrors.length,
-    error: allErrors.filter((e) => e.severity === 'error').length,
-    warn: allErrors.filter((e) => e.severity === 'warn').length,
-  };
-
-  const filtered = filter === 'all' ? allErrors : allErrors.filter((e) => e.severity === filter);
+  const filteredGroups = useMemo(() => {
+    if (filter === 'all') return groups;
+    if (filter === 'error') return groups.filter((g) => g.hasError);
+    return groups.filter((g) => g.hasWarn);
+  }, [groups, filter]);
 
   const filesAnalyzed = files.filter((f) => f.analysis).length;
-  const filesWithErrors = files.filter((f) => f.analysis?.overall === 'error').length;
-  const statsAllZero =
-    filesAnalyzed === 0 && filesWithErrors === 0 && counts.error === 0 && counts.warn === 0;
+  const filesWithIssues = groups.length;
+  const statsAllZero = filesAnalyzed === 0 && filesWithIssues === 0;
 
   return (
     <div>
@@ -85,7 +100,7 @@ export function ErrorsView({ files, authStates, onOpenFile }: Props) {
         <div>
           <h1 className="page-title">Qué conviene revisar</h1>
           <p className="page-subtitle">
-            Los hallazgos de todos los documentos, reunidos en un solo lugar.
+            Documentos con observaciones, agrupados para revisión rápida.
           </p>
         </div>
       </div>
@@ -97,20 +112,20 @@ export function ErrorsView({ files, authStates, onOpenFile }: Props) {
       ) : (
         <div className="stats">
           <div className="stat">
-            <div className="stat-label">Documentos ya analizados</div>
+            <div className="stat-label">Documentos analizados</div>
             <div className="stat-value">{filesAnalyzed}</div>
           </div>
           <div className="stat">
-            <div className="stat-label">Con observaciones graves</div>
-            <div className="stat-value error">{filesWithErrors}</div>
+            <div className="stat-label">Con observaciones</div>
+            <div className="stat-value error">{filesWithIssues}</div>
           </div>
           <div className="stat">
-            <div className="stat-label">Observaciones graves (total)</div>
-            <div className="stat-value error">{counts.error}</div>
+            <div className="stat-label">Errores</div>
+            <div className="stat-value error">{errorCount}</div>
           </div>
           <div className="stat">
-            <div className="stat-label">Advertencias (total)</div>
-            <div className="stat-value warn">{counts.warn}</div>
+            <div className="stat-label">Advertencias</div>
+            <div className="stat-value warn">{warnCount}</div>
           </div>
         </div>
       )}
@@ -120,101 +135,134 @@ export function ErrorsView({ files, authStates, onOpenFile }: Props) {
           className={`filter-chip ${filter === 'all' ? 'active' : ''}`}
           onClick={() => setFilter('all')}
         >
-          Todos <span className="count">{counts.all}</span>
+          Todos <span className="count">{filteredGroups.length}</span>
         </div>
         <div
           className={`filter-chip ${filter === 'error' ? 'active' : ''}`}
           onClick={() => setFilter('error')}
         >
-          Errores <span className="count">{counts.error}</span>
+          Con errores <span className="count">{groups.filter((g) => g.hasError).length}</span>
         </div>
         <div
           className={`filter-chip ${filter === 'warn' ? 'active' : ''}`}
           onClick={() => setFilter('warn')}
         >
-          Advertencias <span className="count">{counts.warn}</span>
+          Con advertencias <span className="count">{groups.filter((g) => g.hasWarn).length}</span>
         </div>
       </div>
 
-      {filtered.length === 0 ? (
+      {filteredGroups.length === 0 ? (
         <div className="panel empty">
           <div className="empty-icon">
             <Icon name="empty" size={48} />
           </div>
           <div className="empty-title">
-            {allErrors.length === 0
+            {allFindingsCount === 0
               ? 'Todavía no hay hallazgos para mostrar'
-              : 'No hay hallazgos con el filtro elegido'}
+              : 'No hay documentos con el filtro elegido'}
           </div>
           <div>
-            {allErrors.length === 0
+            {allFindingsCount === 0
               ? 'Cuando agregues un documento en «Agregar documentos», los puntos a revisar van a aparecer acá.'
               : 'Podés probar con otro filtro o volver a «Todos».'}
           </div>
         </div>
       ) : (
-        <div className="errors-table">
-          <table>
-            <thead>
-              <tr>
-                <th style={{ width: 80 }}>Sev.</th>
-                <th>Problema</th>
-                <th style={{ width: 200 }}>Archivo</th>
-                <th style={{ width: 130 }}>Prepaga</th>
-                <th style={{ width: 100 }}>Código</th>
-                <th style={{ width: 100 }} />
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((e, i) => (
-                <tr key={i}>
-                  <td>
-                    {e.severity === 'error' && (
-                      <span className="badge badge-error">
+        <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius, 8px)', overflow: 'hidden' }}>
+          {filteredGroups.map((g) => {
+            const isOpen = expandedId === g.fileId;
+            const errors = g.findings.filter((f) => f.severity === 'error');
+            const warns = g.findings.filter((f) => f.severity === 'warn');
+
+            return (
+              <div key={g.fileId} style={{ borderBottom: '1px solid var(--border)' }}>
+                <button
+                  type="button"
+                  onClick={() => setExpandedId(isOpen ? null : g.fileId)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    width: '100%',
+                    padding: '12px 14px',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    fontSize: 14,
+                    fontFamily: 'inherit',
+                    color: 'var(--text)',
+                  }}
+                >
+                  <span style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    flexShrink: 0,
+                    background: g.hasError ? 'var(--error)' : 'var(--warn)',
+                  }} />
+                  <span style={{ flex: 1 }}>
+                    <span style={{ fontWeight: 500 }}>{g.fileName}</span>
+                    <span style={{ color: 'var(--text-muted)', marginLeft: 8, fontSize: 13 }}>
+                      {g.prepaga}
+                      {g.codigo ? ` · ${g.codigo}` : ''}
+                      {' · '}
+                      {new Date(g.fileDate).toLocaleDateString('es-AR')}
+                    </span>
+                  </span>
+                  <span style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    {errors.length > 0 && (
+                      <span className="badge badge-error" style={{ fontSize: 11 }}>
                         <span className="badge-dot" />
-                        Error
+                        {errors.length} error{errors.length > 1 ? 'es' : ''}
                       </span>
                     )}
-                    {e.severity === 'warn' && (
-                      <span className="badge badge-warn">
+                    {warns.length > 0 && (
+                      <span className="badge badge-warn" style={{ fontSize: 11 }}>
                         <span className="badge-dot" />
-                        Advertencia
+                        {warns.length} advertencia{warns.length > 1 ? 's' : ''}
                       </span>
                     )}
-                    {e.severity === 'info' && (
-                      <span className="badge badge-neutral">
-                        <span className="badge-dot" />
-                        Manual
-                      </span>
+                  </span>
+                  <span style={{ fontSize: 11, color: 'var(--text-soft)', transition: 'transform 0.15s', transform: isOpen ? 'rotate(180deg)' : 'none' }}>{'▼'}</span>
+                </button>
+
+                {isOpen && (
+                  <div style={{ padding: '0 14px 14px', background: 'var(--bg-panel)', animation: 'slideDown 0.2s ease-out' }}>
+                    {errors.length > 0 && (
+                      <div style={{ marginBottom: 10 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--error)', marginBottom: 4 }}>Errores</div>
+                        {errors.map((e, i) => (
+                          <div key={i} style={{ padding: '6px 0', borderTop: i > 0 ? '1px solid var(--border)' : 'none' }}>
+                            <div style={{ fontWeight: 500, fontSize: 13, color: 'var(--error)' }}>{e.title}</div>
+                            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{e.action || e.body}</div>
+                          </div>
+                        ))}
+                      </div>
                     )}
-                  </td>
-                  <td>
-                    <div className="err-msg">{e.title}</div>
-                    <div className="err-hint">{e.action || e.body}</div>
-                  </td>
-                  <td>
-                    <div className="err-file">{e.fileName}</div>
-                    <div className="err-hint">{new Date(e.fileDate).toLocaleDateString('es-AR')}</div>
-                  </td>
-                  <td>{e.prepaga}</td>
-                  <td>
-                    {e.codigo ? (
-                      <code style={{ fontFamily: 'var(--font-mono)', fontSize: 14 }}>{e.codigo}</code>
-                    ) : (
-                      <span style={{ color: 'var(--text-soft)' }}>—</span>
+                    {warns.length > 0 && (
+                      <div style={{ marginBottom: 10 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--warn)', marginBottom: 4 }}>Advertencias</div>
+                        {warns.map((w, i) => (
+                          <div key={i} style={{ padding: '6px 0', borderTop: i > 0 ? '1px solid var(--border)' : 'none' }}>
+                            <div style={{ fontWeight: 500, fontSize: 13, color: 'var(--warn)' }}>{w.title}</div>
+                            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{w.action || w.body}</div>
+                          </div>
+                        ))}
+                      </div>
                     )}
-                  </td>
-                  <td>
-                    {e.prepaga === 'Swiss Medical' ? (
-                      <button className="btn btn-sm btn-ghost" onClick={() => onOpenFile(e.fileId)}>
-                        Abrir en revisión
-                      </button>
-                    ) : null}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      onClick={() => onOpenFile(g.fileId)}
+                    >
+                      Abrir en revisión
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

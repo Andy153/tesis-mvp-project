@@ -4,7 +4,7 @@ import type { CSSProperties } from 'react';
 import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { SignUp } from '@clerk/nextjs';
+import { SignUp, useUser } from '@clerk/nextjs';
 import { validateInvitationToken } from '@/app/actions/invitations';
 
 type ValidateResult = Awaited<ReturnType<typeof validateInvitationToken>>;
@@ -17,11 +17,19 @@ function isValidateSuccess(
 
 function SecretariaSignUpInner() {
   const searchParams = useSearchParams();
-  const [phase, setPhase] = useState<'loading' | 'error' | 'form'>('loading');
+  const { user, isLoaded: userLoaded, isSignedIn } = useUser();
+  const [phase, setPhase] = useState<'loading' | 'error' | 'form' | 'already_signed_in'>('loading');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!userLoaded) return;
+
+    if (isSignedIn && user) {
+      setPhase('already_signed_in');
+      return;
+    }
+
     const raw = searchParams.get('token');
     const t = raw?.trim() ?? '';
 
@@ -51,7 +59,7 @@ function SecretariaSignUpInner() {
     return () => {
       cancelled = true;
     };
-  }, [searchParams]);
+  }, [searchParams, userLoaded, isSignedIn, user]);
 
   const shellStyle: CSSProperties = {
     minHeight: '100vh',
@@ -85,6 +93,57 @@ function SecretariaSignUpInner() {
           >
             Validando invitación…
           </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (phase === 'already_signed_in') {
+    return (
+      <div style={shellStyle}>
+        <div style={cardStyle}>
+          <h1
+            style={{
+              margin: 0,
+              marginBottom: 10,
+              fontSize: 22,
+              fontWeight: 700,
+              fontFamily: 'var(--font-title)',
+              color: 'var(--text)',
+              letterSpacing: '0.02em',
+            }}
+          >
+            Ya tenés una cuenta activa
+          </h1>
+          <p
+            style={{
+              margin: 0,
+              marginBottom: 20,
+              fontSize: 14,
+              lineHeight: 1.5,
+              color: 'var(--text-muted)',
+              fontFamily: 'var(--font-display)',
+            }}
+          >
+            Este link es para crear una cuenta nueva de secretaria. Cerrá tu sesión actual primero y volvé a abrir el
+            link para registrarte con una cuenta nueva.
+          </p>
+          <Link
+            href="/"
+            style={{
+              display: 'inline-block',
+              fontSize: 14,
+              padding: '10px 18px',
+              backgroundColor: 'var(--accent)',
+              color: '#fff',
+              borderRadius: 6,
+              textDecoration: 'none',
+              fontWeight: 600,
+              fontFamily: 'var(--font-display)',
+            }}
+          >
+            Volver a la app
+          </Link>
         </div>
       </div>
     );

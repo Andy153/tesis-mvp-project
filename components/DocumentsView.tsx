@@ -12,6 +12,127 @@ import { ReviewModal } from './ReviewModal';
 
 type FilterKey = 'all' | 'error' | 'warn' | 'ok';
 
+// ---------------------------------------------------------------------------
+// Panel de documentos pendientes de revisión
+// ---------------------------------------------------------------------------
+
+function PendingReviewPanel({
+  items,
+  onReview,
+  onDelete,
+}: {
+  items: any[];
+  onReview: (id: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  return (
+    <div style={{ marginBottom: 16, border: '1px solid var(--border)', borderRadius: 'var(--radius, 8px)', overflow: 'hidden' }}>
+      <div style={{ padding: '10px 14px', background: 'var(--bg-sunken)', borderBottom: '1px solid var(--border)' }}>
+        <strong style={{ fontSize: 14, fontFamily: 'var(--font-display)' }}>Pendientes de revisión ({items.length})</strong>
+      </div>
+      {items.map((p) => {
+        const isBlocked = p.estado_revision === 'bloqueado';
+        const motivos: { severity: string; message: string }[] = Array.isArray(p.motivos_revision) ? p.motivos_revision : [];
+        const blockers = motivos.filter((m) => m.severity === 'blocker');
+        const warnings = motivos.filter((m) => m.severity === 'warning');
+        const isOpen = expandedId === p.id;
+        const paciente = p.ai_extractions?.paciente ?? '—';
+        const prepaga = p.ai_extractions?.prepaga ?? p.prepaga ?? '';
+
+        return (
+          <div key={p.id} style={{ borderBottom: '1px solid var(--border)' }}>
+            <button
+              type="button"
+              onClick={() => setExpandedId(isOpen ? null : p.id)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                width: '100%',
+                padding: '10px 14px',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                textAlign: 'left',
+                fontSize: 14,
+                fontFamily: 'inherit',
+                color: 'var(--text)',
+              }}
+            >
+              <span style={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                flexShrink: 0,
+                background: isBlocked ? 'var(--error)' : 'var(--ok)',
+              }} />
+              <span style={{ flex: 1, fontWeight: 500 }}>
+                {paciente}
+                {prepaga ? <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: 6 }}>· {prepaga}</span> : null}
+              </span>
+              <span style={{
+                fontSize: 12,
+                padding: '2px 8px',
+                borderRadius: 4,
+                background: isBlocked ? 'var(--error-soft)' : 'var(--ok-soft)',
+                color: isBlocked ? 'var(--error)' : 'var(--ok)',
+                fontWeight: 500,
+              }}>
+                {isBlocked ? 'Faltan datos' : 'Listo para confirmar'}
+              </span>
+              <span style={{ fontSize: 11, color: 'var(--text-soft)', transition: 'transform 0.15s', transform: isOpen ? 'rotate(180deg)' : 'none' }}>▼</span>
+            </button>
+
+            {isOpen && (
+              <div style={{ padding: '0 14px 12px', background: 'var(--bg-panel)', animation: 'slideDown 0.2s ease-out' }}>
+                {blockers.length > 0 && (
+                  <div style={{ marginBottom: 8 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--error)', marginBottom: 4 }}>Errores</div>
+                    <ul style={{ margin: 0, padding: '0 0 0 16px', fontSize: 13, color: 'var(--error)' }}>
+                      {blockers.map((b, i) => <li key={i}>{b.message}</li>)}
+                    </ul>
+                  </div>
+                )}
+                {warnings.length > 0 && (
+                  <div style={{ marginBottom: 8 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--warn)', marginBottom: 4 }}>Advertencias</div>
+                    <ul style={{ margin: 0, padding: '0 0 0 16px', fontSize: 13, color: 'var(--warn)' }}>
+                      {warnings.map((w, i) => <li key={i}>{w.message}</li>)}
+                    </ul>
+                  </div>
+                )}
+                {blockers.length === 0 && warnings.length === 0 && (
+                  <p style={{ margin: 0, marginBottom: 8, fontSize: 13, color: 'var(--text-muted)' }}>
+                    Todos los datos fueron detectados correctamente. Revisá y confirmá.
+                  </p>
+                )}
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    onClick={() => onReview(p.id)}
+                  >
+                    {isBlocked ? 'Completar datos' : 'Revisar y confirmar'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-ghost"
+                    onClick={() => onDelete(p.id)}
+                  >
+                    Eliminar
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function CobroStatusBadge({ item }: { item: HistoryItem }) {
   const { estado, label } = getEstadoEfectivo(item);
 
@@ -127,37 +248,19 @@ export function DocumentsView({
       </div>
 
       {pendingDeduped.length > 0 && (
-        <div style={{ marginBottom: 16, padding: 12, border: '1px solid #e0b94a', background: '#fff4d6', borderRadius: 8 }}>
-          <strong style={{ color: '#7a5a00' }}>Pendientes de revisión: {pendingDeduped.length}</strong>
-          <ul style={{ margin: '8px 0 0 0', padding: 0, listStyle: 'none' }}>
-            {pendingDeduped.map((p) => (
-              <li key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '6px 0', borderTop: '1px solid #e0b94a' }}>
-                <span>{p.ai_extractions?.paciente ?? '—'} · {p.estado_revision === 'bloqueado' ? '🔴 Bloqueado' : '🟡 En revisión'}</span>
-                <span style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                  <button type="button" className="btn btn-sm" onClick={() => setReviewingId(p.id)}>Revisar</button>
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-ghost"
-                    title="Elimina la liquidación en el servidor (útil si ya no tenés el archivo o quedó duplicada)"
-                    onClick={() => {
-                      if (!window.confirm('¿Eliminar este registro de liquidación en la nube? No se puede deshacer.')) return;
-                      void (async () => {
-                        try {
-                          const r = await fetch(`/api/liquidaciones/${p.id}`, { method: 'DELETE' });
-                          if (r.ok) setRefreshKey((k) => k + 1);
-                        } catch {
-                          /* ignore */
-                        }
-                      })();
-                    }}
-                  >
-                    Eliminar
-                  </button>
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
+        <PendingReviewPanel
+          items={pendingDeduped}
+          onReview={(id) => setReviewingId(id)}
+          onDelete={(id) => {
+            if (!window.confirm('¿Eliminar este registro de liquidación en la nube? No se puede deshacer.')) return;
+            void (async () => {
+              try {
+                const r = await fetch(`/api/liquidaciones/${id}`, { method: 'DELETE' });
+                if (r.ok) setRefreshKey((k) => k + 1);
+              } catch { /* ignore */ }
+            })();
+          }}
+        />
       )}
       {reviewingId && (
         <ReviewModal

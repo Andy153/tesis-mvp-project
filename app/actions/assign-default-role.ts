@@ -3,6 +3,9 @@
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import type { UserMetadata, RolUsuario } from '@/lib/roles';
 import { esRolValido } from '@/lib/roles';
+import { createPinHash } from '@/lib/pin-utils';
+
+const DEFAULT_PIN = '0000';
 
 export async function assignDefaultRoleIfNeeded(): Promise<{
   assigned: boolean;
@@ -19,10 +22,14 @@ export async function assignDefaultRoleIfNeeded(): Promise<{
     return { assigned: false, rol: metadata.rol };
   }
 
+  const { hash, salt } = await createPinHash(DEFAULT_PIN);
+
   await client.users.updateUserMetadata(userId, {
     publicMetadata: {
       ...metadata,
       rol: 'medico' as RolUsuario,
+      pinHash: hash,
+      pinSalt: salt,
     },
   });
 

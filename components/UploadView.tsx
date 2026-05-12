@@ -1571,30 +1571,8 @@ function AnalysisDetail({
       <div className="panel doc-preview">
         <div className="doc-preview-head">
           <div style={{ fontWeight: 600, fontSize: 13 }}>{file.name}</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <div style={{ fontSize: 11.5, color: 'var(--text-soft)', fontFamily: 'var(--font-mono)' }}>
-              {file.method === 'ocr' ? 'OCR · español' : 'PDF · texto embebido'}
-            </div>
-            {onReanalyze ? (
-              <button
-                type="button"
-                className="btn btn-sm"
-                onClick={() => onReanalyze()}
-                disabled={reanalyzeBusy}
-                title="Vuelve a leer el archivo y aplicar las últimas reglas de detección (corrige encuadres viejos)."
-              >
-                {reanalyzeBusy ? (
-                  <>
-                    <span className="spinner" style={{ marginRight: 6 }} />
-                    Re-analizando…
-                  </>
-                ) : (
-                  <>
-                    <Icon name="refresh" size={14} /> Re-analizar
-                  </>
-                )}
-              </button>
-            ) : null}
+          <div style={{ fontSize: 11.5, color: 'var(--text-soft)', fontFamily: 'var(--font-mono)' }}>
+            {file.method === 'ocr' ? 'OCR' : 'AI'}
           </div>
         </div>
         <div className="doc-preview-body">
@@ -1706,7 +1684,7 @@ function AnalysisDetail({
                   </div>
                   <div className="suggestion-note">
                     {f.code === 'NO_CODE_SUGGEST'
-                      ? 'Fuente: procedimiento detectado en el texto. Revisá y confirmá el código antes de presentar.'
+                      ? 'Código asignado automáticamente a partir del procedimiento detectado en el texto.'
                       : 'Detectamos el procedimiento en el texto. Este es el código de nomenclador que corresponde.'}
                   </div>
                 </div>

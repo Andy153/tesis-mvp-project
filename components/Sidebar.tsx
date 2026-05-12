@@ -1,5 +1,6 @@
 'use client';
 
+import { useCallback, useEffect, useRef, useState as useStateReact } from 'react';
 import { UserButton, useUser } from '@clerk/nextjs';
 import { Lock } from 'lucide-react';
 import { Logo } from './Logo';
@@ -66,6 +67,24 @@ export function Sidebar({ active, setActive, errorCount, mobileOpen, onCloseMobi
     { id: 'payments', label: 'Pagos in-app', icon: 'creditcard', section: 'soon', disabled: true },
   ];
 
+  const workItems = items.filter((i) => i.section === 'work');
+  const navGroupRef = useRef<HTMLDivElement>(null);
+  const itemRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [indicator, setIndicator] = useStateReact<{ top: number; height: number } | null>(null);
+
+  const measureIndicator = useCallback(() => {
+    const container = navGroupRef.current;
+    const el = itemRefs.current[active];
+    if (!container || !el) { setIndicator(null); return; }
+    const cRect = container.getBoundingClientRect();
+    const eRect = el.getBoundingClientRect();
+    setIndicator({ top: eRect.top - cRect.top, height: eRect.height });
+  }, [active]);
+
+  useEffect(() => {
+    measureIndicator();
+  }, [measureIndicator]);
+
   return (
     <aside
       id="main-sidebar"
@@ -84,11 +103,20 @@ export function Sidebar({ active, setActive, errorCount, mobileOpen, onCloseMobi
         <span className="brand__wordmark">Trazá</span>
       </div>
       <div className="nav-section">Menú principal</div>
-      {items
-        .filter((i) => i.section === 'work')
-        .map((item) => (
+      <div ref={navGroupRef} className="nav-group">
+        {indicator && (
+          <div
+            className="nav-indicator"
+            style={{
+              transform: `translateY(${indicator.top}px)`,
+              height: indicator.height,
+            }}
+          />
+        )}
+        {workItems.map((item) => (
           <div
             key={item.id}
+            ref={(el) => { itemRefs.current[item.id] = el; }}
             className={`nav-item ${active === item.id ? 'active' : ''}`}
             onClick={() => setActive(item.id)}
             role="button"
@@ -112,6 +140,7 @@ export function Sidebar({ active, setActive, errorCount, mobileOpen, onCloseMobi
             )}
           </div>
         ))}
+      </div>
       <div className="nav-section">Próximamente</div>
       {items
         .filter((i) => i.section === 'soon')

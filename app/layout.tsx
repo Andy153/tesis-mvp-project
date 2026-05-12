@@ -47,6 +47,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         lang="es"
         className={`${delaGothicOne.variable} ${unbounded.variable} ${jetbrainsMono.variable}`}
       >
+        <head>
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `(function(){try{var t=JSON.parse(localStorage.getItem('traza.profile.v1')||'{}').theme;document.documentElement.setAttribute('data-theme',t==='dark'?'dark':'light')}catch(e){document.documentElement.setAttribute('data-theme','light')}})()`,
+            }}
+          />
+        </head>
         <body>{children}</body>
       </html>
     </ClerkProvider>

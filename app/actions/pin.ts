@@ -41,10 +41,11 @@ export async function clearMedicoPin() {
     throw new Error('Solo los usuarios con rol médico pueden eliminar el PIN');
   }
 
-  const { pinHash: _h, pinSalt: _s, ...rest } = metadata;
-
   await client.users.updateUserMetadata(userId, {
-    publicMetadata: rest,
+    publicMetadata: {
+      pinHash: null,
+      pinSalt: null,
+    },
   });
 
   return { ok: true };

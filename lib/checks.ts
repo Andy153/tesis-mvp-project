@@ -4,18 +4,17 @@
 // Función pura, testeable sin DB.
 //
 // Responsabilidades:
-// - Detectar bloqueantes (B1-B7) y avisos (W1)
+// - Detectar bloqueantes (B1-B7)
 // - Auto-completar código por keywords si la IA no lo devolvió pero hay descripción
 // - Calcular el estado_revision y los motivos resultantes
 
-import { TRAZA_NOMENCLADOR_RAW, TRAZA_PROC_KEYWORDS } from './nomenclador'
+import { TRAZA_PROC_KEYWORDS } from './nomenclador'
 
 // ============================================================================
 // Tipos
 // ============================================================================
 
 export type CheckCode =
-  // Bloqueantes
   | 'PREPAGA_NO_SWISS'
   | 'PREPAGA_AUSENTE'
   | 'CODIGO_AUSENTE'
@@ -23,8 +22,6 @@ export type CheckCode =
   | 'AFILIADO_AUSENTE'
   | 'PLAZO_VENCIDO'
   | 'FECHA_AUSENTE'
-  // Avisos
-  | 'CODIGO_NO_RECONOCIDO'
 
 export type CheckIssue = {
   code: CheckCode
@@ -128,12 +125,6 @@ function findCodeByDescription(description: string | null | undefined): string |
   return null
 }
 
-function isCodeKnownInNomenclador(code: string | null | undefined): boolean {
-  if (isEmpty(code)) return false
-  const c = String(code).trim()
-  return Object.prototype.hasOwnProperty.call(TRAZA_NOMENCLADOR_RAW, c)
-}
-
 // ============================================================================
 // Motor principal
 // ============================================================================
@@ -184,17 +175,6 @@ export function runChecks(input: CheckInputs, now: Date = new Date()): CheckResu
         field: 'codigo_nomenclador',
       })
     }
-  }
-
-  // ---- W1: código presente pero no reconocido ----
-  // Solo se chequea si el código existe (sino ya lo cubre B3).
-  if (!isEmpty(codigoFinal) && !isCodeKnownInNomenclador(codigoFinal)) {
-    warnings.push({
-      code: 'CODIGO_NO_RECONOCIDO',
-      severity: 'warning',
-      message: `El código ${codigoFinal} no está en nuestra base de nomencladores Swiss. Verificar antes de enviar.`,
-      field: 'codigo_nomenclador',
-    })
   }
 
   // ---- B4: sanatorio ----
@@ -251,10 +231,8 @@ function finalizeResult(
     estado_revision = null
   } else if (blockers.length > 0) {
     estado_revision = 'bloqueado'
-  } else if (warnings.length > 0) {
-    estado_revision = 'en_revision'
   } else {
-    estado_revision = 'confirmado'
+    estado_revision = 'en_revision'
   }
   return { blockers, warnings, estado_revision, isOutOfScope, autoFilledCode }
 }

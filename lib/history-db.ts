@@ -231,6 +231,16 @@ export async function saveDocumentAndExtraction(
     ext?.procedimiento?.codigo_nomenclador ?? checks.autoFilledCode ?? null
 
   // ===========================================================================
+  // 0.5. Asegurar que exista una fila en profiles (FK requerido por documents)
+  // ===========================================================================
+  await supabaseAdmin
+    .from('profiles')
+    .upsert(
+      { clerk_user_id: clerkUserId, updated_at: new Date().toISOString() },
+      { onConflict: 'clerk_user_id', ignoreDuplicates: true },
+    )
+
+  // ===========================================================================
   // 1. Insertar documento
   // ===========================================================================
   const { data: doc, error: docError } = await supabaseAdmin

@@ -149,6 +149,7 @@ export function ReviewModal({ liquidacionId, onClose, onSaved }: Props) {
     justifyContent: 'center',
     zIndex: 9999,
     padding: 16,
+    animation: 'modalOverlayIn 0.18s ease-out both',
   }
   const modalStyle: React.CSSProperties = {
     background: 'white',
@@ -159,6 +160,7 @@ export function ReviewModal({ liquidacionId, onClose, onSaved }: Props) {
     overflow: 'auto',
     padding: 24,
     boxShadow: '0 20px 50px rgba(0,0,0,0.3)',
+    animation: 'modalCardIn 0.22s ease-out both',
   }
   const labelStyle: React.CSSProperties = {
     display: 'block',

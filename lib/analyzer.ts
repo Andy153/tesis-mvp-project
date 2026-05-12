@@ -1996,11 +1996,11 @@ export function analyzeDocument(
     console.log(`${PIPE} nomenclador:matching attempt=no reason=no_valid_codes`);
     if (procedureGuess) {
       findings.push({
-        severity: 'warn',
+        severity: 'ok',
         code: 'NO_CODE_SUGGEST',
-        title: 'Código no encontrado en el documento',
-        body: `No se detectó un código de nomenclador escrito explícitamente. Detectamos una posible práctica a partir del texto (“${procedureGuess.keyword}”). Revisá y confirmá el código antes de presentar.`,
-        action: `Revisar y confirmar: ${procedureGuess.code} — ${procedureGuess.desc}.`,
+        title: 'Código inferido automáticamente',
+        body: `No se detectó un código escrito explícitamente. Se asignó ${procedureGuess.code} — ${procedureGuess.desc} a partir del texto ("${procedureGuess.keyword}").`,
+        action: `Código asignado: ${procedureGuess.code} — ${procedureGuess.desc}.`,
         suggestion: { code: procedureGuess.code, desc: procedureGuess.desc },
         spans: findSpansForProcedureKeyword(procedureGuess.keyword, ocrWords, { desc: procedureGuess.desc }),
       });

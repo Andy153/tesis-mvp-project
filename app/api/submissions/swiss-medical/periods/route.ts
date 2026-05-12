@@ -35,6 +35,7 @@ export async function GET() {
     )
     .eq('clerk_user_id', userId)
     .eq('estado', 'pendiente')
+    .eq('estado_revision', 'confirmado')
     .not('periodo', 'is', null)
 
   if (liqErr) {

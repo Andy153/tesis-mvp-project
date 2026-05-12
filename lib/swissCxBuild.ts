@@ -74,6 +74,7 @@ export async function buildSwissRowsForPeriod(
     .eq('clerk_user_id', userId)
     .eq('periodo', periodo)
     .eq('estado', 'pendiente')
+    .eq('estado_revision', 'confirmado')
 
   if (extErr) {
     console.error('[TRAZA] swissCxBuild:fetch_liquidaciones error:', extErr)

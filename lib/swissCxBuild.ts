@@ -74,6 +74,10 @@ export async function buildSwissRowsForPeriod(
     .eq('clerk_user_id', userId)
     .eq('periodo', periodo)
     .eq('estado', 'pendiente')
+    // Solo partes confirmados por el médico entran al ZIP/planilla.
+    // `bloqueado` y `en_revision` quedan fuera hasta que el usuario los confirme
+    // en el ReviewModal, así no se envían a Swiss con datos faltantes.
+    .eq('estado_revision', 'confirmado')
 
   if (extErr) {
     console.error('[TRAZA] swissCxBuild:fetch_liquidaciones error:', extErr)
@@ -81,6 +85,25 @@ export async function buildSwissRowsForPeriod(
   }
 
   if (!liquidaciones || liquidaciones.length === 0) {
+    const { count: pendientesSinConfirmar } = await supabaseAdmin
+      .from('liquidaciones')
+      .select('id', { count: 'exact', head: true })
+      .eq('clerk_user_id', userId)
+      .eq('periodo', periodo)
+      .eq('estado', 'pendiente')
+      .in('estado_revision', ['bloqueado', 'en_revision'])
+
+    if ((pendientesSinConfirmar ?? 0) > 0) {
+      return {
+        ok: false,
+        status: 404,
+        error:
+          `Tenés ${pendientesSinConfirmar} parte(s) pendientes de revisión para este período. ` +
+          `Confirmá cada uno antes de cerrar el mes.`,
+        encontradosTotal: pendientesSinConfirmar ?? 0,
+      }
+    }
+
     return {
       ok: false,
       status: 404,

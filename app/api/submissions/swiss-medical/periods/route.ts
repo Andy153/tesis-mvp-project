@@ -35,6 +35,9 @@ export async function GET() {
     )
     .eq('clerk_user_id', userId)
     .eq('estado', 'pendiente')
+    // Mismo criterio que buildSwissRowsForPeriod: solo partes confirmados
+    // por el médico cuentan como "presentables" este mes.
+    .eq('estado_revision', 'confirmado')
     .not('periodo', 'is', null)
 
   if (liqErr) {

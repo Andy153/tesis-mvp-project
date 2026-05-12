@@ -166,6 +166,7 @@ export function UploadView({
   async function handleFiles(fileList: File[]) {
     const batchId = 'b_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
     setActiveBatchId(batchId);
+    let lastLiqId: string | null = null;
     for (const file of fileList) {
       const tAll0 = Date.now();
       const id = 'f_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
@@ -214,8 +215,6 @@ export function UploadView({
 
         const clerkUserId = user?.id ?? null;
         if (extractedDocumentId && clerkUserId && file) {
-          // Extraemos la fecha de la operación del texto del parte (si está disponible).
-          // Si no se puede extraer, el upload va a la carpeta _pendiente/ como fallback.
           const structuredForUpload = extractStructured(text, NOMEN_FOR_EXTRACT);
           const operationDate = structuredForUpload?.fechaPractica ?? null;
 
@@ -250,7 +249,7 @@ export function UploadView({
             const r = await fetch(`/api/liquidaciones?document_id=${extractedDocumentId}`);
             const j = await r.json();
             const liqId = j.liquidaciones?.[0]?.id;
-            if (liqId) setReviewingLiqId(liqId);
+            if (liqId) lastLiqId = liqId;
           } catch {}
         }
         console.log(`${PIPE} ui:upload:done total_ms=${Date.now() - tAll0}`);
@@ -263,6 +262,7 @@ export function UploadView({
         });
       }
     }
+    if (lastLiqId) setReviewingLiqId(lastLiqId);
   }
 
   const isVirgin = Boolean(showVirgin);

@@ -140,6 +140,7 @@ export function ReviewModal({ liquidacionId, onClose, onSaved }: Props) {
     }
   }
 
+<<<<<<< Updated upstream
   const overlayStyle: React.CSSProperties = {
     position: 'fixed',
     inset: 0,
@@ -182,11 +183,13 @@ export function ReviewModal({ liquidacionId, onClose, onSaved }: Props) {
     fontSize: 14,
   }
 
+=======
+>>>>>>> Stashed changes
   return (
-    <div style={overlayStyle} onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div style={modalStyle}>
-        <h2 style={{ margin: 0, marginBottom: 4, color: '#1f5d3a' }}>Revisar parte quirúrgico</h2>
-        <p style={{ margin: 0, marginBottom: 16, fontSize: 13, color: '#6b7280' }}>
+    <div className="review-modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="review-modal-card">
+        <h2 className="review-modal-title">Revisar parte quirúrgico</h2>
+        <p className="review-modal-subtitle">
           {liq?.periodo
             ? `Período de cierre: ${periodoLabel(liq.periodo)}`
             : 'Completá los datos para asignar a un período de cierre.'}
@@ -194,18 +197,17 @@ export function ReviewModal({ liquidacionId, onClose, onSaved }: Props) {
 
         {loading && <p>Cargando...</p>}
         {error && (
-          <div style={{ padding: 10, background: '#fde2e2', color: '#842029', borderRadius: 6, marginBottom: 12, fontSize: 13 }}>
+          <div className="review-modal-alert review-modal-alert--error">
             {error}
           </div>
         )}
 
         {!loading && liq && (
           <>
-            {/* Lista de blockers/warnings */}
             {checks.blockers.length > 0 && (
-              <div style={{ background: '#fde2e2', border: '1px solid #e07b7b', borderRadius: 8, padding: 12, marginBottom: 12 }}>
-                <strong style={{ color: '#842029', fontSize: 13 }}>Datos faltantes o inválidos:</strong>
-                <ul style={{ margin: '6px 0 0 18px', padding: 0, color: '#842029', fontSize: 13 }}>
+              <div className="review-modal-alert review-modal-alert--error">
+                <strong>Datos faltantes o inválidos:</strong>
+                <ul>
                   {checks.blockers.map((b: CheckIssue, i: number) => (
                     <li key={i}>{b.message}</li>
                   ))}
@@ -213,9 +215,9 @@ export function ReviewModal({ liquidacionId, onClose, onSaved }: Props) {
               </div>
             )}
             {checks.warnings.length > 0 && (
-              <div style={{ background: '#fff4d6', border: '1px solid #e0b94a', borderRadius: 8, padding: 12, marginBottom: 12 }}>
-                <strong style={{ color: '#7a5a00', fontSize: 13 }}>Avisos:</strong>
-                <ul style={{ margin: '6px 0 0 18px', padding: 0, color: '#7a5a00', fontSize: 13 }}>
+              <div className="review-modal-alert review-modal-alert--warn">
+                <strong>Avisos:</strong>
+                <ul>
                   {checks.warnings.map((w: CheckIssue, i: number) => (
                     <li key={i}>{w.message}</li>
                   ))}
@@ -223,51 +225,50 @@ export function ReviewModal({ liquidacionId, onClose, onSaved }: Props) {
               </div>
             )}
             {checks.isOutOfScope && (
-              <div style={{ background: '#e0e8ff', border: '1px solid #7589c4', borderRadius: 8, padding: 12, marginBottom: 12, fontSize: 13, color: '#1e3a8a' }}>
+              <div className="review-modal-alert review-modal-alert--info">
                 Este parte no es de Swiss Medical. No puede procesarse desde esta vista.
               </div>
             )}
 
-            {/* Form */}
-            <div style={{ display: 'grid', gap: 12 }}>
+            <div className="review-modal-form">
               <div>
-                <label style={labelStyle}>Paciente</label>
-                <input style={inputStyle} value={paciente} onChange={(e) => setPaciente(e.target.value)} />
+                <label className="review-modal-label">Paciente</label>
+                <input className="review-modal-input" value={paciente} onChange={(e) => setPaciente(e.target.value)} />
               </div>
               <div>
-                <label style={labelStyle}>Número de afiliado</label>
-                <input style={inputStyle} value={numeroAfiliado} onChange={(e) => setNumeroAfiliado(e.target.value)} />
+                <label className="review-modal-label">Número de afiliado</label>
+                <input className="review-modal-input" value={numeroAfiliado} onChange={(e) => setNumeroAfiliado(e.target.value)} />
               </div>
               <div>
-                <label style={labelStyle}>Sanatorio</label>
-                <input style={inputStyle} value={sanatorio} onChange={(e) => setSanatorio(e.target.value)} />
+                <label className="review-modal-label">Sanatorio</label>
+                <input className="review-modal-input" value={sanatorio} onChange={(e) => setSanatorio(e.target.value)} />
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 12 }}>
                 <div>
-                  <label style={labelStyle}>Código nomenclador</label>
-                  <input style={inputStyle} value={codigo} onChange={(e) => setCodigo(e.target.value)} />
+                  <label className="review-modal-label">Código nomenclador</label>
+                  <input className="review-modal-input" value={codigo} onChange={(e) => setCodigo(e.target.value)} />
                 </div>
                 <div>
-                  <label style={labelStyle}>Descripción de la práctica</label>
-                  <input style={inputStyle} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} />
+                  <label className="review-modal-label">Descripción de la práctica</label>
+                  <input className="review-modal-input" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} />
                 </div>
               </div>
               <div>
-                <label style={labelStyle}>Fecha de práctica</label>
+                <label className="review-modal-label">Fecha de práctica</label>
                 {fechaWasMissing ? (
                   <input
                     type="date"
-                    style={inputStyle}
+                    className="review-modal-input"
                     value={fecha}
                     onChange={(e) => setFecha(e.target.value)}
                   />
                 ) : (
-                  <input style={{ ...inputStyle, background: '#f7f7f7', color: '#666' }} value={fecha} readOnly />
+                  <input className="review-modal-input review-modal-input--readonly" value={fecha} readOnly />
                 )}
               </div>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 }}>
+            <div className="review-modal-actions">
               <button
                 type="button"
                 className="btn"
@@ -278,20 +279,10 @@ export function ReviewModal({ liquidacionId, onClose, onSaved }: Props) {
               </button>
               <button
                 type="button"
-                className="btn btn-primary"
+                className={`btn btn-primary${!canConfirm ? ' btn-disabled' : ''}`}
                 onClick={() => handleSave('confirm')}
                 disabled={!canConfirm}
                 title={canConfirm ? '' : 'Resolvé los datos faltantes para confirmar'}
-                style={
-                  !canConfirm
-                    ? {
-                        background: '#cdd5d0',
-                        color: '#7a8580',
-                        cursor: 'not-allowed',
-                        borderColor: '#cdd5d0',
-                      }
-                    : undefined
-                }
               >
                 {saving ? 'Confirmando...' : 'Confirmar y agregar a la planilla'}
               </button>

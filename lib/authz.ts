@@ -155,8 +155,33 @@ export function extractStructured(
   const dniMatch = text.match(/DNI[:\s]*(\d{7,8})/i);
   if (dniMatch) result.dni = dniMatch[1];
 
-  const afiliadoMatch = text.match(/af[ií]liado[:\s\u00ba\u00b0Nn\.]*([0-9]{6,20})/i);
-  if (afiliadoMatch) result.afiliado = afiliadoMatch[1];
+  // Regla práctica Swiss Medical: el N° de credencial suele ser un número de 18-19 dígitos
+  // (puede venir con espacios cada 4) cerca de las etiquetas "Credencial", "N° de Credencial",
+  // "Número" o debajo del campo "Plan" / "Prepaga".
+  const swissCredencialMatch =
+    text.match(/(?:n[°º]\s*(?:de\s*)?)?credencial[:\s\u00ba\u00b0Nn\.]*((?:\d[\s\-]?){18,19})/i) ||
+    text.match(/n[°º]\s*credencial[:\s]*((?:\d[\s\-]?){18,19})/i);
+  if (swissCredencialMatch) {
+    const cleaned = swissCredencialMatch[1].replace(/[\s\-]/g, '');
+    if (cleaned.length >= 18 && cleaned.length <= 19) {
+      result.afiliado = cleaned;
+    }
+  }
+  if (!result.afiliado) {
+    const afiliadoMatch = text.match(/af[ií]liado[:\s\u00ba\u00b0Nn\.]*([0-9]{6,20})/i);
+    if (afiliadoMatch) result.afiliado = afiliadoMatch[1];
+  }
+  // Fallback: si la prepaga es Swiss y todavía no tenemos número, buscar cualquier número
+  // de 18-19 dígitos en el documento (es muy específico y poco propenso a falsos positivos).
+  if (!result.afiliado) {
+    const swissBulk = text.match(/\b((?:\d[\s\-]?){18,19})\b/);
+    if (swissBulk) {
+      const cleaned = swissBulk[1].replace(/[\s\-]/g, '');
+      if (cleaned.length >= 18 && cleaned.length <= 19) {
+        result.afiliado = cleaned;
+      }
+    }
+  }
 
   // Lookahead amplio: formularios suelen tener Afiliado/HC antes del DNI, o "D.N.I." en vez de "DNI".
   const pacienteMatch = text.match(

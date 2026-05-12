@@ -8,7 +8,7 @@
 // - Auto-completar código por keywords si la IA no lo devolvió pero hay descripción
 // - Calcular el estado_revision y los motivos resultantes
 
-import { TRAZA_PROC_KEYWORDS, TRAZA_NOMENCLADOR_RAW } from './nomenclador'
+import { TRAZA_PROC_KEYWORDS } from './nomenclador'
 
 // ============================================================================
 // Tipos
@@ -103,27 +103,16 @@ function daysUntilCierre(fechaPracticaISO: string, now: Date = new Date()): numb
   return Math.floor(ms / (24 * 60 * 60 * 1000))
 }
 
-const STOPWORDS = new Set([
-  'de','del','la','el','las','los','en','con','sin','por','para','o','y','a','u',
-  'un','una','mas','como','unica','unico','tipo','via','operacion','practica',
-  'procedimiento','cirugia','operatoria','tratamiento','tecnica',
-])
-
 /**
  * Busca un código en TRAZA_PROC_KEYWORDS comparando contra una descripción.
  * Devuelve el código si encuentra match, null si no.
  *
- * Estrategia en dos pasadas:
- *   1) Keywords curadas (TRAZA_PROC_KEYWORDS) — más específicas primero.
- *   2) Fallback: buscar en las descripciones de TRAZA_NOMENCLADOR_RAW por
- *      coincidencia de palabras significativas. Prefiere Ginecologia y el match
- *      con mayor proporción de palabras coincidentes.
+ * Estrategia: normalizar (sin tildes, lowercase), buscar la keyword más específica
+ * (las primeras del array son las más específicas, así que iteramos en orden).
  */
 function findCodeByDescription(description: string | null | undefined): string | null {
   if (isEmpty(description)) return null
   const haystack = normalize(description as string)
-
-  // --- Pasada 1: keywords curadas (específicas primero) ---
   for (const entry of TRAZA_PROC_KEYWORDS) {
     for (const kw of entry.keywords) {
       const needle = normalize(kw)
@@ -133,47 +122,6 @@ function findCodeByDescription(description: string | null | undefined): string |
       }
     }
   }
-
-  // --- Pasada 2: fallback contra descripciones del nomenclador ---
-  return findCodeByNomencladorDesc(haystack)
-}
-
-function findCodeByNomencladorDesc(haystack: string): string | null {
-  const inputWords = haystack
-    .split(/[\s,.\-/()]+/)
-    .filter(w => w.length >= 3 && !STOPWORDS.has(w))
-
-  if (inputWords.length === 0) return null
-
-  const nomen = TRAZA_NOMENCLADOR_RAW as Record<string, { desc: string; specialty: string }>
-
-  let bestCode: string | null = null
-  let bestScore = 0
-  let bestSpecialtyBonus = 0
-
-  for (const [code, val] of Object.entries(nomen)) {
-    const descNorm = normalize(val.desc)
-    let matched = 0
-    for (const w of inputWords) {
-      if (descNorm.includes(w)) matched++
-    }
-    if (matched === 0) continue
-
-    const score = matched / inputWords.length
-    const specialtyBonus = val.specialty === 'Ginecologia' ? 1 : 0
-
-    const isBetter =
-      score > bestScore ||
-      (score === bestScore && specialtyBonus > bestSpecialtyBonus)
-
-    if (isBetter) {
-      bestCode = code
-      bestScore = score
-      bestSpecialtyBonus = specialtyBonus
-    }
-  }
-
-  if (bestScore >= 0.5) return bestCode
   return null
 }
 

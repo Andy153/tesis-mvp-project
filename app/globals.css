@@ -291,6 +291,7 @@ html[data-theme='dark'] .brand-logo__wordmark {
   position: sticky;
   top: 0;
   height: 100vh;
+  z-index: 1;
 }
 .brand {
   display: flex;
@@ -468,7 +469,12 @@ html[data-theme='dark'] .brand-logo__wordmark {
   margin-inline: auto;
   padding: 40px 48px 40px;
 }
-.main > * {
+.page-head,
+.docs-toolbar,
+.errors-table,
+.upload-zone,
+.panel.empty,
+.stat {
   animation: fadeIn 0.2s ease-out both;
 }
 .page-head {
@@ -1040,8 +1046,8 @@ html[data-theme='dark'] .filter-chip.active .count { background: rgba(255,255,25
    ================================================================ */
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 @keyframes modalOverlayIn {
@@ -1804,13 +1810,17 @@ html[data-theme='dark'] .cal-cell.muted .cal-daynum {
   position: fixed;
   inset: 0;
   background: rgba(20, 20, 18, 0.55);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
   display: grid;
   place-items: center;
   padding: 24px;
-  z-index: 50;
+  z-index: 9990;
   animation: modalOverlayIn 0.18s ease-out both;
 }
 .modal-card {
+  position: relative;
+  z-index: 9991;
   width: 100%;
   max-width: 520px;
   background: var(--bg-panel);
@@ -1874,6 +1884,11 @@ html[data-theme='dark'] .q-actions .btn.btn-primary {
 html[data-theme='dark'] .q-actions .btn.btn-primary:hover {
   background: var(--accent);
 }
+
+html[data-theme='dark'] .modal-overlay {
+  background: rgba(0, 0, 0, 0.65);
+}
+
 .q-progress {
   margin-top: 10px;
   font-size: 11.5px;
@@ -1944,6 +1959,8 @@ html[data-theme='dark'] .q-actions .btn.btn-primary:hover {
   inset: 0;
   z-index: 90;
   background: rgba(20, 20, 18, 0.45);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s ease;

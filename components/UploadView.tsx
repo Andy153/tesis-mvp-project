@@ -103,7 +103,7 @@ export function UploadView({
         `${PIPE} ui:reanalyze:extract done ms=${Date.now() - tExtract0} text_len=${text.length} thumbs=${thumbnails.length} method=${method} pages=${pageTexts?.length ?? 0}`,
       );
       const tAnalyze0 = Date.now();
-      const analysis = analyzeDocument(text, file.name, ocrWords, pageTexts);
+      const analysis = analyzeDocument(text, file.name, ocrWords, pageTexts, aiParteExtract ?? null);
       console.log(`${PIPE} ui:reanalyze:analyze done ms=${Date.now() - tAnalyze0} overall=${analysis.overall}`);
       const clerkUserId = user?.id ?? null;
       const uploadFile = file.file;
@@ -209,7 +209,7 @@ export function UploadView({
         );
 
         const tAnalyze0 = Date.now();
-        const analysis = analyzeDocument(text, file.name, ocrWords, pageTexts);
+        const analysis = analyzeDocument(text, file.name, ocrWords, pageTexts, aiParteExtract ?? null);
         console.log(`${PIPE} ui:upload:analyze done ms=${Date.now() - tAnalyze0} overall=${analysis.overall}`);
 
         const clerkUserId = user?.id ?? null;

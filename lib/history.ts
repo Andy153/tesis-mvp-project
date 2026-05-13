@@ -137,7 +137,7 @@ function persistedToFileEntry(f: PersistedFileEntry, savedRevision: number): His
     f.status === 'analyzed' && Boolean(f.text) && savedRevision !== TRAZA_ANALYZER_REVISION;
   const analysis: Analysis | undefined =
     needReanalyze && f.text
-      ? analyzeDocument(f.text, f.name, undefined, f.pageTexts)
+      ? analyzeDocument(f.text, f.name, undefined, f.pageTexts, f.aiParteExtract ?? null)
       : f.analysis
         ? ({ ...f.analysis, findings: f.analysis.findings as Analysis['findings'] } as Analysis)
         : undefined;

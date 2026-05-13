@@ -6,11 +6,12 @@ import type { ParteQuirurgicoExtract } from './ai/schemas';
 import { TRAZA_NOMENCLADOR_FULL, TRAZA_PROC_KEYWORDS } from './nomenclador.js';
 import { TRAZA_PREPAGAS, TRAZA_REQUIRED_FIELDS, TRAZA_SANATORIOS } from './traza-constants';
 import { matchScore } from './semantic';
+import { findCodeByDescription, findCodeBySimilarity } from './checks';
 
 let _pendingDocumentId: string | null = null
 
 /** Incrementar al cambiar reglas de análisis para invalidar análisis guardados en `loadHistory`. */
-export const TRAZA_ANALYZER_REVISION = 19;
+export const TRAZA_ANALYZER_REVISION = 20;
 
 const PIPE = '[TRAZA_PIPELINE]';
 
@@ -1801,6 +1802,7 @@ export function analyzeDocument(
   fileName: string,
   ocrWords?: PageWords[],
   pageTexts?: string[],
+  aiParteExtract?: ParteQuirurgicoExtract | null,
 ): Analysis {
   const tAll0 = Date.now();
   const lower = stripAccents(text.toLowerCase());
@@ -1862,6 +1864,43 @@ export function analyzeDocument(
       `${PIPE} analyze:procedureGuess sources=PROC_KEYWORDS scanned_keywords=${scannedKeywords} wholeword_hits=${wholeWordHits} near_substring_hits=${nearHits.length ? nearHits.join(',') : 'none'}`,
     );
   }
+  // Fallback alineado con `lib/checks.ts`: si los keywords curados no
+  // encontraron nada, probamos el matcher por similitud sobre los campos
+  // estructurados de la IA (tipo_realizado, descripcion_tecnica,
+  // diagnostico_operatorio). Sin esto, el panel "Resultado del análisis"
+  // marcaba "Falta el código de nomenclador" aunque la liquidación ya
+  // tuviera el código auto-completado por checks.ts en backend
+  // (desincronización UI ↔ DB).
+  if (!procedureGuess && !isPartogramOnly && aiParteExtract) {
+    const tipoRealizado = (aiParteExtract.procedimiento as any)?.tipo_realizado ?? null;
+    const descripcionTecnica = (aiParteExtract.procedimiento as any)?.descripcion_tecnica ?? null;
+    const diagnosticoOperatorio = (aiParteExtract.procedimiento as any)?.diagnostico_operatorio ?? null;
+
+    const inferred =
+      findCodeByDescription(tipoRealizado) ||
+      findCodeByDescription(descripcionTecnica) ||
+      findCodeByDescription(diagnosticoOperatorio) ||
+      findCodeBySimilarity(tipoRealizado, descripcionTecnica, diagnosticoOperatorio);
+
+    if (inferred) {
+      const entryInNomen = NOMEN[inferred];
+      const descSugerido = entryInNomen?.entries?.[0]?.desc || '';
+      // Usamos el campo más específico disponible como "keyword" para el
+      // resaltado del span; si nada hay, fallback al primer término del
+      // tipo realizado o de la descripción técnica.
+      const keywordRaw =
+        (typeof tipoRealizado === 'string' && tipoRealizado.trim()) ||
+        (typeof descripcionTecnica === 'string' && descripcionTecnica.trim()) ||
+        (typeof diagnosticoOperatorio === 'string' && diagnosticoOperatorio.trim()) ||
+        '';
+      const keyword = keywordRaw.split(/[\s,.;:]+/).filter(Boolean)[0] || '';
+      procedureGuess = { keyword, code: inferred, desc: descSugerido };
+      console.log(
+        `${PIPE} analyze:procedureGuess source=ai_extract_fallback code=${inferred} kw=${keyword}`,
+      );
+    }
+  }
+
   console.log(`${PIPE} analyze:procedureGuess ${procedureGuess ? `code=${procedureGuess.code} kw=${procedureGuess.keyword}` : 'none'}`);
   if (isPartogramOnly) {
     console.log(`${PIPE} analyze:procedureGuess skipped reason=is_partogram_only`);

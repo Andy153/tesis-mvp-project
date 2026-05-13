@@ -116,7 +116,7 @@ function daysUntilCierre(fechaPracticaISO: string, now: Date = new Date()): numb
  * Estrategia: normalizar (sin tildes, lowercase), buscar la keyword más específica
  * (las primeras del array son las más específicas, así que iteramos en orden).
  */
-function findCodeByDescription(description: string | null | undefined): string | null {
+export function findCodeByDescription(description: string | null | undefined): string | null {
   if (isEmpty(description)) return null
   const haystack = normalize(description as string)
   for (const entry of TRAZA_PROC_KEYWORDS) {
@@ -217,7 +217,7 @@ function tokensSimilares(a: string, b: string): boolean {
  *   - F2 mínimo: 0.25 (debajo de eso, retornar null y bloquear).
  *   - Empate: gana descripción más corta y, sub-empate, código numérico menor.
  */
-function findCodeBySimilarity(
+export function findCodeBySimilarity(
   ...fuentes: Array<string | null | undefined>
 ): string | null {
   const tokensSet = new Set<string>()

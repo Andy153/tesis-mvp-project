@@ -6,6 +6,7 @@ import { formatDateLong, getSaludo } from '@/lib/utils';
 import { Indicadores } from '@/components/dashboard/Indicadores';
 import { CalendarView } from '@/components/CalendarView';
 import { loadProfile } from '@/lib/profile';
+import { useMounted } from '@/lib/use-mounted';
 
 type DashboardViewProps = {
   onNavigate?: (view: string) => void;
@@ -13,6 +14,7 @@ type DashboardViewProps = {
 };
 
 export function DashboardView({ onNavigate, onOpenFile }: DashboardViewProps) {
+  const mounted = useMounted();
   const { user, isLoaded } = useUser();
   const [profileName, setProfileName] = useState('');
   useEffect(() => {
@@ -23,7 +25,7 @@ export function DashboardView({ onNavigate, onOpenFile }: DashboardViewProps) {
     isLoaded && user
       ? [user.firstName, user.lastName].filter(Boolean).join(' ').trim() || user.fullName?.trim() || ''
       : '';
-  const saludo = getSaludo((profileName || '').trim() || clerkNombre);
+  const saludo = getSaludo(mounted ? (profileName || '').trim() || clerkNombre : '');
   const fechaHoy = formatDateLong(new Date());
 
   return (

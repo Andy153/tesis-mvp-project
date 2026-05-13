@@ -48,14 +48,12 @@ export function Sidebar({ active, setActive, errorCount, mobileOpen, onCloseMobi
   const clerkAvatarUrl = mounted && clerkLoaded ? clerkUser?.imageUrl : undefined;
 
   const clerkNombre =
-    [clerkUser?.firstName, clerkUser?.lastName].filter(Boolean).join(' ').trim() ||
-    clerkUser?.fullName?.trim() ||
-    '';
-  const nombreSidebar = (user?.displayName || '').trim() || clerkNombre || 'Tu cuenta';
-  const rolProfesionSidebar =
-    rol === 'secretaria'
-      ? LABELS_ROL.secretaria
-      : (user?.profesion || '').trim() || (rol === 'medico' ? 'Especialidad pendiente' : '—');
+    mounted && clerkLoaded
+      ? [clerkUser?.firstName, clerkUser?.lastName].filter(Boolean).join(' ').trim() ||
+        clerkUser?.fullName?.trim() ||
+        ''
+      : '';
+  const nombreSidebar = mounted ? (user?.displayName || '').trim() || clerkNombre || '' : '';
 
   const items: Item[] = [
     { id: 'dashboard', label: 'Resumen general', icon: 'dashboard', section: 'work' },
@@ -165,14 +163,16 @@ export function Sidebar({ active, setActive, errorCount, mobileOpen, onCloseMobi
         title="Podés tocar aquí para abrir tu perfil y preferencias"
       >
         <div className="avatar" style={{ overflow: 'hidden' }}>
-          {mounted && clerkLoaded && clerkAvatarUrl ? (
-            <UserButton />
-          ) : user?.avatarDataUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={user.avatarDataUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-          ) : (
-            getInitials(nombreSidebar)
-          )}
+          {mounted ? (
+            clerkLoaded && clerkAvatarUrl ? (
+              <UserButton />
+            ) : user?.avatarDataUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={user.avatarDataUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
+              getInitials(nombreSidebar)
+            )
+          ) : null}
         </div>
         <div>
           <div style={{ marginBottom: 8, minHeight: 32 }} />
@@ -195,7 +195,6 @@ export function Sidebar({ active, setActive, errorCount, mobileOpen, onCloseMobi
               </div>
             )}
           </div>
-          <div className="user-role">{rolProfesionSidebar}</div>
         </div>
       </div>
     </aside>

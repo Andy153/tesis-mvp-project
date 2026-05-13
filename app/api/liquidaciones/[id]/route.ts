@@ -140,6 +140,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     sanatorio: body.sanatorio !== undefined ? body.sanatorio : null,
     codigoNomenclador: body.codigo_nomenclador !== undefined ? body.codigo_nomenclador : null,
     descripcionPractica: body.descripcion_practica !== undefined ? body.descripcion_practica : null,
+    tipoRealizado: datosExtras?.procedimiento?.tipo_realizado ?? null,
+    diagnosticoOperatorio: datosExtras?.procedimiento?.diagnostico_operatorio ?? null,
     fechaPracticaISO: body.fecha_practica_iso !== undefined ? body.fecha_practica_iso : null,
   }
   const checks = runChecks(checkInputs)

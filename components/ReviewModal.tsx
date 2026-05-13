@@ -105,6 +105,10 @@ export function ReviewModal({ liquidacionId, onClose, onSaved }: Props) {
       sanatorio: sanatorio || null,
       codigoNomenclador: codigo || null,
       descripcionPractica: descripcion || null,
+      tipoRealizado:
+        liq?.ai_extractions.datos_extras?.procedimiento?.tipo_realizado ?? null,
+      diagnosticoOperatorio:
+        liq?.ai_extractions.datos_extras?.procedimiento?.diagnostico_operatorio ?? null,
       fechaPracticaISO: fecha || null,
     })
   }, [liq, numeroAfiliado, sanatorio, codigo, descripcion, fecha])

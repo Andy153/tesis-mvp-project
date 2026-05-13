@@ -5,10 +5,11 @@
 //
 // Responsabilidades:
 // - Detectar bloqueantes (B1-B7)
-// - Auto-completar código por keywords si la IA no lo devolvió pero hay descripción
+// - Auto-completar código por keywords (matcher curado) y, como fallback,
+//   buscar por similitud en todo el nomenclador antes de bloquear.
 // - Calcular el estado_revision y los motivos resultantes
 
-import { TRAZA_PROC_KEYWORDS } from './nomenclador'
+import { TRAZA_NOMENCLADOR_RAW, TRAZA_PROC_KEYWORDS } from './nomenclador'
 
 // ============================================================================
 // Tipos
@@ -37,7 +38,12 @@ export type CheckInputs = {
   numeroAfiliado: string | null | undefined
   sanatorio: string | null | undefined
   codigoNomenclador: string | null | undefined
+  /** Detalle técnico de la práctica (p. ej. "dilatacion histeroscopia resectoscopio…"). */
   descripcionPractica: string | null | undefined
+  /** Nombre canónico/breve de la práctica (p. ej. "HISTEROSCOPIA"). */
+  tipoRealizado?: string | null
+  /** Diagnóstico operatorio (p. ej. "METRORRAGIA"). Agrega contexto clínico. */
+  diagnosticoOperatorio?: string | null
   fechaPracticaISO: string | null | undefined // 'YYYY-MM-DD'
 }
 
@@ -125,6 +131,143 @@ function findCodeByDescription(description: string | null | undefined): string |
   return null
 }
 
+// Palabras genéricas que aparecen en muchas entradas del nomenclador y no aportan
+// poder discriminativo. Las filtramos del tokenizado para evitar falsos positivos.
+const STOPWORDS_INFERENCIA = new Set([
+  'operacion',
+  'operacional',
+  'tratamiento',
+  'tratamientos',
+  'intervencion',
+  'intervenciones',
+  'unica',
+  'unico',
+  'completa',
+  'completo',
+  'parcial',
+  'parciales',
+  'general',
+  'generales',
+  'tipo',
+  'tipos',
+  'caso',
+  'casos',
+  'incluye',
+  'incluido',
+  'incluida',
+  'segun',
+  'segunda',
+  'primera',
+  'tiempo',
+  'tiempos',
+  'cualquier',
+  'misma',
+  'mismo',
+  'otro',
+  'otra',
+  'otros',
+  'otras',
+])
+
+function tokenizarParaInferencia(desc: string): string[] {
+  const norm = normalize(desc).replace(/[^a-z0-9 ]+/g, ' ')
+  const tokens = norm.split(/\s+/).filter((t) => t.length >= 4 && !STOPWORDS_INFERENCIA.has(t))
+  return Array.from(new Set(tokens))
+}
+
+/**
+ * Match flexible entre tokens para tolerar variaciones de género/sufijo del
+ * español médico:  "resectoscopio" ↔ "resectoscopía",  "diagnóstica" ↔
+ * "diagnóstico",  "operatoria" ↔ "operatorio",  "biopsia" ↔ "biopsias".
+ *
+ * Estrategia: si los dos tokens tienen ≥6 chars y comparten los primeros 6,
+ * los consideramos equivalentes. Para tokens más cortos, exigimos igualdad
+ * exacta (evita confundir "test" con "testículo").
+ */
+function tokensSimilares(a: string, b: string): boolean {
+  if (a === b) return true
+  if (a.length < 6 || b.length < 6) return false
+  return a.slice(0, 6) === b.slice(0, 6)
+}
+
+/**
+ * Fallback: si el matcher de keywords no encontró nada, buscamos el código
+ * más parecido recorriendo TRAZA_NOMENCLADOR_RAW por similitud de tokens.
+ *
+ * Recibe múltiples fuentes (tipo_realizado, descripcion_tecnica,
+ * diagnostico_operatorio) y las combina en un único conjunto de tokens del
+ * parte. Más fuentes = más contexto clínico = mejor pick.
+ *
+ * Score: F-beta con β=2.
+ *   - precision = matched / |tokens_del_nomenclador|   → qué tan específica
+ *   - recall    = matched / |tokens_del_parte|        → qué tanto cubre
+ *   - F2 = (1 + β²) · p · r / (β² · p + r),  con β=2
+ *
+ * Elegimos F2 (no F1) porque clínicamente es mucho más grave perder un dato
+ * específico del parte (recall) que elegir una entrada con palabras extras
+ * (precision). Ej: si el parte dice "histeroscopia con resectoscopio", el
+ * código operatorio (incluye "resectoscopia") debe ganar sobre la diagnóstica
+ * (solo cubre "histeroscopia").
+ *
+ * Salvaguardas:
+ *   - Tokens del parte filtrados por stopwords y longitud ≥4.
+ *   - Si el parte tiene 1 solo token, exigir ≥10 chars (evita inferir por
+ *     "biopsia", "parto", "hernia" que son demasiado genéricos).
+ *   - Si el parte tiene >1 token, exigir matched ≥2 (similar criterio).
+ *   - F2 mínimo: 0.25 (debajo de eso, retornar null y bloquear).
+ *   - Empate: gana descripción más corta y, sub-empate, código numérico menor.
+ */
+function findCodeBySimilarity(
+  ...fuentes: Array<string | null | undefined>
+): string | null {
+  const tokensSet = new Set<string>()
+  for (const src of fuentes) {
+    if (isEmpty(src)) continue
+    for (const t of tokenizarParaInferencia(src as string)) tokensSet.add(t)
+  }
+  const tokensParte = Array.from(tokensSet)
+  if (tokensParte.length === 0) return null
+  if (tokensParte.length === 1 && tokensParte[0].length < 10) return null
+
+  const MIN_MATCHED = tokensParte.length === 1 ? 1 : 2
+  const MIN_F2 = 0.25
+  const BETA2 = 4 // β² con β=2
+
+  const raw = TRAZA_NOMENCLADOR_RAW as Record<string, { desc: string; specialty: string }>
+  let best: { code: string; score: number; descLen: number } | null = null
+
+  for (const code of Object.keys(raw)) {
+    const entry = raw[code]
+    if (!entry?.desc) continue
+    const tokensNomen = tokenizarParaInferencia(entry.desc)
+    if (tokensNomen.length === 0) continue
+
+    let matched = 0
+    for (const tp of tokensParte) {
+      if (tokensNomen.some((tn) => tokensSimilares(tp, tn))) matched += 1
+    }
+    if (matched < MIN_MATCHED) continue
+
+    const precision = matched / tokensNomen.length
+    const recall = matched / tokensParte.length
+    const f2 = ((1 + BETA2) * precision * recall) / (BETA2 * precision + recall)
+    if (f2 < MIN_F2) continue
+
+    if (
+      !best ||
+      f2 > best.score ||
+      (f2 === best.score && entry.desc.length < best.descLen) ||
+      (f2 === best.score &&
+        entry.desc.length === best.descLen &&
+        Number(code) < Number(best.code))
+    ) {
+      best = { code, score: f2, descLen: entry.desc.length }
+    }
+  }
+
+  return best?.code ?? null
+}
+
 // ============================================================================
 // Motor principal
 // ============================================================================
@@ -159,10 +302,38 @@ export function runChecks(input: CheckInputs, now: Date = new Date()): CheckResu
   }
 
   // ---- B3: código de nomenclador ----
-  // Si la IA no devolvió código, intentamos auto-completar por keywords.
+  // Si la IA no devolvió código:
+  //   1) probar el matcher curado de keywords (preciso, pocos falsos positivos).
+  //   2) fallback: similitud de tokens contra TRAZA_NOMENCLADOR_RAW completo.
+  // Sólo bloqueamos si ambos fallan.
   let codigoFinal = input.codigoNomenclador
   if (isEmpty(codigoFinal)) {
-    const inferred = findCodeByDescription(input.descripcionPractica)
+    // Fuentes posibles del parte. El orden importa para keywords (probamos
+    // primero el campo más limpio), pero para similitud las combinamos todas.
+    const fuentes = [
+      input.tipoRealizado,
+      input.descripcionPractica,
+      input.diagnosticoOperatorio,
+    ]
+
+    // Paso 1: matcher de keywords curadas, en orden de "señal sobre ruido".
+    // Detenemos al primer hit (las keywords son específicas y curadas a mano).
+    let inferred: string | null = null
+    for (const f of fuentes) {
+      if (isEmpty(f)) continue
+      const r = findCodeByDescription(f)
+      if (r) {
+        inferred = r
+        break
+      }
+    }
+
+    // Paso 2: similitud sobre todo el contexto combinado. Más tokens = mejor
+    // pick (la entrada del nomenclador que cubra más del parte gana).
+    if (!inferred) {
+      inferred = findCodeBySimilarity(...fuentes)
+    }
+
     if (inferred) {
       codigoFinal = inferred
       autoFilledCode = inferred
@@ -256,6 +427,9 @@ export function checkInputsFromExtraction(rawExtraction: any): CheckInputs {
       rawExtraction?.procedimiento?.descripcion_tecnica ??
       rawExtraction?.procedimiento?.tipo_realizado ??
       null,
+    tipoRealizado: rawExtraction?.procedimiento?.tipo_realizado ?? null,
+    diagnosticoOperatorio:
+      rawExtraction?.procedimiento?.diagnostico_operatorio ?? null,
     fechaPracticaISO: null, // se setea aparte porque viene parseada
   }
 }

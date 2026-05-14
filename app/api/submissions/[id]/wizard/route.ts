@@ -23,7 +23,8 @@ type WizardEstado =
   | 'factura_instrucciones'
   | 'factura_adjuntada'
   | 'aprobado'
-  | 'excepcion_enviada';
+  | 'excepcion_enviada'
+  | 'descartado';
 
 // ============================================================================
 // GET: traer submission con datos del wizard
@@ -147,6 +148,9 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   } else if (action === 'marcar_aprobado') {
     update.wizard_estado = 'aprobado';
     update.wizard_paso = 6;
+    update.wizard_completado_en = new Date().toISOString();
+  } else if (action === 'descartar_seguimiento') {
+    update.wizard_estado = 'descartado';
     update.wizard_completado_en = new Date().toISOString();
   } else if (action === 'go_back') {
     const nuevoPaso = Math.max(1, (sub.wizard_paso ?? 1) - 1);

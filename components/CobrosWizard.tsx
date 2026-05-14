@@ -230,6 +230,7 @@ export function CobrosWizard({
   const paso = sub.wizard_paso ?? 1;
   const isAprobado = estado === 'aprobado';
   const isExcepcion = estado === 'excepcion_enviada';
+  const isDescartado = estado === 'descartado';
 
   const labelStyle: CSSProperties = {
     fontSize: 13,
@@ -272,6 +273,17 @@ export function CobrosWizard({
     );
   }
 
+  if (isDescartado) {
+    return (
+      <div style={{ padding: 20, background: '#f5f5f5', border: '1px solid #d0d7d2', borderRadius: 10 }}>
+        <strong style={{ color: '#555' }}>Seguimiento descartado</strong>
+        <p style={{ color: '#666', fontSize: 14, margin: '8px 0 0' }}>
+          Este paso a paso ya no aparecerá como acción pendiente.
+        </p>
+      </div>
+    );
+  }
+
   const goBack = async () => {
     if (paso <= 1) return;
     await patch('go_back');
@@ -298,6 +310,26 @@ export function CobrosWizard({
           {error}
         </div>
       )}
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+        <button
+          type="button"
+          className="btn"
+          style={{ fontSize: 12, color: '#666' }}
+          disabled={saving}
+          onClick={() => {
+            if (
+              window.confirm(
+                '¿Descartar este seguimiento de cobro? No borra documentos ni envíos, solo oculta este paso a paso de acciones pendientes.',
+              )
+            ) {
+              patch('descartar_seguimiento');
+            }
+          }}
+        >
+          Descartar seguimiento
+        </button>
+      </div>
 
       {/* Paso 1 */}
       <Step numero={1} titulo="Esperá 48 horas para que Swiss Medical procese la liquidación" activo={paso === 1} completado={paso > 1}>

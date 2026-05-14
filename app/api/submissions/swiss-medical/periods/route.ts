@@ -3,6 +3,7 @@ import { auth } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { isSwissMedicalPrepaga } from '@/lib/swissCxBuild'
+import { filterSubmissionsWithLiveLiquidaciones } from '@/lib/monthlySubmissions'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -53,7 +54,7 @@ export async function GET() {
 
   const { data: subs, error: subErr } = await supabaseAdmin
     .from('monthly_submissions')
-    .select('periodo, status, enviado_en')
+    .select('periodo, status, enviado_en, partes_incluidos')
     .eq('clerk_user_id', userId)
     .eq('obra_social', OBRA_SOCIAL)
 
@@ -62,8 +63,10 @@ export async function GET() {
     return NextResponse.json({ error: subErr.message }, { status: 500 })
   }
 
+  const liveSubs = await filterSubmissionsWithLiveLiquidaciones(userId, subs ?? [])
+
   const subByPeriodo = new Map<string, { status: string; enviado_en: string | null }>()
-  for (const s of subs ?? []) {
+  for (const s of liveSubs) {
     const prev = subByPeriodo.get(s.periodo)
     const rank = (st: string) =>
       st === 'enviado' ? 3 : st === 'enviando' ? 2 : st === 'fallido' ? 1 : 0

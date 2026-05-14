@@ -2,15 +2,26 @@
 
 import * as React from 'react';
 import { parseISO } from 'date-fns';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
-import { loadHistoryWithFallback } from '@/lib/history';
+import { loadHistoryWithFallback, type HistoryItem } from '@/lib/history';
 import { getCobrosDelMesPorDia, PREPAGAS } from '@/lib/dashboard-data';
 import { formatCurrency } from '@/lib/utils';
 import { useMounted } from '@/lib/use-mounted';
 
-function CalendarioContent() {
-  const { files } = loadHistoryWithFallback();
-  const cobrosPorDia = getCobrosDelMesPorDia(files);
+type CalendarioProps = {
+  files?: HistoryItem[];
+  mes?: Date;
+};
+
+function CalendarioContent({ files: filesProp, mes }: CalendarioProps) {
+  const { files: fallbackFiles } = loadHistoryWithFallback();
+  const files = filesProp ?? fallbackFiles;
+  const mesObjetivo = mes ?? new Date();
+  const mesLabel = format(mesObjetivo, 'MMMM yyyy', { locale: es });
+  const mesCapitalizado = mesLabel.charAt(0).toUpperCase() + mesLabel.slice(1);
+  const cobrosPorDia = getCobrosDelMesPorDia(files, mesObjetivo);
 
   const cantidadCobros = cobrosPorDia.reduce((acc, dia) => acc + dia.items.length, 0);
   const cantidadAConfirmar = cobrosPorDia.reduce(
@@ -78,13 +89,13 @@ function CalendarioContent() {
       <div className="stats-empty" style={{ marginBottom: 18 }}>
         {cantidadAConfirmar > 0 ? (
           <>
-            Este mes tenés <b className="tabular">{cantidadConMonto}</b> cobro(s) estimados +{' '}
+            En {mesCapitalizado} tenés <b className="tabular">{cantidadConMonto}</b> cobro(s) estimados +{' '}
             <b className="tabular">{cantidadAConfirmar}</b> a confirmar por un total de{' '}
             <b className="tabular">{formatCurrency(totalEstimado)}</b>.
           </>
         ) : (
           <>
-            Este mes tenés <b className="tabular">{cantidadCobros}</b> cobro(s) estimados por un total de{' '}
+            En {mesCapitalizado} tenés <b className="tabular">{cantidadCobros}</b> cobro(s) estimados por un total de{' '}
             <b className="tabular">{formatCurrency(totalEstimado)}</b>.
           </>
         )}
@@ -240,7 +251,7 @@ function CalendarioContent() {
   );
 }
 
-export function Calendario() {
+export function Calendario(props: CalendarioProps) {
   const mounted = useMounted();
   if (!mounted) {
     return (
@@ -257,5 +268,5 @@ export function Calendario() {
       </section>
     );
   }
-  return <CalendarioContent />;
+  return <CalendarioContent {...props} />;
 }

@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-import { loadHistoryWithFallback } from '@/lib/history';
+import { loadHistoryWithFallback, type HistoryItem } from '@/lib/history';
 import { getProyeccionDelMes, PREPAGAS } from '@/lib/dashboard-data';
 import { formatCurrency } from '@/lib/utils';
 import { useMounted } from '@/lib/use-mounted';
@@ -14,15 +14,21 @@ import { useMounted } from '@/lib/use-mounted';
 type ProyeccionProps = {
   onNavigate?: (view: string) => void;
   showMoreLink?: boolean;
+  files?: HistoryItem[];
+  mes?: Date;
 };
 
 function ProyeccionContent({
   onNavigate,
   showMoreLink = true,
+  files: filesProp,
+  mes,
 }: ProyeccionProps) {
-  const { files } = loadHistoryWithFallback();
-  const proyeccion = getProyeccionDelMes(files);
-  const mesActual = format(new Date(), 'MMMM yyyy', { locale: es });
+  const { files: fallbackFiles } = loadHistoryWithFallback();
+  const files = filesProp ?? fallbackFiles;
+  const mesObjetivo = mes ?? new Date();
+  const proyeccion = getProyeccionDelMes(files, mesObjetivo);
+  const mesActual = format(mesObjetivo, 'MMMM yyyy', { locale: es });
   const mesCapitalizado = mesActual.charAt(0).toUpperCase() + mesActual.slice(1);
 
   const porcentajeCobrado = proyeccion.total > 0 ? Math.round((proyeccion.cobrado / proyeccion.total) * 100) : 0;

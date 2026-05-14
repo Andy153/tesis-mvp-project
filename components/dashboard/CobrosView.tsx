@@ -791,8 +791,8 @@ export function CobrosView({
 
         <div style={{ display: 'grid', gap: 18 }}>
           <div style={{ display: 'grid', gap: 18 }}>
-            <Proyeccion showMoreLink={false} />
-            <Calendario />
+            <Proyeccion showMoreLink={false} files={files as any} mes={mes} />
+            <Calendario files={files as any} mes={mes} />
           </div>
 
           {/* Controles */}

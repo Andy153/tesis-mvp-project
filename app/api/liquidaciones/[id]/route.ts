@@ -68,7 +68,9 @@ type PatchBody = {
   fecha_practica_iso?: string | null // 'YYYY-MM-DD'
   // Action: si es 'confirm', el médico apretó Confirmar (estado_revision pasa a confirmado).
   // Si es 'save_draft', solo guarda los cambios sin confirmar.
-  action: 'confirm' | 'save_draft'
+  // Si es 'mark_presented', registra la presentación para Centro de cobros.
+  action: 'confirm' | 'save_draft' | 'mark_presented'
+  fecha_presentacion_iso?: string | null
 }
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
@@ -82,7 +84,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
 
-  if (body.action !== 'confirm' && body.action !== 'save_draft') {
+  if (body.action !== 'confirm' && body.action !== 'save_draft' && body.action !== 'mark_presented') {
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
   }
 
@@ -104,6 +106,30 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   if (liqErr) return NextResponse.json({ error: liqErr.message }, { status: 500 })
   if (!liq) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  if (body.action === 'mark_presented') {
+    const fechaPresentacion =
+      body.fecha_presentacion_iso && !Number.isNaN(new Date(body.fecha_presentacion_iso).getTime())
+        ? new Date(body.fecha_presentacion_iso).toISOString()
+        : new Date().toISOString()
+
+    const { error: presentErr } = await supabaseAdmin
+      .from('liquidaciones')
+      .update({
+        estado: 'presentado',
+        fecha_presentacion: fechaPresentacion,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', params.id)
+      .eq('clerk_user_id', userId)
+
+    if (presentErr) {
+      console.error('[TRAZA] liquidaciones:mark_presented_error', presentErr)
+      return NextResponse.json({ error: presentErr.message }, { status: 500 })
+    }
+
+    return NextResponse.json({ ok: true, estado: 'presentado', fecha_presentacion: fechaPresentacion })
+  }
 
   const ext = (liq.ai_extractions as any)
   const datosExtras = (ext?.datos_extras ?? {}) as any

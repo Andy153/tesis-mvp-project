@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from './Icon';
 import type { FileEntry } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
@@ -188,6 +188,29 @@ export function DocumentsView({
   const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
   const [pending, setPending] = useState<any[]>([]);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const syncedPresentedIds = useRef<Set<string>>(new Set());
+
+  const markPresentedInCloud = useCallback(async (file: FileEntry) => {
+    if (!file.documentId) return;
+
+    const r = await fetch(`/api/liquidaciones?document_id=${encodeURIComponent(file.documentId)}`);
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || 'No se pudo buscar la liquidación');
+
+    const liquidaciones = Array.isArray(j.liquidaciones) ? j.liquidaciones : [];
+    await Promise.all(
+      liquidaciones.map(async (liq: any) => {
+        const res = await fetch(`/api/liquidaciones/${liq.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'mark_presented' }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error || 'No se pudo marcar como presentado');
+      }),
+    );
+  }, []);
+
   useEffect(() => {
     fetch('/api/liquidaciones?estado_revision=bloqueado,en_revision')
       .then((r) => r.json())
@@ -213,6 +236,17 @@ export function DocumentsView({
 
   /** Misma lista que Carga / Cobros: solo el estado del padre (evita que loadHistory() pise un borrado reciente). */
   const ready = useMemo(() => files.filter((f) => f.status !== 'analyzing'), [files]);
+
+  useEffect(() => {
+    for (const f of ready) {
+      if (!f.documentId || f.tracking?.estado !== 'presentado') continue;
+      if (syncedPresentedIds.current.has(f.documentId)) continue;
+      syncedPresentedIds.current.add(f.documentId);
+      void markPresentedInCloud(f).catch((e) => {
+        console.warn('[TRAZA] mark_presented_cloud_autosync_warn', e);
+      });
+    }
+  }, [ready, markPresentedInCloud]);
 
   const counts = useMemo(() => {
     return {
@@ -442,9 +476,14 @@ export function DocumentsView({
                               </span>
                               <button
                                 className="btn btn-sm btn-primary"
-                                onClick={() => {
+                                onClick={async () => {
                                   onUpdateTracking(f.id, (it) => markAsPresented(it));
                                   setConfirmPresentId(null);
+                                  try {
+                                    await markPresentedInCloud(f);
+                                  } catch (e) {
+                                    console.warn('[TRAZA] mark_presented_cloud_warn', e);
+                                  }
                                 }}
                               >
                                 Sí

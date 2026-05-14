@@ -116,7 +116,10 @@ export function CobrosView({
 
   const hasDbData = dbLoaded && dbLiquidaciones.length > 0;
   const dbFiles = hasDbData
-    ? dbLiquidaciones.map((liq) => ({
+    ? dbLiquidaciones.map((liq) => {
+        const ext = liq.documents?.ai_extractions?.[0];
+        const datosExtras = (ext?.datos_extras ?? {}) as any;
+        return {
         id: liq.id,
         name: liq.documents?.nombre_archivo ?? liq.id,
         size: 0,
@@ -124,14 +127,28 @@ export function CobrosView({
         addedAt: liq.created_at,
         status: 'analyzed' as const,
         analysis: undefined,
-        aiParteExtract: liq.documents?.ai_extractions?.[0]
+        aiParteExtract: ext
           ? {
-              paciente: { apellido_nombre: liq.documents.ai_extractions[0].paciente },
-              procedimiento: {
-                tipo_realizado: liq.documents.ai_extractions[0].descripcion_practica,
-                codigo_nomenclador: liq.documents.ai_extractions[0].codigo_nomenclador,
+              ...datosExtras,
+              paciente: {
+                ...(datosExtras?.paciente ?? {}),
+                apellido_nombre: ext.paciente,
               },
-              cobertura: { prepaga: liq.prepaga },
+              procedimiento: {
+                ...(datosExtras?.procedimiento ?? {}),
+                tipo_realizado:
+                  datosExtras?.procedimiento?.tipo_realizado ?? ext.descripcion_practica,
+                codigo_nomenclador:
+                  datosExtras?.procedimiento?.codigo_nomenclador ?? ext.codigo_nomenclador,
+              },
+              cirugia: {
+                ...(datosExtras?.cirugia ?? {}),
+                fecha: datosExtras?.cirugia?.fecha ?? ext.fecha_practica,
+              },
+              cobertura: {
+                ...(datosExtras?.cobertura ?? {}),
+                prepaga: datosExtras?.cobertura?.prepaga ?? liq.prepaga,
+              },
             }
           : undefined,
         tracking: {
@@ -150,9 +167,10 @@ export function CobrosView({
           montoOriginal: liq.monto_galenos ?? undefined,
           motivoRechazo: liq.motivo_rechazo ?? undefined,
         },
-      }))
+      }
+    })
     : null;
-  const files = (filesProp ?? dbFiles ?? fallbackFiles) as any;
+  const files = ((filesProp && filesProp.length > 0) ? filesProp : dbFiles ?? fallbackFiles) as any;
 
   const [mesKey, setMesKey] = React.useState<string>(() => monthKey(new Date()));
   const mes = React.useMemo(() => monthFromKey(mesKey), [mesKey]);
@@ -173,6 +191,7 @@ export function CobrosView({
   const [openPaid, setOpenPaid] = React.useState<null | { id: string; fecha: string; monto: string }>(null);
   const [expanded, setExpanded] = React.useState<Set<string>>(() => new Set());
   const [openDetailId, setOpenDetailId] = React.useState<string | null>(null);
+  const autoSelectedCobroMonth = React.useRef(false);
   const [openSection, setOpenSection] = React.useState<{ cobrados: boolean; rechazados: boolean }>(() => ({
     cobrados: false,
     rechazados: false,
@@ -258,6 +277,23 @@ export function CobrosView({
     }
     return out;
   }, []);
+
+  React.useEffect(() => {
+    if (autoSelectedCobroMonth.current || all.length > 0 || !files?.length) return;
+
+    const current = monthKey(new Date());
+    const sortedOptions = [...mesesOpciones].sort((a, b) => {
+      const da = Math.abs(monthFromKey(a.key).getTime() - monthFromKey(current).getTime());
+      const db = Math.abs(monthFromKey(b.key).getTime() - monthFromKey(current).getTime());
+      return da - db;
+    });
+    const monthWithCobros = sortedOptions.find((opt) => getCobrosDelMes(files as any, monthFromKey(opt.key)).length > 0);
+
+    if (monthWithCobros && monthWithCobros.key !== mesKey) {
+      autoSelectedCobroMonth.current = true;
+      setMesKey(monthWithCobros.key);
+    }
+  }, [all.length, files, mesKey, mesesOpciones]);
 
   const prepagaBadge = (obra: CobroItem['prepaga']) => {
     const info =

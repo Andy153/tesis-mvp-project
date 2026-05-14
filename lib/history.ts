@@ -266,6 +266,9 @@ export type LiquidacionesAPIResponse = {
       descripcion_practica: string | null
       cirujano: string | null
       fecha_practica: string | null
+      sanatorio?: string | null
+      anestesia?: string | null
+      datos_extras?: Record<string, unknown>
     }[]
   } | null
 }

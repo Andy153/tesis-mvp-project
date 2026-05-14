@@ -345,7 +345,7 @@ export function DocumentsView({
         </div>
       )}
 
-      <CobrosBanner />
+      <CobrosBanner key={refreshKey} />
       <div style={{ marginBottom: 16 }}>
         <SwissMedicalCloseButton onSent={() => setRefreshKey((k) => k + 1)} />
       </div>

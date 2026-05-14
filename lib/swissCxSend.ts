@@ -5,6 +5,7 @@ import { Resend } from 'resend'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { generateSwissCxFiles } from '@/lib/swissCxExport'
 import { buildSwissRowsForPeriod, type ParteInfo } from '@/lib/swissCxBuild'
+import { includedLiquidacionIds } from '@/lib/monthlySubmissions'
 
 export const OBRA_SOCIAL = 'swiss_medical'
 const BUCKET_DOCUMENTOS = 'documentos-medicos'
@@ -117,6 +118,24 @@ function sanitizeFilename(s: string): string {
   return s.replace(/[^\w.\- ]/g, '_').slice(0, 80)
 }
 
+async function hasLiveIncludedLiquidaciones(userId: string, partesIncluidos: unknown): Promise<boolean> {
+  const ids = includedLiquidacionIds({ partes_incluidos: partesIncluidos })
+  if (ids.length === 0) return true
+
+  const { count, error } = await supabaseAdmin
+    .from('liquidaciones')
+    .select('id', { count: 'exact', head: true })
+    .eq('clerk_user_id', userId)
+    .in('id', ids)
+
+  if (error) {
+    console.warn('[TRAZA] sendSwiss:live_existing_check_failed', error.message)
+    return true
+  }
+
+  return (count ?? 0) > 0
+}
+
 function yearMonthFromDate(dateStr: string | null | undefined): string | null {
   if (!dateStr) return null
   const d = new Date(dateStr)
@@ -215,21 +234,20 @@ export async function sendSwissMonthlyForUser(
 
   let submissionId: string
 
-  if (existing) {
+  const existingStillRelevant = existing
+    ? await hasLiveIncludedLiquidaciones(userId, existing.partes_incluidos)
+    : false
+  const existingHadMissingPdf =
+    existing?.status === 'enviado' &&
+    Array.isArray(existing.partes_incluidos) &&
+    existing.partes_incluidos.some((p: any) => p?.pdf_adjunto === false)
+  const shouldReuseExisting =
+    Boolean(existing) &&
+    existingStillRelevant &&
+    (existing!.status !== 'enviado' || existingHadMissingPdf)
+
+  if (existing && shouldReuseExisting) {
     if (existing.status === 'enviado') {
-      const hadMissingPdf =
-        Array.isArray(existing.partes_incluidos) &&
-        existing.partes_incluidos.some((p: any) => p?.pdf_adjunto === false)
-
-      if (!hadMissingPdf) {
-        return {
-          skipped: true,
-          reason: 'Ya enviado',
-          status: 409,
-          submission_id: existing.id,
-        }
-      }
-
       console.warn('[TRAZA] sendSwiss:corrective_resend_missing_pdf', {
         submission_id: existing.id,
         periodo,
@@ -254,6 +272,16 @@ export async function sendSwissMonthlyForUser(
     }
     submissionId = existing.id
   } else {
+    if (existing) {
+      console.warn('[TRAZA] sendSwiss:creating_new_submission_despite_existing', {
+        submission_id: existing.id,
+        periodo,
+        existing_status: existing.status,
+        existing_still_relevant: existingStillRelevant,
+        existing_had_missing_pdf: existingHadMissingPdf,
+      })
+    }
+
     const { data: inserted, error: insertErr } = await supabaseAdmin
       .from('monthly_submissions')
       .insert({
@@ -401,6 +429,24 @@ export async function sendSwissMonthlyForUser(
       fecha_practica: p.fecha_practica,
       pdf_adjunto: !partesSinPdf.some((sp) => sp.document_id === p.document_id),
     }))
+
+    const fechaPresentacion = new Date().toISOString()
+    const liquidacionIds = partes.map((p) => p.liquidacion_id).filter(Boolean)
+    if (liquidacionIds.length > 0) {
+      const { error: markPresentedErr } = await supabaseAdmin
+        .from('liquidaciones')
+        .update({
+          estado: 'presentado',
+          fecha_presentacion: fechaPresentacion,
+          updated_at: fechaPresentacion,
+        })
+        .eq('clerk_user_id', userId)
+        .in('id', liquidacionIds)
+
+      if (markPresentedErr) {
+        console.warn('[TRAZA] sendSwiss:mark_liquidaciones_presented_warn', markPresentedErr.message)
+      }
+    }
 
     const { error: finalErr } = await supabaseAdmin
       .from('monthly_submissions')

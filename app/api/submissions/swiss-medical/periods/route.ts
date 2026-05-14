@@ -80,10 +80,13 @@ export async function GET() {
     .sort((a, b) => b.localeCompare(a))
     .map((p) => {
       const sub = subByPeriodo.get(p)
+      const cantidadPendientes = counts.get(p) ?? 0
       return {
         periodo: p,
-        cantidad_pendientes: counts.get(p) ?? 0,
-        ya_enviado: sub?.status === 'enviado',
+        cantidad_pendientes: cantidadPendientes,
+        // Si hay partes pendientes confirmadas, el período vuelve a ser enviable
+        // aunque ya exista un envío anterior para el mismo mes.
+        ya_enviado: cantidadPendientes === 0 && sub?.status === 'enviado',
         enviado_en: sub?.enviado_en ?? null,
         status_envio: sub?.status ?? null,
       }

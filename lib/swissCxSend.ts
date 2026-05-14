@@ -234,25 +234,7 @@ export async function sendSwissMonthlyForUser(
 
   let submissionId: string
 
-  const existingStillRelevant = existing
-    ? await hasLiveIncludedLiquidaciones(userId, existing.partes_incluidos)
-    : false
-  const existingHadMissingPdf =
-    existing?.status === 'enviado' &&
-    Array.isArray(existing.partes_incluidos) &&
-    existing.partes_incluidos.some((p: any) => p?.pdf_adjunto === false)
-  const shouldReuseExisting =
-    Boolean(existing) &&
-    existingStillRelevant &&
-    (existing!.status !== 'enviado' || existingHadMissingPdf)
-
-  if (existing && shouldReuseExisting) {
-    if (existing.status === 'enviado') {
-      console.warn('[TRAZA] sendSwiss:corrective_resend_missing_pdf', {
-        submission_id: existing.id,
-        periodo,
-      })
-    }
+  if (existing) {
     if (existing.status === 'enviando') {
       return {
         skipped: true,
@@ -261,9 +243,29 @@ export async function sendSwissMonthlyForUser(
         submission_id: existing.id,
       }
     }
+
+    const existingStillRelevant = await hasLiveIncludedLiquidaciones(userId, existing.partes_incluidos)
+    const existingHadMissingPdf =
+      existing.status === 'enviado' &&
+      Array.isArray(existing.partes_incluidos) &&
+      existing.partes_incluidos.some((p: any) => p?.pdf_adjunto === false)
+
+    console.warn('[TRAZA] sendSwiss:reusing_existing_submission_slot', {
+      submission_id: existing.id,
+      periodo,
+      existing_status: existing.status,
+      existing_still_relevant: existingStillRelevant,
+      existing_had_missing_pdf: existingHadMissingPdf,
+    })
+
     const { error: promoteErr } = await supabaseAdmin
       .from('monthly_submissions')
-      .update({ status: 'enviando', error_message: null, updated_at: new Date().toISOString() })
+      .update({
+        status: 'enviando',
+        error_message: null,
+        resend_message_id: null,
+        updated_at: new Date().toISOString(),
+      })
       .eq('id', existing.id)
       .eq('status', existing.status)
     if (promoteErr) {
@@ -272,16 +274,6 @@ export async function sendSwissMonthlyForUser(
     }
     submissionId = existing.id
   } else {
-    if (existing) {
-      console.warn('[TRAZA] sendSwiss:creating_new_submission_despite_existing', {
-        submission_id: existing.id,
-        periodo,
-        existing_status: existing.status,
-        existing_still_relevant: existingStillRelevant,
-        existing_had_missing_pdf: existingHadMissingPdf,
-      })
-    }
-
     const { data: inserted, error: insertErr } = await supabaseAdmin
       .from('monthly_submissions')
       .insert({

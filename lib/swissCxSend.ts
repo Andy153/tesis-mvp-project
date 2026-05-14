@@ -117,6 +117,72 @@ function sanitizeFilename(s: string): string {
   return s.replace(/[^\w.\- ]/g, '_').slice(0, 80)
 }
 
+function yearMonthFromDate(dateStr: string | null | undefined): string | null {
+  if (!dateStr) return null
+  const d = new Date(dateStr)
+  if (Number.isNaN(d.getTime())) return null
+  const yyyy = String(d.getFullYear())
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  return `${yyyy}-${mm}`
+}
+
+function extensionCandidates(nombreArchivo: string | null | undefined): string[] {
+  const rawExt = String(nombreArchivo ?? '').split('.').pop()?.trim().toLowerCase()
+  const candidates = new Set<string>(['pdf'])
+  if (rawExt && /^[a-z0-9]{1,8}$/.test(rawExt)) candidates.add(rawExt)
+  return Array.from(candidates)
+}
+
+function buildDocumentStorageCandidates(userId: string, p: ParteInfo): string[] {
+  const candidates = new Set<string>()
+  const normalizedPath = normalizeSupabaseStoragePath(BUCKET_DOCUMENTOS, p.storage_path)
+  if (normalizedPath) candidates.add(normalizedPath)
+
+  // Backwards compatibility: older DB rows stored a placeholder path before the
+  // real PDF upload happened. The uploaded object itself is keyed by document id.
+  const folders = [yearMonthFromDate(p.fecha_practica), '_pendiente'].filter(
+    (v): v is string => Boolean(v),
+  )
+  for (const folder of folders) {
+    for (const ext of extensionCandidates(p.nombre_archivo)) {
+      candidates.add(`${userId}/${folder}/${p.document_id}.${ext}`)
+    }
+  }
+
+  return Array.from(candidates)
+}
+
+async function downloadFirstAvailablePdf(
+  userId: string,
+  p: ParteInfo,
+): Promise<{ buffer: Buffer; storagePath: string } | null> {
+  const candidates = buildDocumentStorageCandidates(userId, p)
+  if (candidates.length === 0) return null
+
+  let lastError: string | undefined
+  for (const candidate of candidates) {
+    const { data: blob, error } = await supabaseAdmin.storage
+      .from(BUCKET_DOCUMENTOS)
+      .download(candidate)
+
+    if (!error && blob) {
+      return {
+        buffer: Buffer.from(await blob.arrayBuffer()),
+        storagePath: candidate,
+      }
+    }
+    lastError = error?.message
+  }
+
+  console.warn('[TRAZA] sendSwiss:pdf_download_failed', {
+    document_id: p.document_id,
+    storage_path: p.storage_path,
+    tried_paths: candidates,
+    error: lastError,
+  })
+  return null
+}
+
 export async function sendSwissMonthlyForUser(
   userId: string,
   periodo: string,
@@ -134,7 +200,7 @@ export async function sendSwissMonthlyForUser(
   // PASO 1: Reservar slot
   const { data: existing, error: existingErr } = await supabaseAdmin
     .from('monthly_submissions')
-    .select('id, status, resend_message_id, enviado_en')
+    .select('id, status, resend_message_id, enviado_en, partes_incluidos')
     .eq('clerk_user_id', userId)
     .eq('periodo', periodo)
     .eq('obra_social', OBRA_SOCIAL)
@@ -151,12 +217,23 @@ export async function sendSwissMonthlyForUser(
 
   if (existing) {
     if (existing.status === 'enviado') {
-      return {
-        skipped: true,
-        reason: 'Ya enviado',
-        status: 409,
-        submission_id: existing.id,
+      const hadMissingPdf =
+        Array.isArray(existing.partes_incluidos) &&
+        existing.partes_incluidos.some((p: any) => p?.pdf_adjunto === false)
+
+      if (!hadMissingPdf) {
+        return {
+          skipped: true,
+          reason: 'Ya enviado',
+          status: 409,
+          submission_id: existing.id,
+        }
       }
+
+      console.warn('[TRAZA] sendSwiss:corrective_resend_missing_pdf', {
+        submission_id: existing.id,
+        periodo,
+      })
     }
     if (existing.status === 'enviando') {
       return {
@@ -245,25 +322,12 @@ export async function sendSwissMonthlyForUser(
     let totalBytes = xlsxBuffer.length
 
     for (const p of partes) {
-      const normalizedPath = normalizeSupabaseStoragePath(BUCKET_DOCUMENTOS, p.storage_path)
-      if (!normalizedPath) {
+      const downloaded = await downloadFirstAvailablePdf(userId, p)
+      if (!downloaded) {
         partesSinPdf.push(p)
         continue
       }
-      const { data: blob, error: dlErr } = await supabaseAdmin.storage
-        .from(BUCKET_DOCUMENTOS)
-        .download(normalizedPath)
-      if (dlErr || !blob) {
-        console.warn('[TRAZA] sendSwiss:pdf_download_failed', {
-          document_id: p.document_id,
-          storage_path: p.storage_path,
-          normalized_path: normalizedPath,
-          error: dlErr?.message,
-        })
-        partesSinPdf.push(p)
-        continue
-      }
-      const buf = Buffer.from(await blob.arrayBuffer())
+      const buf = downloaded.buffer
       const baseName = sanitizeFilename(p.paciente || p.nombre_archivo || `parte_${p.document_id}`)
       if (totalBytes + buf.length > MAX_ATTACHMENTS_BYTES) {
         console.warn('[TRAZA] sendSwiss:size_limit_reached')
@@ -272,6 +336,14 @@ export async function sendSwissMonthlyForUser(
       }
       totalBytes += buf.length
       pdfsAdjuntos.push({ filename: `${baseName}.pdf`, content: buf })
+
+      if (downloaded.storagePath !== normalizeSupabaseStoragePath(BUCKET_DOCUMENTOS, p.storage_path)) {
+        await supabaseAdmin
+          .from('documents')
+          .update({ storage_path: downloaded.storagePath })
+          .eq('id', p.document_id)
+          .eq('clerk_user_id', userId)
+      }
     }
 
     // PASO 5: Subir xlsx

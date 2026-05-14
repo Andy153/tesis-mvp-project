@@ -112,13 +112,13 @@ export function UploadView({
         const structuredForUpload = extractStructured(text, NOMEN_FOR_EXTRACT);
         const operationDate = structuredForUpload?.fechaPractica ?? null;
 
-        import('@/lib/storage-upload').then(({ uploadDocumentToStorage }) => {
-          uploadDocumentToStorage(uploadFile, extractedDocumentId, operationDate)
-            .then((path) => {
-              if (path) console.log('[TRAZA] File uploaded to storage:', path);
-            })
-            .catch(() => {});
-        });
+        try {
+          const { uploadDocumentToStorage } = await import('@/lib/storage-upload');
+          const storagePath = await uploadDocumentToStorage(uploadFile, extractedDocumentId, operationDate);
+          if (storagePath) console.log('[TRAZA] File uploaded to storage:', storagePath);
+        } catch (uploadErr) {
+          console.error('[TRAZA] File upload to storage failed:', uploadErr);
+        }
       }
       autoManualPrompted.current.delete(file.id);
       onAddFile({
@@ -219,13 +219,13 @@ export function UploadView({
           const structuredForUpload = extractStructured(text, NOMEN_FOR_EXTRACT);
           const operationDate = structuredForUpload?.fechaPractica ?? null;
 
-          import('@/lib/storage-upload').then(({ uploadDocumentToStorage }) => {
-            uploadDocumentToStorage(file, extractedDocumentId, operationDate)
-              .then((path) => {
-                if (path) console.log('[TRAZA] File uploaded to storage:', path);
-              })
-              .catch(() => {});
-          });
+          try {
+            const { uploadDocumentToStorage } = await import('@/lib/storage-upload');
+            const storagePath = await uploadDocumentToStorage(file, extractedDocumentId, operationDate);
+            if (storagePath) console.log('[TRAZA] File uploaded to storage:', storagePath);
+          } catch (uploadErr) {
+            console.error('[TRAZA] File upload to storage failed:', uploadErr);
+          }
         }
 
         onAddFile({

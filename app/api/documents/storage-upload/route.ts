@@ -79,5 +79,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: error.message }, { status: 400 })
   }
 
+  const { error: updateErr } = await supabaseAdmin
+    .from('documents')
+    .update({ storage_path: storagePath })
+    .eq('id', documentId)
+    .eq('clerk_user_id', userId)
+
+  if (updateErr) {
+    console.error('[TRAZA] Storage upload metadata update error:', updateErr)
+    return NextResponse.json({ error: updateErr.message }, { status: 500 })
+  }
+
   return NextResponse.json({ path: storagePath, folder })
 }

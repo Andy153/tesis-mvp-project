@@ -310,6 +310,12 @@ export function CobrosWizard({
             <p style={{ fontSize: 14, color: '#1f5d3a', margin: 0 }}>
               ⏳ <Countdown desde={sub.enviado_en} horas={48} onReady={() => setReady48h(true)} />
             </p>
+            <p style={{ fontSize: 13, color: '#666', margin: '10px 0 12px' }}>
+              El contador es una recomendación, no bloquea el proceso.
+            </p>
+            <button type="button" className="btn btn-primary" onClick={() => patch('comprobante_disponible')} disabled={saving}>
+              Avanzar y revisar el portal →
+            </button>
           </div>
         ) : (
           <div>
@@ -455,18 +461,25 @@ export function CobrosWizard({
       <Step numero={6} titulo="Verificá la aprobación (48 horas)" activo={paso === 6} completado={isAprobado}>
         {!sub.factura_adjuntada_en ? (
           <p style={{ fontSize: 14, color: '#888' }}>Completá el paso anterior para iniciar esta espera.</p>
-        ) : !readyFactura ? (
-          <div>
-            <p style={{ fontSize: 14, color: '#555', margin: '0 0 8px' }}>Swiss Medical tiene 48 horas para procesar la factura adjuntada.</p>
-            <p style={{ fontSize: 14, color: '#1f5d3a' }}>
-              ⏳ <Countdown desde={sub.factura_adjuntada_en} horas={48} onReady={() => setReadyFactura(true)} />
-            </p>
-          </div>
         ) : (
           <div>
-            <p style={{ fontSize: 14, color: '#1f5d3a', marginBottom: 12 }}>
-              ✅ Ya pasaron 48 horas. Revisá si figura <strong>Aprobado</strong> en el portal.
-            </p>
+            {!readyFactura ? (
+              <>
+                <p style={{ fontSize: 14, color: '#555', margin: '0 0 8px' }}>
+                  Swiss Medical tiene 48 horas para procesar la factura adjuntada.
+                </p>
+                <p style={{ fontSize: 14, color: '#1f5d3a', margin: '0 0 8px' }}>
+                  ⏳ <Countdown desde={sub.factura_adjuntada_en} horas={48} onReady={() => setReadyFactura(true)} />
+                </p>
+                <p style={{ fontSize: 13, color: '#666', margin: '0 0 12px' }}>
+                  El contador es una recomendación, no bloquea la verificación.
+                </p>
+              </>
+            ) : (
+              <p style={{ fontSize: 14, color: '#1f5d3a', marginBottom: 12 }}>
+                ✅ Ya pasaron 48 horas. Revisá si figura <strong>Aprobado</strong> en el portal.
+              </p>
+            )}
             <a
               href="https://www.swissmedical.com.ar/prestadores"
               target="_blank"

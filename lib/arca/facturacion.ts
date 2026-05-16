@@ -1,153 +1,249 @@
-import { afipClient } from '@/lib/arca/client'
-import type { EmitirFacturaCInput, FacturaCResult } from '@/lib/arca/types'
-import { formatCaeDate, formatDate } from '@/lib/arca/utils'
+import { createClientAsync } from 'soap'
+import { getTicketAcceso } from './client'
+import { generarPDFFacturaC } from './pdf-factura'
 
-export type { EmitirFacturaCInput, FacturaCResult } from '@/lib/arca/types'
+const WSFE_WSDL_HOMO = 'https://wswhomo.afip.gov.ar/wsfev1/service.asmx?WSDL'
+const WSFE_WSDL_PROD = 'https://servicios1.afip.gov.ar/wsfev1/service.asmx?WSDL'
+const CBTE_TIPO_FACTURA_C = 11
 
-const SWISS_MEDICAL_CUIT = 30692317714
-
-function toAfipDate(isoDate: string): number {
-  return parseInt(isoDate.replace(/-/g, ''), 10)
+const CONDICION_IVA_LABELS: Record<number, string> = {
+  1: 'IVA Responsable Inscripto',
+  4: 'IVA Sujeto Exento',
+  5: 'Consumidor Final',
+  6: 'Responsable Monotributo',
+  7: 'Sujeto no Categorizado',
+  8: 'Proveedor del Exterior',
+  9: 'Cliente del Exterior',
+  10: 'IVA Liberado - Ley 19640',
+  13: 'Monotributista Social',
+  15: 'IVA No Alcanzado',
+  16: 'Monotributo Trabajador Independiente Promovido',
 }
 
-function formatCaeFechaVto(fecha: string): string {
-  return fecha.replace(/-/g, '')
+function toYYYYMMDD(value: string): string {
+  const digits = value.replace(/\D/g, '')
+  if (digits.length >= 8) return digits.slice(0, 8)
+  return String(todayYYYYMMDD())
 }
 
-export async function emitirFacturaC(input: EmitirFacturaCInput): Promise<FacturaCResult> {
-  try {
-    const ptoVta = Number(process.env.AFIP_PUNTO_VENTA) || 1
-    const cbteTipo = 11
+function wsfeWsdl(): string {
+  return process.env.AFIP_AMBIENTE === 'produccion' ? WSFE_WSDL_PROD : WSFE_WSDL_HOMO
+}
 
-    const lastVoucher = await afipClient.ElectronicBilling.getLastVoucher(ptoVta, cbteTipo)
-    const nextVoucherNumber = lastVoucher + 1
+function afipCuit(): number {
+  return parseInt(process.env.AFIP_CUIT || '23452350319', 10)
+}
 
-    const fechaHoy = parseInt(new Date().toISOString().split('T')[0].replace(/-/g, ''), 10)
-    const fechaDesde = toAfipDate(input.periodoDesde)
-    const fechaHasta = toAfipDate(input.periodoHasta)
+function afipPtoVta(): number {
+  return parseInt(process.env.AFIP_PTO_VTA || '10', 10)
+}
 
-    const data = {
+function todayYYYYMMDD(): number {
+  const d = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return parseInt(`${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`, 10)
+}
+
+function formatAfipMessages(items: unknown): string {
+  if (!items) return ''
+  const list = Array.isArray(items) ? items : [items]
+  return list
+    .map((item) => {
+      if (!item || typeof item !== 'object') return String(item)
+      const { Code, Msg } = item as { Code?: number | string; Msg?: string }
+      return Code != null ? `${Code}: ${Msg ?? ''}` : String(Msg ?? item)
+    })
+    .join('; ')
+}
+
+function roundMonto(monto: number): number {
+  return Math.round(monto * 100) / 100
+}
+
+export async function emitirFacturaC(params: {
+  monto: number
+  receptorCuit?: string
+  descripcion?: string
+  condicionIVAReceptor?: number
+  periodoDesde?: string
+  periodoHasta?: string
+  receptorRazonSocial?: string
+  fchVtoPago?: string
+}): Promise<{
+  cae: string
+  caeVencimiento: string
+  numeroComprobante: number
+  fechaEmision: string
+  pdfBase64: string
+}> {
+  const cuit = afipCuit()
+  const ptoVta = afipPtoVta()
+  const cbteFch = todayYYYYMMDD()
+  const fechaEmision = String(cbteFch)
+  const periodoDesde = params.periodoDesde ? toYYYYMMDD(params.periodoDesde) : fechaEmision
+  const periodoHasta = params.periodoHasta ? toYYYYMMDD(params.periodoHasta) : fechaEmision
+  const fchServDesde = parseInt(periodoDesde, 10)
+  const fchServHasta = parseInt(periodoHasta, 10)
+  const fchVtoPagoStr = params.fchVtoPago ? toYYYYMMDD(params.fchVtoPago) : fechaEmision
+  const fchVtoPago = parseInt(fchVtoPagoStr, 10)
+  if (fchVtoPago < cbteFch) {
+    throw new Error('FchVtoPago no puede ser anterior a hoy')
+  }
+  const monto = roundMonto(params.monto)
+
+  const docTipo = params.receptorCuit ? 80 : 99
+  const docNro = params.receptorCuit
+    ? parseInt(params.receptorCuit.replace(/\D/g, ''), 10)
+    : 0
+  const condicionIVAReceptor =
+    params.condicionIVAReceptor ?? (params.receptorCuit ? 1 : 5)
+
+  const ticket = await getTicketAcceso('wsfe')
+  const auth = {
+    Token: ticket.token,
+    Sign: ticket.sign,
+    Cuit: cuit,
+  }
+
+  const client = await createClientAsync(wsfeWsdl())
+
+  const [ultimoRaw] = await client.FECompUltimoAutorizadoAsync({
+    Auth: auth,
+    PtoVta: ptoVta,
+    CbteTipo: CBTE_TIPO_FACTURA_C,
+  })
+  console.log('[WSFE] FECompUltimoAutorizado response:', JSON.stringify(ultimoRaw, null, 2))
+
+  const ultimoResult = ultimoRaw?.FECompUltimoAutorizadoResult
+  if (ultimoResult?.Errors) {
+    throw new Error(`FECompUltimoAutorizado: ${formatAfipMessages(ultimoResult.Errors.Err)}`)
+  }
+
+  const ultimoAutorizado = Number(ultimoResult?.CbteNro ?? 0)
+  const nextNumber = ultimoAutorizado + 1
+
+  const feCAEReq = {
+    FeCabReq: {
       CantReg: 1,
       PtoVta: ptoVta,
-      CbteTipo: cbteTipo,
-      Concepto: 2,
-      DocTipo: 80,
-      DocNro: Number(String(input.cuitReceptor).replace(/\D/g, '')),
-      CbteDesde: nextVoucherNumber,
-      CbteHasta: nextVoucherNumber,
-      CbteFch: fechaHoy,
-      ImpTotal: input.importeTotal,
-      ImpTotConc: 0,
-      ImpNeto: input.importeTotal,
-      ImpOpEx: 0,
-      ImpIVA: 0,
-      ImpTrib: 0,
-      FchServDesde: fechaDesde,
-      FchServHasta: fechaHasta,
-      FchVtoPago: fechaHasta,
-      MonId: 'PES',
-      MonCotiz: 1,
-      CondicionIVAReceptorId: 1,
+      CbteTipo: CBTE_TIPO_FACTURA_C,
+    },
+    FeDetReq: {
+      FECAEDetRequest: [
+        {
+          Concepto: 2,
+          DocTipo: docTipo,
+          DocNro: docNro,
+          CondicionIVAReceptorId: condicionIVAReceptor,
+          CbteDesde: nextNumber,
+          CbteHasta: nextNumber,
+          CbteFch: cbteFch,
+          ImpTotal: monto,
+          ImpTotConc: 0,
+          ImpNeto: monto,
+          ImpOpEx: 0,
+          ImpIVA: 0,
+          ImpTrib: 0,
+          FchServDesde: fchServDesde,
+          FchServHasta: fchServHasta,
+          FchVtoPago: fchVtoPago,
+          MonId: 'PES',
+          MonCotiz: 1,
+        },
+      ],
+    },
+  }
+
+  console.log('[WSFE] FECAERequest:', JSON.stringify(feCAEReq, null, 2))
+
+  const [solicitarRaw] = await client.FECAESolicitarAsync({
+    Auth: auth,
+    FeCAEReq: feCAEReq,
+  })
+  console.log('[WSFE] FECAESolicitar response:', JSON.stringify(solicitarRaw, null, 2))
+
+  const solicitarResult = solicitarRaw?.FECAESolicitarResult
+  if (!solicitarResult) {
+    throw new Error('FECAESolicitar: respuesta vacía')
+  }
+
+  if (solicitarResult.Errors) {
+    throw new Error(`FECAESolicitar: ${formatAfipMessages(solicitarResult.Errors.Err)}`)
+  }
+
+  const detRaw = solicitarResult.FeDetResp?.FECAEDetResponse
+  const detList = detRaw == null ? [] : Array.isArray(detRaw) ? detRaw : [detRaw]
+  const det = detList[0]
+
+  if (!det) {
+    throw new Error('FECAESolicitar: sin FECAEDetResponse')
+  }
+
+  if (det.Resultado === 'A') {
+    if (!det.CAE) {
+      throw new Error('FECAESolicitar: autorizado sin CAE')
     }
 
-    const res = await afipClient.ElectronicBilling.createVoucher(data)
+    const cae = String(det.CAE)
+    const caeVencimiento = String(det.CAEFchVto)
+    const condicionIVALabel =
+      CONDICION_IVA_LABELS[condicionIVAReceptor] ?? `Condición IVA ${condicionIVAReceptor}`
 
-    if (!res?.CAE) {
-      return { exito: false, errores: ['ARCA no devolvió CAE'] }
-    }
+    const pdfBuffer = await generarPDFFacturaC({
+      emisor: {
+        razonSocial:
+          process.env.EMISOR_RAZON_SOCIAL?.trim() ||
+          process.env.AFIP_RAZON_SOCIAL?.trim() ||
+          'Prestador de Servicios',
+        cuit: String(cuit),
+        condicionIVA:
+          process.env.EMISOR_CONDICION_IVA?.trim() ||
+          process.env.AFIP_ISSUER_IVA_CONDITION?.trim() ||
+          'Responsable Monotributo',
+        domicilio:
+          process.env.EMISOR_DOMICILIO?.trim() ||
+          process.env.AFIP_ISSUER_ADDRESS?.trim() ||
+          'Domicilio comercial',
+        puntoVenta: ptoVta,
+        ingresosBrutos: process.env.EMISOR_INGRESOS_BRUTOS?.trim() || process.env.AFIP_ISSUER_GROSS_INCOME?.trim(),
+        fechaInicioActividades:
+          process.env.EMISOR_FECHA_INICIO_ACTIVIDADES?.trim() ||
+          process.env.AFIP_ISSUER_ACTIVITY_START?.trim(),
+      },
+      receptor: {
+        cuit: params.receptorCuit?.replace(/\D/g, '') || '0',
+        razonSocial: params.receptorRazonSocial?.trim() || 'Consumidor Final',
+        condicionIVA: condicionIVALabel,
+      },
+      factura: {
+        numero: nextNumber,
+        fechaEmision,
+        periodoDesde,
+        periodoHasta,
+        descripcion: params.descripcion?.trim() || 'Servicios profesionales',
+        monto,
+        cae,
+        caeVencimiento,
+        tipoDocRec: docTipo,
+        nroDocRec: docNro,
+      },
+    })
 
     return {
-      exito: true,
-      nroComprobante: nextVoucherNumber,
-      cae: res.CAE,
-      caeFechaVto: formatCaeFechaVto(res.CAEFchVto),
+      cae,
+      caeVencimiento,
+      numeroComprobante: nextNumber,
+      fechaEmision,
+      pdfBase64: pdfBuffer.toString('base64'),
     }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    return { exito: false, errores: [message] }
   }
-}
 
-export async function generarPDFFacturaC(params: {
-  nroComprobante: number
-  cae: string
-  caeFechaVto: string
-  importeTotal: number
-  periodo: string
-  cuitEmisor: number
-  razonSocialEmisor: string
-}): Promise<{ fileBase64: string; fileName: string } | null> {
-  try {
-    const [year, month] = params.periodo.split('-')
-    const monthPadded = month.padStart(2, '0')
-    const lastDay = new Date(Number(year), Number(month), 0).getDate()
-
-    const issueDateFormatted = formatDate(new Date())
-    const caeDueDateFormatted = formatCaeDate(params.caeFechaVto)
-    const salesPoint = Number(process.env.AFIP_PUNTO_VENTA) || 1
-    const billingTo = `${lastDay}/${monthPadded}/${year}`
-
-    const response = (await afipClient.ElectronicBilling.createPDF({
-      file_name: `factura_${params.periodo}_${params.nroComprobante}.pdf`,
-      template: {
-        name: 'invoice-c',
-        params: {
-          voucher_number: params.nroComprobante,
-          sales_point: salesPoint,
-          issue_date: issueDateFormatted,
-          cae_due_date: caeDueDateFormatted,
-          issuer_cuit: params.cuitEmisor,
-          cae: Number(String(params.cae).replace(/\D/g, '')),
-          issuer_business_name: params.razonSocialEmisor,
-          issuer_address: process.env.AFIP_ISSUER_ADDRESS || '-',
-          issuer_iva_condition: process.env.AFIP_ISSUER_IVA_CONDITION || 'Responsable Monotributo',
-          issuer_gross_income: process.env.AFIP_ISSUER_GROSS_INCOME || '-',
-          issuer_activity_start_date: process.env.AFIP_ISSUER_ACTIVITY_START || '01/01/2020',
-          receiver_name: 'Swiss Medical S.A.',
-          receiver_address: '-',
-          receiver_document_type: 80,
-          receiver_document_number: SWISS_MEDICAL_CUIT,
-          receiver_iva_condition: 'IVA Responsable Inscripto',
-          sale_condition: 'Contado',
-          currency_id: 'ARS',
-          currency_rate: 1,
-          concept: 2,
-          items: [
-            {
-              code: '001',
-              description: `Servicios médicos período ${params.periodo}`,
-              quantity: 1,
-              unit_price: params.importeTotal,
-              subtotal: params.importeTotal,
-            },
-          ],
-          vat_amount: 0,
-          tributes_amount: 0,
-          total_amount: params.importeTotal,
-          net_amount_taxed: 0,
-          net_amount_untaxed: 0,
-          exempt_amount: params.importeTotal,
-          billing_from: `01/${monthPadded}/${year}`,
-          billing_to: billingTo,
-          payment_due_date: billingTo,
-        },
-      },
-    })) as { file: string; file_name: string }
-
-    let fileBase64: string
-    if (response.file.startsWith('http://') || response.file.startsWith('https://')) {
-      const pdfRes = await fetch(response.file)
-      if (!pdfRes.ok) {
-        throw new Error(`No se pudo descargar el PDF (${pdfRes.status})`)
-      }
-      fileBase64 = Buffer.from(await pdfRes.arrayBuffer()).toString('base64')
-    } else {
-      fileBase64 = response.file
-    }
-
-    return { fileBase64, fileName: response.file_name }
-  } catch (error) {
-    console.error('[ARCA] generarPDFFacturaC error:', error)
-    return null
+  if (det.Resultado === 'R') {
+    const obs = formatAfipMessages(det.Observaciones?.Obs)
+    const errs = formatAfipMessages(det.Errors?.Err)
+    const parts = [obs, errs].filter(Boolean)
+    throw new Error(`FECAESolicitar rechazado: ${parts.join(' | ') || 'sin detalle'}`)
   }
+
+  throw new Error(`FECAESolicitar: resultado inesperado "${String(det.Resultado)}"`)
 }

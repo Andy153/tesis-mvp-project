@@ -5,7 +5,8 @@ import { createClientAsync } from 'soap'
 
 const WSAA_WSDL_HOMO = 'https://wsaahomo.afip.gov.ar/ws/services/LoginCms?WSDL'
 const WSAA_WSDL_PROD = 'https://servicios1.afip.gov.ar/ws/services/LoginCms?WSDL'
-const WSAA_CA_URL_HOMO = 'http://www.afip.gov.ar/ws/WSAA/WSAA.CER'
+const TA_CACHE_PATH = path.resolve(process.cwd(), 'certs', '.ta_cache.json')
+const TA_CACHE_MARGIN_MS = 2 * 60 * 1000
 
 interface TicketAcceso {
   token: string
@@ -13,95 +14,114 @@ interface TicketAcceso {
   expiresAt: Date
 }
 
-// Cache en memoria por servicio
+interface TicketAccesoSerialized {
+  token: string
+  sign: string
+  expiresAt: string
+}
+
+type TaCacheFile = Record<string, TicketAccesoSerialized>
+
+// Cache en memoria por servicio (mismo proceso / mismo módulo)
 const ticketCache: Record<string, TicketAcceso> = {}
 
+function isTicketValid(ticket: TicketAcceso): boolean {
+  return ticket.expiresAt > new Date(Date.now() + TA_CACHE_MARGIN_MS)
+}
+
+function serializeTicket(ticket: TicketAcceso): TicketAccesoSerialized {
+  return {
+    token: ticket.token,
+    sign: ticket.sign,
+    expiresAt: ticket.expiresAt.toISOString(),
+  }
+}
+
+function deserializeTicket(raw: TicketAccesoSerialized): TicketAcceso | null {
+  if (!raw?.token || !raw?.sign || !raw?.expiresAt) return null
+  const expiresAt = new Date(raw.expiresAt)
+  if (Number.isNaN(expiresAt.getTime())) return null
+  return { token: raw.token, sign: raw.sign, expiresAt }
+}
+
+function readTaCacheFromDisk(): TaCacheFile | null {
+  try {
+    if (!fs.existsSync(TA_CACHE_PATH)) return null
+    const content = fs.readFileSync(TA_CACHE_PATH, 'utf8')
+    const parsed = JSON.parse(content) as TaCacheFile
+    if (!parsed || typeof parsed !== 'object') return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+function readTaFromDisk(service: string): { ticket: TicketAcceso | null; expired: boolean } {
+  const cache = readTaCacheFromDisk()
+  const entry = cache?.[service]
+  if (!entry) return { ticket: null, expired: false }
+
+  const ticket = deserializeTicket(entry)
+  if (!ticket) return { ticket: null, expired: false }
+
+  if (isTicketValid(ticket)) return { ticket, expired: false }
+  return { ticket: null, expired: true }
+}
+
+function writeTaToDisk(service: string, ticket: TicketAcceso): void {
+  try {
+    const cache = readTaCacheFromDisk() ?? {}
+    cache[service] = serializeTicket(ticket)
+    fs.mkdirSync(path.dirname(TA_CACHE_PATH), { recursive: true })
+    fs.writeFileSync(TA_CACHE_PATH, JSON.stringify(cache, null, 2), 'utf8')
+  } catch {
+    // archivo inexistente, corrupto o sin permisos: ignorar
+  }
+}
+
+function formatArcaDate(ms: number): string {
+  const d = new Date(ms)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const year = d.getFullYear()
+  const month = pad(d.getMonth() + 1)
+  const day = pad(d.getDate())
+  const hours = pad(d.getHours())
+  const minutes = pad(d.getMinutes())
+  const seconds = pad(d.getSeconds())
+  const offsetMinutes = -d.getTimezoneOffset()
+  const offsetSign = offsetMinutes >= 0 ? '+' : '-'
+  const offsetH = pad(Math.floor(Math.abs(offsetMinutes) / 60))
+  const offsetM = pad(Math.abs(offsetMinutes) % 60)
+  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${offsetSign}${offsetH}:${offsetM}`
+}
+
 function buildTRA(service: string): string {
-  const now = new Date()
-  const expiration = new Date(now.getTime() + 12 * 60 * 60 * 1000)
-  const genTime = now.toISOString().replace(/\.\d{3}Z$/, '-03:00')
-  const expTime = expiration.toISOString().replace(/\.\d{3}Z$/, '-03:00')
-  const uniqueId = Math.floor(now.getTime() / 1000)
+  const now = Date.now()
+  const generationTime = formatArcaDate(now - 5 * 60 * 1000)
+  const expirationTime = formatArcaDate(now + 10 * 60 * 1000)
+  const uniqueId = Math.floor(now / 1000)
   return `<?xml version="1.0" encoding="UTF-8"?>
 <loginTicketRequest version="1.0">
   <header>
     <uniqueId>${uniqueId}</uniqueId>
-    <generationTime>${genTime}</generationTime>
-    <expirationTime>${expTime}</expirationTime>
+    <generationTime>${generationTime}</generationTime>
+    <expirationTime>${expirationTime}</expirationTime>
   </header>
   <service>${service}</service>
 </loginTicketRequest>`
 }
 
-function certificateFromFile(filePath: string): forge.pki.Certificate {
-  const raw = fs.readFileSync(filePath)
-  const text = raw.toString('utf8')
-  if (text.includes('-----BEGIN CERTIFICATE-----')) {
-    return forge.pki.certificateFromPem(text)
-  }
-  return forge.pki.certificateFromAsn1(forge.asn1.fromDer(raw.toString('binary')))
-}
-
-function getWsaaCaCertPath(): string {
-  return path.resolve(process.cwd(), process.env.AFIP_WSAA_CA_PATH || 'certs/wsaa_homo_ca.cer')
-}
-
-async function ensureWsaaCaCertificate(isProduction: boolean): Promise<void> {
-  const caPath = getWsaaCaCertPath()
-  if (fs.existsSync(caPath)) {
-    try {
-      const ca = certificateFromFile(caPath)
-      if (ca.subject?.getField('CN')) {
-        return
-      }
-    } catch {
-      // archivo inválido, intentar descargar de nuevo
-    }
-  }
-
-  if (isProduction) {
-    throw new Error(
-      `Falta el certificado CA de WSAA en ${caPath}. Configurá AFIP_WSAA_CA_PATH con el .CER de producción.`,
-    )
-  }
-
-  try {
-    const response = await fetch(WSAA_CA_URL_HOMO, {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-    })
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`)
-    }
-
-    const buffer = Buffer.from(await response.arrayBuffer())
-    if (buffer.length < 100 || buffer[0] !== 0x30) {
-      throw new Error('respuesta no es un certificado DER')
-    }
-
-    fs.mkdirSync(path.dirname(caPath), { recursive: true })
-    fs.writeFileSync(caPath, buffer)
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error)
-    throw new Error(
-      `No se pudo obtener WSAA.CER (${detail}). Descargalo manualmente desde ${WSAA_CA_URL_HOMO} y guardalo en ${caPath}`,
-    )
-  }
-}
-
 function signTRA(tra: string): string {
   const certPath = path.resolve(process.cwd(), process.env.AFIP_CERT_PATH || 'certs/traza_homo.crt')
   const keyPath = path.resolve(process.cwd(), process.env.AFIP_KEY_PATH || 'certs/traza_homo.key')
-  const caPath = getWsaaCaCertPath()
 
   const certPem = fs.readFileSync(certPath, 'utf8')
   const keyPem = fs.readFileSync(keyPath, 'utf8')
   const cert = forge.pki.certificateFromPem(certPem)
   const key = forge.pki.privateKeyFromPem(keyPem)
-  const caCert = certificateFromFile(caPath)
 
   const p7 = forge.pkcs7.createSignedData()
   p7.content = forge.util.createBuffer(tra, 'utf8')
-  p7.addCertificate(caCert)
   p7.addCertificate(cert)
   p7.addSigner({
     key,
@@ -138,14 +158,22 @@ function extractAfipFault(error: unknown): string | null {
 
 export async function getTicketAcceso(service = 'wsfe'): Promise<TicketAcceso> {
   const cached = ticketCache[service]
-  if (cached && cached.expiresAt > new Date(Date.now() + 5 * 60 * 1000)) {
+  if (cached && isTicketValid(cached)) {
     return cached
+  }
+
+  const { ticket: diskTicket, expired: diskExpired } = readTaFromDisk(service)
+  if (diskTicket) {
+    console.log('[WSAA] reusing cached TA')
+    ticketCache[service] = diskTicket
+    return diskTicket
+  }
+  if (diskExpired) {
+    console.log('[WSAA] cached TA expired, requesting new')
   }
 
   const isProduction = process.env.AFIP_AMBIENTE === 'produccion'
   const wsdl = isProduction ? WSAA_WSDL_PROD : WSAA_WSDL_HOMO
-
-  await ensureWsaaCaCertificate(isProduction)
 
   const tra = buildTRA(service)
   const cms = signTRA(tra)
@@ -156,7 +184,8 @@ export async function getTicketAcceso(service = 'wsfe'): Promise<TicketAcceso> {
     const responseXml = result?.loginCmsReturn ?? result?.return ?? ''
     const ticket = parseTicket(responseXml)
     ticketCache[service] = ticket
-    console.log('[WSAA] Ticket obtenido, expira:', ticket.expiresAt)
+    writeTaToDisk(service, ticket)
+    console.log('[WSAA] new TA from AFIP, cached to disk')
     return ticket
   } catch (error) {
     const afipFault = extractAfipFault(error)

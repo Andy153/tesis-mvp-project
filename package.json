@@ -13,6 +13,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@afipsdk/afip.js": "^1.2.3",
     "@clerk/localizations": "^4.5.8",
     "@clerk/nextjs": "^6.39.3",
     "@supabase/supabase-js": "^2.105.4",

@@ -9,6 +9,11 @@ out/
 .env
 .env*.local
 
+# AFIP/ARCA certificates (never commit)
+certs/
+*.key
+*.crt
+
 # OS / editor
 .DS_Store
 *.log

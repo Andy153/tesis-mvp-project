@@ -7,6 +7,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { extractMontoFromComprobante } from '@/lib/arca/extractMonto';
 import { Resend } from 'resend';
 
 export const runtime = 'nodejs';
@@ -112,19 +113,52 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       .upload(path, buffer, { contentType: 'application/pdf', upsert: true });
     if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
     update.comprobante_smg_path = path;
+
+    const montoExtraido = await extractMontoFromComprobante(buffer);
+    if (montoExtraido !== null) {
+      update.monto_total = montoExtraido;
+    }
+
     update.wizard_estado = 'comprobante_subido';
     update.wizard_paso = 4;
   } else if (action === 'factura_instrucciones_ok') {
     update.wizard_estado = 'factura_instrucciones';
     update.wizard_paso = 5;
+  } else if (action === 'factura_emitida') {
+    const cae = body.cae as string | undefined;
+    const caeFechaVto = body.caeFechaVto as string | undefined;
+    const pdfBase64 = body.pdfBase64 as string | undefined;
+    const pdfFileName = body.pdfFileName as string | undefined;
+
+    if (!cae?.trim()) {
+      return NextResponse.json({ error: 'Falta el CAE' }, { status: 400 });
+    }
+
+    update.cai_numero = cae.trim();
+    if (caeFechaVto) {
+      const digits = String(caeFechaVto).replace(/\D/g, '');
+      update.cai_vencimiento =
+        digits.length === 8
+          ? `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`
+          : String(caeFechaVto);
+    }
+
+    if (pdfBase64 && pdfFileName) {
+      const buffer = Buffer.from(pdfBase64, 'base64');
+      const path = `${userId}/${sub.periodo}_factura.pdf`;
+      const { error: upErr } = await supabaseAdmin.storage
+        .from(BUCKET_SUBMISSIONS)
+        .upload(path, buffer, { contentType: 'application/pdf', upsert: true });
+      if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
+      update.factura_path = path;
+    }
+
+    update.wizard_estado = 'factura_instrucciones';
+    update.wizard_paso = 5;
   } else if (action === 'adjuntar_factura') {
-    const facturaFile = body.factura as File | null;
     const caiNumero = body.cai_numero as string | null;
     const caiVencimiento = body.cai_vencimiento as string | null;
 
-    if (!facturaFile || !(facturaFile instanceof File)) {
-      return NextResponse.json({ error: 'Falta el archivo de la factura' }, { status: 400 });
-    }
     if (!caiNumero?.trim()) {
       return NextResponse.json({ error: 'Falta el número de CAI' }, { status: 400 });
     }
@@ -132,14 +166,6 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       return NextResponse.json({ error: 'Falta la fecha de vencimiento del CAI' }, { status: 400 });
     }
 
-    const buffer = Buffer.from(await facturaFile.arrayBuffer());
-    const path = `${userId}/${sub.periodo}_factura.pdf`;
-    const { error: upErr } = await supabaseAdmin.storage
-      .from(BUCKET_SUBMISSIONS)
-      .upload(path, buffer, { contentType: 'application/pdf', upsert: true });
-    if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
-
-    update.factura_path = path;
     update.cai_numero = caiNumero.trim();
     update.cai_vencimiento = caiVencimiento.trim();
     update.factura_adjuntada_en = new Date().toISOString();

@@ -2,6 +2,7 @@
 
 import type { CSSProperties, ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
+import { FacturaARCA } from '@/components/arca/FacturaARCA';
 
 type Submission = {
   id: string;
@@ -11,6 +12,7 @@ type Submission = {
   wizard_paso: number | null;
   enviado_en: string;
   cantidad_partes: number | null;
+  monto_total: number | null;
   comprobante_smg_path: string | null;
   factura_path: string | null;
   cai_numero: string | null;
@@ -132,7 +134,6 @@ export function CobrosWizard({
   const [ready48h, setReady48h] = useState(false);
   const [readyFactura, setReadyFactura] = useState(false);
   const [comprobanteFile, setComprobanteFile] = useState<File | null>(null);
-  const [facturaFile, setFacturaFile] = useState<File | null>(null);
   const [caiNumero, setCaiNumero] = useState('');
   const [caiVencimiento, setCaiVencimiento] = useState('');
   const [exceptionSent, setExceptionSent] = useState(false);
@@ -140,8 +141,17 @@ export function CobrosWizard({
   const load = async () => {
     try {
       const r = await fetch(`/api/submissions/${submissionId}/wizard`);
+      const contentType = r.headers.get('content-type') ?? '';
+      if (!contentType.includes('application/json')) {
+        const text = await r.text();
+        throw new Error(
+          r.status === 404
+            ? 'No se encontró el seguimiento de cobro. Recargá la página.'
+            : `Error del servidor (${r.status}): ${text.slice(0, 120)}`,
+        );
+      }
       const j = await r.json();
-      if (!r.ok) throw new Error(j.error);
+      if (!r.ok) throw new Error(j.error ?? 'Error al cargar el wizard');
       setSub(j.submission);
       setCaiNumero(j.submission.cai_numero ?? '');
       setCaiVencimiento(j.submission.cai_vencimiento ?? '');
@@ -418,25 +428,31 @@ export function CobrosWizard({
         >
           {saving ? 'Subiendo...' : 'Subir comprobante'}
         </button>
-        <button type="button" className="btn" style={{ marginTop: 12, fontSize: 13, color: '#666' }} onClick={goBack} disabled={saving}>
+        <button type="button" className="btn" style={{ marginTop: 12, marginLeft: 12, marginRight: 12, fontSize: 13, color: '#666' }} onClick={goBack} disabled={saving}>
           ← Volver al paso anterior
         </button>
       </Step>
 
       {/* Paso 4 */}
-      <Step numero={4} titulo="Creá la factura en ARCA" activo={paso === 4} completado={paso > 4}>
-        <p style={{ fontSize: 14, color: '#555', margin: '0 0 12px' }}>
-          Con el comprobante de Swiss Medical, ingresá a ARCA y generá la factura correspondiente a la liquidación de{' '}
-          <strong>{periodoLabel(sub.periodo)}</strong>.
-        </p>
-        <a href="https://auth.afip.gob.ar" target="_blank" rel="noopener noreferrer" style={{ ...linkStyle, display: 'inline-block', marginBottom: 16 }}>
-          🔗 Abrir ARCA (AFIP)
-        </a>
-        <br />
-        <button type="button" className="btn btn-primary" onClick={() => patch('factura_instrucciones_ok')} disabled={saving}>
-          Ya creé la factura en ARCA →
-        </button>
-        <button type="button" className="btn" style={{ marginTop: 12, fontSize: 13, color: '#666' }} onClick={goBack} disabled={saving}>
+      <Step numero={4} titulo="Emitir factura en ARCA" activo={paso === 4} completado={paso > 4}>
+        <FacturaARCA
+          submissionId={sub.id}
+          monto={sub.monto_total ?? 0}
+          periodo={sub.periodo}
+          onExito={async (cae, caeFechaVto, nroComprobante, pdfBase64, pdfFileName) => {
+            await patch('factura_emitida', { cae, caeFechaVto, nroComprobante, pdfBase64, pdfFileName });
+          }}
+          onError={(mensaje) => {
+            console.error('Error emitiendo factura:', mensaje);
+          }}
+        />
+        <button
+          type="button"
+          className="btn"
+          style={{ marginTop: 12, marginLeft: 0, marginRight: 0, fontSize: 13, color: '#666' }}
+          onClick={goBack}
+          disabled={saving}
+        >
           ← Volver al paso anterior
         </button>
       </Step>
@@ -444,17 +460,14 @@ export function CobrosWizard({
       {/* Paso 5 */}
       <Step numero={5} titulo="Adjuntá la factura en el portal de Swiss Medical" activo={paso === 5} completado={paso > 5}>
         <p style={{ fontSize: 14, color: '#555', margin: '0 0 12px' }}>
-          En la Consulta de liquidación, hacé click en el <strong>clip 📎</strong> de la fila correspondiente y adjuntá la factura.
+          Descargá la factura del paso anterior y subila manualmente en el portal de prestadores de Swiss Medical. En la
+          Consulta de liquidación, hacé click en el <strong>clip 📎</strong> de la fila correspondiente.
         </p>
         <img src="/wizard/paso5_adjuntar.png" alt="Adjuntar factura con el clip" style={{ width: '100%', borderRadius: 8, margin: '12px 0', border: '1px solid #e0e0e0' }} />
         <p style={{ fontSize: 14, color: '#555', margin: '0 0 12px' }}>
-          Luego completá los datos del CAI acá.
+          Una vez adjuntada en el portal, confirmá acá los datos del CAI que ingresaste.
         </p>
         <div style={{ display: 'grid', gap: 10, marginBottom: 12 }}>
-          <div>
-            <label style={labelStyle}>Factura (PDF)</label>
-            <input type="file" accept="application/pdf" onChange={(e) => setFacturaFile(e.target.files?.[0] ?? null)} style={{ fontSize: 13 }} />
-          </div>
           <div>
             <label style={labelStyle}>Número de CAI</label>
             <input style={inputStyle} value={caiNumero} onChange={(e) => setCaiNumero(e.target.value)} placeholder="Ej: 12345678901234" />
@@ -467,24 +480,17 @@ export function CobrosWizard({
         <button
           type="button"
           className="btn btn-primary"
-          disabled={!facturaFile || !caiNumero.trim() || !caiVencimiento || saving}
+          disabled={!caiNumero.trim() || !caiVencimiento || saving}
           style={
-            !facturaFile || !caiNumero.trim() || !caiVencimiento
+            !caiNumero.trim() || !caiVencimiento
               ? { background: '#cdd5d0', color: '#7a8580', cursor: 'not-allowed', borderColor: '#cdd5d0' }
               : undefined
           }
-          onClick={async () => {
-            if (!facturaFile) return;
-            const fd = new FormData();
-            fd.append('factura', facturaFile);
-            fd.append('cai_numero', caiNumero);
-            fd.append('cai_vencimiento', caiVencimiento);
-            await patchFormData('adjuntar_factura', fd);
-          }}
+          onClick={() => patch('adjuntar_factura', { cai_numero: caiNumero, cai_vencimiento: caiVencimiento })}
         >
-          {saving ? 'Guardando...' : 'Confirmar adjunto'}
+          {saving ? 'Guardando...' : 'Confirmar adjunto en el portal'}
         </button>
-        <button type="button" className="btn" style={{ marginTop: 12, fontSize: 13, color: '#666' }} onClick={goBack} disabled={saving}>
+        <button type="button" className="btn" style={{ marginTop: 12, marginBottom: 12, marginLeft: 12, marginRight: 12, fontSize: 13, color: '#666' }} onClick={goBack} disabled={saving}>
           ← Volver al paso anterior
         </button>
       </Step>

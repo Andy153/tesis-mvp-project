@@ -1,6 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  experimental: {
+    // pdf-parse usa `!module.parent` para auto-test; no debe bundlearse en la ruta del wizard.
+    serverComponentsExternalPackages: ['pdf-parse'],
+  },
   webpack: (config, { dev }) => {
     // pdfjs-dist ships a node canvas binding that we don't need in the browser
     config.resolve.alias = {

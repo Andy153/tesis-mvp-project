@@ -2,10 +2,10 @@ import fs from 'fs'
 import path from 'path'
 import forge from 'node-forge'
 import { createClientAsync } from 'soap'
+import { supabaseAdmin } from '@/lib/supabase-admin'
 
 const WSAA_WSDL_HOMO = 'https://wsaahomo.afip.gov.ar/ws/services/LoginCms?WSDL'
 const WSAA_WSDL_PROD = 'https://servicios1.afip.gov.ar/ws/services/LoginCms?WSDL'
-const TA_CACHE_PATH = path.resolve(process.cwd(), 'certs', '.ta_cache.json')
 const TA_CACHE_MARGIN_MS = 2 * 60 * 1000
 
 interface TicketAcceso {
@@ -14,68 +14,112 @@ interface TicketAcceso {
   expiresAt: Date
 }
 
-interface TicketAccesoSerialized {
-  token: string
-  sign: string
-  expiresAt: string
-}
-
-type TaCacheFile = Record<string, TicketAccesoSerialized>
-
 // Cache en memoria por servicio (mismo proceso / mismo módulo)
 const ticketCache: Record<string, TicketAcceso> = {}
+
+function afipCuit(): string {
+  return String(process.env.AFIP_CUIT ?? '23452350319').trim()
+}
 
 function isTicketValid(ticket: TicketAcceso): boolean {
   return ticket.expiresAt > new Date(Date.now() + TA_CACHE_MARGIN_MS)
 }
 
-function serializeTicket(ticket: TicketAcceso): TicketAccesoSerialized {
-  return {
-    token: ticket.token,
-    sign: ticket.sign,
-    expiresAt: ticket.expiresAt.toISOString(),
-  }
-}
+async function readTaFromSupabase(cuit: string, service: string): Promise<TicketAcceso | null> {
+  const cuitKey = String(cuit).trim()
+  console.log('[WSAA] readTaFromSupabase called with:', {
+    cuit: cuitKey,
+    service,
+    cuitType: typeof cuitKey,
+  })
 
-function deserializeTicket(raw: TicketAccesoSerialized): TicketAcceso | null {
-  if (!raw?.token || !raw?.sign || !raw?.expiresAt) return null
-  const expiresAt = new Date(raw.expiresAt)
-  if (Number.isNaN(expiresAt.getTime())) return null
-  return { token: raw.token, sign: raw.sign, expiresAt }
-}
-
-function readTaCacheFromDisk(): TaCacheFile | null {
   try {
-    if (!fs.existsSync(TA_CACHE_PATH)) return null
-    const content = fs.readFileSync(TA_CACHE_PATH, 'utf8')
-    const parsed = JSON.parse(content) as TaCacheFile
-    if (!parsed || typeof parsed !== 'object') return null
-    return parsed
-  } catch {
+    const { data, error } = await supabaseAdmin
+      .from('arca_tickets')
+      .select('token, sign, expires_at')
+      .eq('cuit', cuitKey)
+      .eq('service', service)
+      .maybeSingle()
+
+    console.log('[WSAA] Supabase response:', { data, error })
+
+    if (error) {
+      console.error('[WSAA] Supabase error:', error)
+      return null
+    }
+
+    if (!data) {
+      console.log('[WSAA] No row found in Supabase')
+      return null
+    }
+
+    if (!data.token || !data.sign || !data.expires_at) {
+      console.log('[WSAA] Incomplete row in Supabase:', data)
+      return null
+    }
+
+    const expiresAt = new Date(data.expires_at)
+    if (Number.isNaN(expiresAt.getTime())) {
+      console.log('[WSAA] Invalid expires_at in Supabase:', data.expires_at)
+      return null
+    }
+
+    const now = new Date(Date.now() + TA_CACHE_MARGIN_MS)
+    console.log('[WSAA] Comparing dates:', {
+      expires_at_raw: data.expires_at,
+      expires_at_parsed: expiresAt.toISOString(),
+      now_with_margin: now.toISOString(),
+      isValid: expiresAt > now,
+    })
+
+    if (expiresAt <= now) {
+      console.log('[WSAA] TA in Supabase expired')
+      return null
+    }
+
+    return {
+      token: data.token,
+      sign: data.sign,
+      expiresAt,
+    }
+  } catch (error) {
+    console.error('[WSAA] Supabase read exception:', error)
     return null
   }
 }
 
-function readTaFromDisk(service: string): { ticket: TicketAcceso | null; expired: boolean } {
-  const cache = readTaCacheFromDisk()
-  const entry = cache?.[service]
-  if (!entry) return { ticket: null, expired: false }
+async function writeTaToSupabase(cuit: string, service: string, ticket: TicketAcceso): Promise<void> {
+  const cuitKey = String(cuit).trim()
+  const row = {
+    cuit: cuitKey,
+    service,
+    token: ticket.token,
+    sign: ticket.sign,
+    expires_at: ticket.expiresAt.toISOString(),
+    updated_at: new Date().toISOString(),
+  }
 
-  const ticket = deserializeTicket(entry)
-  if (!ticket) return { ticket: null, expired: false }
+  console.log('[WSAA] writeTaToSupabase called with:', {
+    cuit: cuitKey,
+    service,
+    cuitType: typeof cuitKey,
+    expires_at: row.expires_at,
+  })
 
-  if (isTicketValid(ticket)) return { ticket, expired: false }
-  return { ticket: null, expired: true }
-}
-
-function writeTaToDisk(service: string, ticket: TicketAcceso): void {
   try {
-    const cache = readTaCacheFromDisk() ?? {}
-    cache[service] = serializeTicket(ticket)
-    fs.mkdirSync(path.dirname(TA_CACHE_PATH), { recursive: true })
-    fs.writeFileSync(TA_CACHE_PATH, JSON.stringify(cache, null, 2), 'utf8')
-  } catch {
-    // archivo inexistente, corrupto o sin permisos: ignorar
+    const { data, error } = await supabaseAdmin
+      .from('arca_tickets')
+      .upsert(row, { onConflict: 'cuit,service' })
+      .select('cuit, service, expires_at')
+      .maybeSingle()
+
+    console.log('[WSAA] Supabase upsert response:', { data, error })
+
+    if (error) {
+      console.error('[WSAA] Supabase write error:', error)
+    }
+  } catch (error) {
+    console.error('[WSAA] Supabase write exception:', error)
   }
 }
 
@@ -111,12 +155,65 @@ function buildTRA(service: string): string {
 </loginTicketRequest>`
 }
 
-function signTRA(tra: string): string {
-  const certPath = path.resolve(process.cwd(), process.env.AFIP_CERT_PATH || 'certs/traza_homo.crt')
-  const keyPath = path.resolve(process.cwd(), process.env.AFIP_KEY_PATH || 'certs/traza_homo.key')
+function readCertPem(): string {
+  console.log('[DEBUG-CERT] AFIP_CERT_PEM exists:', !!process.env.AFIP_CERT_PEM)
+  console.log('[DEBUG-CERT] AFIP_CERT_PEM length:', process.env.AFIP_CERT_PEM?.length || 0)
+  console.log('[DEBUG-CERT] AFIP_CERT_PEM first 30 chars:', process.env.AFIP_CERT_PEM?.substring(0, 30))
+  console.log(
+    '[DEBUG-CERT] AFIP_CERT_PEM includes BEGIN:',
+    process.env.AFIP_CERT_PEM?.includes('BEGIN CERTIFICATE'),
+  )
 
-  const certPem = fs.readFileSync(certPath, 'utf8')
-  const keyPem = fs.readFileSync(keyPath, 'utf8')
+  const envCert = process.env.AFIP_CERT_PEM
+  if (envCert && envCert.trim().includes('BEGIN CERTIFICATE')) {
+    return envCert
+  }
+
+  const certPath = path.resolve(
+    process.cwd(),
+    process.env.AFIP_CERT_PATH || 'certs/traza_homo.crt',
+  )
+  if (!fs.existsSync(certPath)) {
+    throw new Error(
+      'Cert no disponible: defina AFIP_CERT_PEM (env var) o AFIP_CERT_PATH (archivo)',
+    )
+  }
+  return fs.readFileSync(certPath, 'utf8')
+}
+
+function readKeyPem(): string {
+  console.log('[DEBUG-KEY] AFIP_KEY_PEM exists:', !!process.env.AFIP_KEY_PEM)
+  console.log('[DEBUG-KEY] AFIP_KEY_PEM length:', process.env.AFIP_KEY_PEM?.length || 0)
+  console.log('[DEBUG-KEY] AFIP_KEY_PEM first 30 chars:', process.env.AFIP_KEY_PEM?.substring(0, 30))
+  console.log(
+    '[DEBUG-KEY] AFIP_KEY_PEM includes PRIVATE:',
+    process.env.AFIP_KEY_PEM?.includes('PRIVATE KEY'),
+  )
+
+  const envKey = process.env.AFIP_KEY_PEM
+  if (envKey && envKey.trim().includes('PRIVATE KEY')) {
+    return envKey
+  }
+
+  const keyPath = path.resolve(
+    process.cwd(),
+    process.env.AFIP_KEY_PATH || 'certs/traza_homo.key',
+  )
+  if (!fs.existsSync(keyPath)) {
+    throw new Error(
+      'Key no disponible: defina AFIP_KEY_PEM (env var) o AFIP_KEY_PATH (archivo)',
+    )
+  }
+  return fs.readFileSync(keyPath, 'utf8')
+}
+
+function signTRA(tra: string): string {
+  const certSource = process.env.AFIP_CERT_PEM ? 'env' : 'filesystem'
+  const keySource = process.env.AFIP_KEY_PEM ? 'env' : 'filesystem'
+  console.log('[WSAA] signing TRA with cert from', certSource, 'and key from', keySource)
+
+  const certPem = readCertPem()
+  const keyPem = readKeyPem()
   const cert = forge.pki.certificateFromPem(certPem)
   const key = forge.pki.privateKeyFromPem(keyPem)
 
@@ -157,20 +254,23 @@ function extractAfipFault(error: unknown): string | null {
 }
 
 export async function getTicketAcceso(service = 'wsfe'): Promise<TicketAcceso> {
+  const cuit = afipCuit()
+  console.log('[WSAA] getTicketAcceso:', { service, cuit, cuitType: typeof cuit })
+
   const cached = ticketCache[service]
   if (cached && isTicketValid(cached)) {
+    console.log('[WSAA] reusing TA from memory')
     return cached
   }
 
-  const { ticket: diskTicket, expired: diskExpired } = readTaFromDisk(service)
-  if (diskTicket) {
-    console.log('[WSAA] reusing cached TA')
-    ticketCache[service] = diskTicket
-    return diskTicket
+  const supabaseTicket = await readTaFromSupabase(cuit, service)
+  if (supabaseTicket) {
+    console.log('[WSAA] reusing TA from Supabase')
+    ticketCache[service] = supabaseTicket
+    return supabaseTicket
   }
-  if (diskExpired) {
-    console.log('[WSAA] cached TA expired, requesting new')
-  }
+
+  console.log('[WSAA] no cached TA, requesting new from AFIP')
 
   const isProduction = process.env.AFIP_AMBIENTE === 'produccion'
   const wsdl = isProduction ? WSAA_WSDL_PROD : WSAA_WSDL_HOMO
@@ -184,8 +284,8 @@ export async function getTicketAcceso(service = 'wsfe'): Promise<TicketAcceso> {
     const responseXml = result?.loginCmsReturn ?? result?.return ?? ''
     const ticket = parseTicket(responseXml)
     ticketCache[service] = ticket
-    writeTaToDisk(service, ticket)
-    console.log('[WSAA] new TA from AFIP, cached to disk')
+    await writeTaToSupabase(cuit, service, ticket)
+    console.log('[WSAA] new TA cached in memory + Supabase')
     return ticket
   } catch (error) {
     const afipFault = extractAfipFault(error)

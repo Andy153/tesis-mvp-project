@@ -1,5 +1,6 @@
 import { createClientAsync } from 'soap'
 import { getTicketAcceso } from './client'
+import { consultarPadron } from './padron'
 import { generarPDFFacturaC } from './pdf-factura'
 
 const WSFE_WSDL_HOMO = 'https://wswhomo.afip.gov.ar/wsfev1/service.asmx?WSDL'
@@ -95,8 +96,16 @@ export async function emitirFacturaC(params: {
   const docNro = params.receptorCuit
     ? parseInt(params.receptorCuit.replace(/\D/g, ''), 10)
     : 0
-  const condicionIVAReceptor =
-    params.condicionIVAReceptor ?? (params.receptorCuit ? 1 : 5)
+
+  let condicionIVAReceptor = 5
+  let receptorRazonSocial = params.receptorRazonSocial?.trim() || 'Consumidor Final'
+
+  if (params.receptorCuit) {
+    const padron = await consultarPadron(params.receptorCuit)
+    condicionIVAReceptor = padron.condicionIVACodigo
+    receptorRazonSocial =
+      params.receptorRazonSocial?.trim() || padron.razonSocial || 'Consumidor Final'
+  }
 
   const ticket = await getTicketAcceso('wsfe')
   const auth = {
@@ -212,7 +221,7 @@ export async function emitirFacturaC(params: {
       },
       receptor: {
         cuit: params.receptorCuit?.replace(/\D/g, '') || '0',
-        razonSocial: params.receptorRazonSocial?.trim() || 'Consumidor Final',
+        razonSocial: receptorRazonSocial,
         condicionIVA: condicionIVALabel,
       },
       factura: {

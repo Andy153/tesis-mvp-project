@@ -156,14 +156,6 @@ function buildTRA(service: string): string {
 }
 
 function readCertPem(): string {
-  console.log('[DEBUG-CERT] AFIP_CERT_PEM exists:', !!process.env.AFIP_CERT_PEM)
-  console.log('[DEBUG-CERT] AFIP_CERT_PEM length:', process.env.AFIP_CERT_PEM?.length || 0)
-  console.log('[DEBUG-CERT] AFIP_CERT_PEM first 30 chars:', process.env.AFIP_CERT_PEM?.substring(0, 30))
-  console.log(
-    '[DEBUG-CERT] AFIP_CERT_PEM includes BEGIN:',
-    process.env.AFIP_CERT_PEM?.includes('BEGIN CERTIFICATE'),
-  )
-
   const envCert = process.env.AFIP_CERT_PEM
   if (envCert && envCert.trim().includes('BEGIN CERTIFICATE')) {
     return envCert
@@ -182,14 +174,6 @@ function readCertPem(): string {
 }
 
 function readKeyPem(): string {
-  console.log('[DEBUG-KEY] AFIP_KEY_PEM exists:', !!process.env.AFIP_KEY_PEM)
-  console.log('[DEBUG-KEY] AFIP_KEY_PEM length:', process.env.AFIP_KEY_PEM?.length || 0)
-  console.log('[DEBUG-KEY] AFIP_KEY_PEM first 30 chars:', process.env.AFIP_KEY_PEM?.substring(0, 30))
-  console.log(
-    '[DEBUG-KEY] AFIP_KEY_PEM includes PRIVATE:',
-    process.env.AFIP_KEY_PEM?.includes('PRIVATE KEY'),
-  )
-
   const envKey = process.env.AFIP_KEY_PEM
   if (envKey && envKey.trim().includes('PRIVATE KEY')) {
     return envKey

@@ -36,3 +36,6 @@ data/
 
 # clerk configuration (can include secrets)
 /.clerk/
+
+# PWA icon generator (local script)
+scripts/generate-icons.mjs

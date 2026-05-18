@@ -48,6 +48,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         className={`${delaGothicOne.variable} ${unbounded.variable} ${jetbrainsMono.variable}`}
       >
         <head>
+          <link rel="manifest" href="/manifest.json" />
+          <meta name="theme-color" content="#2A6B52" />
+          <link rel="apple-touch-icon" href="/icons/icon-180x180.png" />
+          <meta name="apple-mobile-web-app-capable" content="yes" />
+          <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+          <meta name="apple-mobile-web-app-title" content="Trazá" />
           <script
             dangerouslySetInnerHTML={{
               __html: `(function(){try{var t=JSON.parse(localStorage.getItem('traza.profile.v1')||'{}').theme;document.documentElement.setAttribute('data-theme',t==='dark'?'dark':'light')}catch(e){document.documentElement.setAttribute('data-theme','light')}})()`,

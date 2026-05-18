@@ -168,49 +168,33 @@ export function ErrorsView({ files, authStates, onOpenFile }: Props) {
           </div>
         </div>
       ) : (
-        <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius, 8px)', overflow: 'hidden' }}>
+        <div className="errors-card-list">
           {filteredGroups.map((g) => {
             const isOpen = expandedId === g.fileId;
             const errors = g.findings.filter((f) => f.severity === 'error');
             const warns = g.findings.filter((f) => f.severity === 'warn');
 
             return (
-              <div key={g.fileId} style={{ borderBottom: '1px solid var(--border)' }}>
+              <div key={g.fileId} className="errors-card-item">
                 <button
                   type="button"
+                  className="errors-card-row"
                   onClick={() => setExpandedId(isOpen ? null : g.fileId)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                    width: '100%',
-                    padding: '12px 14px',
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    fontSize: 14,
-                    fontFamily: 'inherit',
-                    color: 'var(--text)',
-                  }}
                 >
-                  <span style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: '50%',
-                    flexShrink: 0,
-                    background: g.hasError ? 'var(--error)' : 'var(--warn)',
-                  }} />
-                  <span style={{ flex: 1 }}>
-                    <span style={{ fontWeight: 500 }}>{g.fileName}</span>
-                    <span style={{ color: 'var(--text-muted)', marginLeft: 8, fontSize: 13 }}>
+                  <span
+                    className={`errors-card-row__dot ${g.hasError ? 'errors-card-row__dot--error' : 'errors-card-row__dot--warn'}`}
+                    aria-hidden
+                  />
+                  <span className="errors-card-row__main">
+                    <span className="errors-card-row__file">{g.fileName}</span>
+                    <span className="errors-card-row__meta">
                       {g.prepaga}
                       {g.codigo ? ` · ${g.codigo}` : ''}
                       {' · '}
                       {new Date(g.fileDate).toLocaleDateString('es-AR')}
                     </span>
                   </span>
-                  <span style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                  <span className="errors-card-row__badges">
                     {errors.length > 0 && (
                       <span className="badge badge-error" style={{ fontSize: 11 }}>
                         <span className="badge-dot" />
@@ -224,11 +208,16 @@ export function ErrorsView({ files, authStates, onOpenFile }: Props) {
                       </span>
                     )}
                   </span>
-                  <span style={{ fontSize: 11, color: 'var(--text-soft)', transition: 'transform 0.15s', transform: isOpen ? 'rotate(180deg)' : 'none' }}>{'▼'}</span>
+                  <span
+                    className={`errors-card-row__chevron${isOpen ? ' errors-card-row__chevron--open' : ''}`}
+                    aria-hidden
+                  >
+                    ▼
+                  </span>
                 </button>
 
                 {isOpen && (
-                  <div style={{ padding: '0 14px 14px', background: 'var(--bg-panel)', animation: 'slideDown 0.2s ease-out' }}>
+                  <div className="errors-card-detail">
                     {errors.length > 0 && (
                       <div style={{ marginBottom: 10 }}>
                         <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--error)', marginBottom: 4 }}>Errores</div>

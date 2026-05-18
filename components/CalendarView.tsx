@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import './CalendarView.css';
 import { Icon } from './Icon';
 import type { AuthState, FileEntry, Severity } from '@/lib/types';
 import { loadHistory } from '@/lib/history';
@@ -293,29 +294,19 @@ export function CalendarView({
                     role="button"
                     tabIndex={0}
                   >
-                    <div className="cal-daynum">{d.date.getDate()}</div>
-                    {totalDocs > 0 && (
-                      <div className="cal-pill">
-                        <span className="n">{totalDocs}</span>
-                        <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
-                          {hasPend && (
-                            <span className="cal-bucket-dot" style={{ width: 7, height: 7, borderRadius: 999, background: 'var(--ok)' }} />
-                          )}
-                          {hasCobro && (
-                            <span
-                              className="cal-bucket-dot"
-                              style={{ width: 7, height: 7, borderRadius: 999, background: 'var(--info)' }}
-                            />
-                          )}
-                          {hasRech && (
-                            <span
-                              className="cal-bucket-dot"
-                              style={{ width: 7, height: 7, borderRadius: 999, background: 'var(--danger)' }}
-                            />
-                          )}
-                        </span>
-                      </div>
-                    )}
+                    <div className="cal-cell-inner">
+                      <div className="cal-daynum">{d.date.getDate()}</div>
+                      {totalDocs > 0 && (
+                        <div className="cal-pill cal-pill--cell">
+                          <span className="n">{totalDocs}</span>
+                          <span className="cal-pill-dots">
+                            {hasPend && <span className="cal-bucket-dot cal-bucket-dot--pend" />}
+                            {hasCobro && <span className="cal-bucket-dot cal-bucket-dot--cobro" />}
+                            {hasRech && <span className="cal-bucket-dot cal-bucket-dot--rech" />}
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               })}

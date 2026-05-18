@@ -1,0 +1,50 @@
+/* Month grid cell: stack day number and status pill without overlap */
+.cal-grid .cal-cell {
+  display: flex;
+  flex-direction: column;
+}
+
+.cal-cell-inner {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: stretch;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  min-height: 100%;
+}
+
+.cal-pill.cal-pill--cell {
+  position: static;
+  align-self: flex-end;
+  margin-top: auto;
+  flex-shrink: 0;
+  max-width: 100%;
+}
+
+.cal-pill-dots {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.cal-bucket-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.cal-bucket-dot--pend {
+  background: var(--ok);
+}
+
+.cal-bucket-dot--cobro {
+  background: var(--info);
+}
+
+.cal-bucket-dot--rech {
+  background: var(--danger);
+}

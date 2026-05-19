@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Body JSON inválido' }, { status: 400 })
   }
 
-  const { cuitReceptor, importeTotal, periodoDesde, periodoHasta, periodo } = body
+  const { cuitReceptor, importeTotal, periodoDesde, periodoHasta, periodo, submissionId } = body
 
   if (
     cuitReceptor == null ||
@@ -26,12 +26,14 @@ export async function POST(req: NextRequest) {
     periodoHasta == null ||
     periodoHasta === '' ||
     periodo == null ||
-    periodo === ''
+    periodo === '' ||
+    submissionId == null ||
+    submissionId === ''
   ) {
     return NextResponse.json(
       {
         error:
-          'Faltan campos requeridos: cuitReceptor, importeTotal, periodoDesde, periodoHasta, periodo',
+          'Faltan campos requeridos: cuitReceptor, importeTotal, periodoDesde, periodoHasta, periodo, submissionId',
       },
       { status: 400 },
     )
@@ -40,6 +42,8 @@ export async function POST(req: NextRequest) {
   try {
     const resultado = await emitirFacturaC({
       clerkUserId: userId,
+      submissionId: String(submissionId),
+      periodo: String(periodo),
       monto: Number(importeTotal),
       receptorCuit: cuitReceptor != null && cuitReceptor !== '' ? String(cuitReceptor) : undefined,
       periodoDesde: String(periodoDesde),
@@ -56,8 +60,8 @@ export async function POST(req: NextRequest) {
       cae: resultado.cae,
       caeFechaVto: resultado.caeVencimiento,
       fechaEmision: resultado.fechaEmision,
-      pdfBase64: resultado.pdfBase64,
-      pdfFileName: `factura_c_${String(resultado.numeroComprobante).padStart(8, '0')}.pdf`,
+      pdfPath: resultado.pdfPath,
+      pdfUrl: resultado.pdfUrl,
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)

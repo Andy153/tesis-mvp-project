@@ -61,6 +61,7 @@ export function Sidebar({ active, setActive, errorCount, mobileOpen, onCloseMobi
     { id: 'documents', label: 'Mis documentos', icon: 'file', section: 'work' },
     { id: 'errors', label: 'Qué conviene revisar', icon: 'alert', section: 'work', badge: errorCount },
     { id: 'cobros', label: 'Centro de cobros', icon: 'wallet', section: 'work' },
+    { id: 'settings', label: 'Tu perfil', icon: 'settings', section: 'work' },
     { id: 'alerts', label: 'Avisos', icon: 'bell', section: 'soon', disabled: true },
     { id: 'payments', label: 'Pagos in-app', icon: 'creditcard', section: 'soon', disabled: true },
   ];

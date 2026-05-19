@@ -2,6 +2,13 @@ import { createClientAsync } from 'soap'
 import { getProfileFiscalFromDB } from '@/lib/profile-db'
 import { getTicketAcceso, type ArcaAuthOpts } from './client'
 import { consultarPadron } from './padron'
+import {
+  createFacturaSignedUrl,
+  facturaStoragePath,
+  formatCaeVencimientoForDb,
+  persistFacturaEmitidaToSubmission,
+  uploadFacturaPdf,
+} from './factura-storage'
 import { generarPDFFacturaC } from './pdf-factura'
 import { readUserCertPem, readUserKeyPem } from './profile-certs'
 
@@ -25,6 +32,8 @@ const CONDICION_IVA_LABELS: Record<number, string> = {
 
 export interface EmitirFacturaCParams {
   clerkUserId: string
+  submissionId: string
+  periodo: string
   monto: number
   receptorCuit?: string
   descripcion?: string
@@ -72,7 +81,8 @@ export async function emitirFacturaC(params: EmitirFacturaCParams): Promise<{
   caeVencimiento: string
   numeroComprobante: number
   fechaEmision: string
-  pdfBase64: string
+  pdfPath: string
+  pdfUrl: string
 }> {
   const profile = await getProfileFiscalFromDB(params.clerkUserId)
   const certPem = await readUserCertPem(params.clerkUserId)
@@ -238,12 +248,27 @@ export async function emitirFacturaC(params: EmitirFacturaCParams): Promise<{
       },
     })
 
+    const pdfPath = facturaStoragePath(params.clerkUserId, params.periodo)
+    await uploadFacturaPdf(pdfPath, pdfBuffer)
+
+    const caeVencimientoDb = formatCaeVencimientoForDb(caeVencimiento)
+    await persistFacturaEmitidaToSubmission({
+      submissionId: params.submissionId,
+      clerkUserId: params.clerkUserId,
+      facturaPath: pdfPath,
+      caeNumero: cae,
+      caeVencimiento: caeVencimientoDb,
+    })
+
+    const pdfUrl = await createFacturaSignedUrl(pdfPath)
+
     return {
       cae,
       caeVencimiento,
       numeroComprobante: nextNumber,
       fechaEmision,
-      pdfBase64: pdfBuffer.toString('base64'),
+      pdfPath,
+      pdfUrl,
     }
   }
 

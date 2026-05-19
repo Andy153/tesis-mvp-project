@@ -5,6 +5,9 @@ import { useClerk, useUser } from '@clerk/nextjs';
 import { Icon } from './Icon';
 import { PinManagementCard } from './profile/PinManagementCard';
 import { InvitacionSecretariaCard } from './profile/InvitacionSecretariaCard';
+import { CuentaFiscalCard } from './profile/CuentaFiscalCard';
+import { CertificadoArcaCard } from './profile/CertificadoArcaCard';
+import type { ProfileDB } from '@/lib/profile-db';
 import type { ThemeMode, UserProfile } from '@/lib/profile';
 import {
   applyThemeMode,
@@ -45,6 +48,7 @@ export function ProfileView() {
   const [profile, setProfile] = useState<UserProfile>(DEFAULT_PROFILE);
   const [hydrated, setHydrated] = useState(false);
   const [hasDbProfile, setHasDbProfile] = useState<boolean | null>(null);
+  const [dbProfile, setDbProfile] = useState<ProfileDB | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -53,32 +57,37 @@ export function ProfileView() {
   const [medicoOtrosAbierto, setMedicoOtrosAbierto] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
-  useEffect(() => {
-    const local = loadProfile();
-    setProfile(local);
-    applyThemeMode(local.theme);
-    setHydrated(true);
-
-    fetch('/api/profile')
+  const loadDbProfile = () => {
+    return fetch('/api/profile')
       .then((r) => r.json())
-      .then(({ profile: dbProfile }) => {
-        setHasDbProfile(Boolean(dbProfile));
-        if (dbProfile) {
+      .then(({ profile: row }) => {
+        setHasDbProfile(Boolean(row));
+        setDbProfile(row ?? null);
+        if (row) {
           setProfile((p) => ({
             ...p,
-            displayName: dbProfile.nombre ?? p.displayName,
-            profesion: dbProfile.especialidad ?? p.profesion,
+            displayName: row.nombre ?? p.displayName,
+            profesion: row.especialidad ?? p.profesion,
             obras:
-              Array.isArray(dbProfile.prepagas) && dbProfile.prepagas.length > 0
-                ? dbProfile.prepagas.map((name: string) => ({ obraSocial: name, codigo: '' }))
+              Array.isArray(row.prepagas) && row.prepagas.length > 0
+                ? row.prepagas.map((name: string) => ({ obraSocial: name, codigo: '' }))
                 : p.obras,
           }));
         }
       })
       .catch(() => {
         setHasDbProfile(false);
-      })
-      .finally(() => setLoading(false));
+        setDbProfile(null);
+      });
+  };
+
+  useEffect(() => {
+    const local = loadProfile();
+    setProfile(local);
+    applyThemeMode(local.theme);
+    setHydrated(true);
+
+    loadDbProfile().finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
@@ -183,7 +192,9 @@ export function ProfileView() {
       <div className="page-head">
         <div>
           <h1 className="page-title">Tu perfil</h1>
-          <p className="page-subtitle">Cómo te mostramos en la app y tus preferencias.</p>
+          <p className="page-subtitle">
+            Cómo te mostramos en la app, tus preferencias y datos fiscales para facturación.
+          </p>
         </div>
       </div>
 
@@ -352,7 +363,7 @@ export function ProfileView() {
             </label>
           </div>
           {saveError && (
-            <div style={{ color: 'var(--danger)', fontSize: 12, marginTop: 8 }}>{saveError}</div>
+            <div style={{ color: 'var(--error)', fontSize: 12, marginTop: 8 }}>{saveError}</div>
           )}
         </div>
 
@@ -516,9 +527,23 @@ export function ProfileView() {
         )}
       </div>
 
+      {rol === 'medico' && (
+        <>
+          <CuentaFiscalCard
+            dbProfile={dbProfile}
+            loading={loading}
+            onSaved={() => {
+              void loadDbProfile();
+            }}
+          />
+          <CertificadoArcaCard dbProfile={dbProfile} profileLoading={loading} />
+        </>
+      )}
+
       <PinManagementCard />
       <InvitacionSecretariaCard />
     </div>
   );
 }
+
 

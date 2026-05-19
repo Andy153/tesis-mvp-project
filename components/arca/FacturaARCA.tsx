@@ -2,18 +2,18 @@
 
 import { useState } from 'react';
 import { formatCaeDate } from '@/lib/arca/utils';
+import { navigateToPerfil } from '@/lib/traza-nav';
+import {
+  getFacturacionBlockedMessage,
+  getFacturacionBlockedTitle,
+  useFiscalProfile,
+} from '@/lib/use-fiscal-profile';
 
 export interface FacturaARCAProps {
   submissionId: string;
   monto: number;
   periodo: string;
-  onExito: (
-    cae: string,
-    caeFechaVto: string,
-    nroComprobante: number,
-    pdfBase64: string | null,
-    pdfFileName: string | null,
-  ) => void | Promise<void>;
+  onExito: (cae: string, caeFechaVto: string, nroComprobante: number) => void | Promise<void>;
   onError: (mensaje: string) => void;
 }
 
@@ -68,13 +68,20 @@ function Spinner() {
   );
 }
 
-export function FacturaARCA({ monto, periodo, onExito, onError }: FacturaARCAProps) {
+export function FacturaARCA({ submissionId, monto, periodo, onExito, onError }: FacturaARCAProps) {
+  const {
+    loading: fiscalLoading,
+    complete: fiscalComplete,
+    certReady,
+    canFacturar,
+  } = useFiscalProfile();
   const [estado, setEstado] = useState<Estado>('idle');
   const [caeEmitido, setCaeEmitido] = useState<string | null>(null);
   const [caeFechaVtoEmitido, setCaeFechaVtoEmitido] = useState<string | null>(null);
   const [nroComprobanteEmitido, setNroComprobanteEmitido] = useState<number | null>(null);
-  const [pdfBase64, setPdfBase64] = useState<string | null>(null);
-  const [pdfFileName, setPdfFileName] = useState<string | null>(null);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfPath, setPdfPath] = useState<string | null>(null);
+  const [refreshingPdfUrl, setRefreshingPdfUrl] = useState(false);
   const [mensajeError, setMensajeError] = useState<string | null>(null);
   const [continuando, setContinuando] = useState(false);
   const [montoManual, setMontoManual] = useState('');
@@ -83,6 +90,14 @@ export function FacturaARCA({ monto, periodo, onExito, onError }: FacturaARCAPro
   const montoFacturar = necesitaMontoManual ? Number(montoManual) || 0 : monto;
 
   const emitir = async () => {
+    const blockedMsg = getFacturacionBlockedMessage(fiscalComplete, certReady);
+    if (blockedMsg) {
+      setMensajeError(blockedMsg);
+      setEstado('error');
+      onError(blockedMsg);
+      return;
+    }
+
     setEstado('loading');
     setMensajeError(null);
     try {
@@ -95,6 +110,7 @@ export function FacturaARCA({ monto, periodo, onExito, onError }: FacturaARCAPro
           periodoDesde: `${periodo}-01`,
           periodoHasta: lastDayOfMonth(periodo),
           periodo,
+          submissionId,
         }),
       });
       const j = await r.json();
@@ -108,8 +124,8 @@ export function FacturaARCA({ monto, periodo, onExito, onError }: FacturaARCAPro
       setCaeEmitido(j.cae);
       setCaeFechaVtoEmitido(j.caeFechaVto ?? null);
       setNroComprobanteEmitido(j.nroComprobante ?? null);
-      setPdfBase64(j.pdfBase64 ?? null);
-      setPdfFileName(j.pdfFileName ?? null);
+      setPdfUrl(j.pdfUrl ?? null);
+      setPdfPath(j.pdfPath ?? null);
       setEstado('exito');
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Error de conexión';
@@ -119,17 +135,31 @@ export function FacturaARCA({ monto, periodo, onExito, onError }: FacturaARCAPro
     }
   };
 
+  const refreshPdfUrl = async () => {
+    if (!pdfPath || refreshingPdfUrl) return;
+    setRefreshingPdfUrl(true);
+    try {
+      const r = await fetch('/api/arca/factura/pdf-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pdfPath }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error ?? 'No se pudo renovar el enlace');
+      setPdfUrl(j.pdfUrl ?? null);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Error al renovar el enlace';
+      setMensajeError(msg);
+    } finally {
+      setRefreshingPdfUrl(false);
+    }
+  };
+
   const continuar = async () => {
     if (!caeEmitido || nroComprobanteEmitido == null || continuando) return;
     setContinuando(true);
     try {
-      await onExito(
-        caeEmitido,
-        caeFechaVtoEmitido ?? '',
-        nroComprobanteEmitido,
-        pdfBase64,
-        pdfFileName,
-      );
+      await onExito(caeEmitido, caeFechaVtoEmitido ?? '', nroComprobanteEmitido);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Error al guardar';
       setMensajeError(msg);
@@ -168,14 +198,28 @@ export function FacturaARCA({ monto, periodo, onExito, onError }: FacturaARCAPro
               <strong>Vencimiento CAE:</strong> {formatCaeDate(caeFechaVtoEmitido)}
             </p>
           )}
-          {pdfBase64 ? (
-            <a
-              href={`data:application/pdf;base64,${pdfBase64}`}
-              download={pdfFileName || 'factura.pdf'}
-              style={{ display: 'inline-block', marginTop: 12, color: '#16a34a', fontWeight: 600 }}
-            >
-              📄 Descargar factura PDF
-            </a>
+          {pdfUrl ? (
+            <div style={{ marginTop: 12 }}>
+              <a
+                href={pdfUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ display: 'inline-block', color: '#16a34a', fontWeight: 600 }}
+              >
+                📄 Descargar factura PDF
+              </a>
+              {pdfPath && (
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  style={{ display: 'block', marginTop: 8, fontSize: 12, padding: '4px 0' }}
+                  disabled={refreshingPdfUrl}
+                  onClick={() => void refreshPdfUrl()}
+                >
+                  {refreshingPdfUrl ? 'Renovando enlace…' : 'Renovar enlace de descarga'}
+                </button>
+              )}
+            </div>
           ) : (
             <p style={{ fontSize: 12, color: '#888', margin: '12px 0 0' }}>
               El PDF no pudo generarse, pero el CAE es válido.
@@ -218,7 +262,32 @@ export function FacturaARCA({ monto, periodo, onExito, onError }: FacturaARCAPro
     );
   }
 
-  const disabled = estado === 'loading' || (necesitaMontoManual && montoFacturar <= 0);
+  if (fiscalLoading) {
+    return (
+      <p style={{ fontSize: 14, color: 'var(--text-muted)', margin: 0 }}>
+        Verificando configuración para facturar…
+      </p>
+    );
+  }
+
+  const blockedMessage = getFacturacionBlockedMessage(fiscalComplete, certReady);
+
+  if (blockedMessage) {
+    return (
+      <div className="factura-fiscal-blocked">
+        <p className="factura-fiscal-blocked__title">
+          {getFacturacionBlockedTitle(fiscalComplete, certReady)}
+        </p>
+        <p className="factura-fiscal-blocked__text">{blockedMessage}</p>
+        <button type="button" className="btn btn-primary" onClick={navigateToPerfil}>
+          Ir a Tu perfil
+        </button>
+      </div>
+    );
+  }
+
+  const disabled =
+    !canFacturar || estado === 'loading' || (necesitaMontoManual && montoFacturar <= 0);
 
   return (
     <div>

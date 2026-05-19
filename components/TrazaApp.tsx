@@ -69,6 +69,15 @@ export default function TrazaApp() {
   }, [files, authStates]);
 
   useEffect(() => {
+    const onNavigate = (e: Event) => {
+      const view = (e as CustomEvent<{ view?: string }>).detail?.view;
+      if (view) setActive(view);
+    };
+    window.addEventListener('traza:navigate', onNavigate);
+    return () => window.removeEventListener('traza:navigate', onNavigate);
+  }, []);
+
+  useEffect(() => {
     if (!mobileNavOpen) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setMobileNavOpen(false);

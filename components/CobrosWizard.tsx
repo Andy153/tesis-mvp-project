@@ -15,8 +15,8 @@ type Submission = {
   monto_total: number | null;
   comprobante_smg_path: string | null;
   factura_path: string | null;
-  cai_numero: string | null;
-  cai_vencimiento: string | null;
+  cae_numero: string | null;
+  cae_vencimiento: string | null;
   factura_adjuntada_en: string | null;
   wizard_completado_en: string | null;
 };
@@ -134,8 +134,8 @@ export function CobrosWizard({
   const [ready48h, setReady48h] = useState(false);
   const [readyFactura, setReadyFactura] = useState(false);
   const [comprobanteFile, setComprobanteFile] = useState<File | null>(null);
-  const [caiNumero, setCaiNumero] = useState('');
-  const [caiVencimiento, setCaiVencimiento] = useState('');
+  const [caeNumero, setCaeNumero] = useState('');
+  const [caeVencimiento, setCaeVencimiento] = useState('');
   const [exceptionSent, setExceptionSent] = useState(false);
 
   const load = async () => {
@@ -153,8 +153,8 @@ export function CobrosWizard({
       const j = await r.json();
       if (!r.ok) throw new Error(j.error ?? 'Error al cargar el wizard');
       setSub(j.submission);
-      setCaiNumero(j.submission.cai_numero ?? '');
-      setCaiVencimiento(j.submission.cai_vencimiento ?? '');
+      setCaeNumero(j.submission.cae_numero ?? '');
+      setCaeVencimiento(j.submission.cae_vencimiento ?? '');
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error');
     } finally {
@@ -277,7 +277,7 @@ export function CobrosWizard({
       <div style={{ padding: 20, background: '#fff4d6', border: '1px solid #e0b94a', borderRadius: 10 }}>
         <strong style={{ color: '#7a5a00' }}>Solicitud de excepción enviada</strong>
         <p style={{ color: '#7a5a00', fontSize: 14, margin: '8px 0 0' }}>
-          Se envió un mail a Swiss Medical con la factura y los datos del CAI. Esperá su respuesta.
+          Se envió un mail a Swiss Medical con la factura y los datos del CAE. Esperá su respuesta.
         </p>
       </div>
     );
@@ -439,8 +439,8 @@ export function CobrosWizard({
           submissionId={sub.id}
           monto={sub.monto_total ?? 0}
           periodo={sub.periodo}
-          onExito={async (cae, caeFechaVto, nroComprobante, pdfBase64, pdfFileName) => {
-            await patch('factura_emitida', { cae, caeFechaVto, nroComprobante, pdfBase64, pdfFileName });
+          onExito={async () => {
+            await patch('factura_emitida', {});
           }}
           onError={(mensaje) => {
             console.error('Error emitiendo factura:', mensaje);
@@ -465,28 +465,28 @@ export function CobrosWizard({
         </p>
         <img src="/wizard/paso5_adjuntar.png" alt="Adjuntar factura con el clip" style={{ width: '100%', borderRadius: 8, margin: '12px 0', border: '1px solid #e0e0e0' }} />
         <p style={{ fontSize: 14, color: '#555', margin: '0 0 12px' }}>
-          Una vez adjuntada en el portal, confirmá acá los datos del CAI que ingresaste.
+          Una vez adjuntada en el portal, confirmá acá los datos del CAE que ingresaste.
         </p>
         <div style={{ display: 'grid', gap: 10, marginBottom: 12 }}>
           <div>
-            <label style={labelStyle}>Número de CAI</label>
-            <input style={inputStyle} value={caiNumero} onChange={(e) => setCaiNumero(e.target.value)} placeholder="Ej: 12345678901234" />
+            <label style={labelStyle}>Número de CAE</label>
+            <input style={inputStyle} value={caeNumero} onChange={(e) => setCaeNumero(e.target.value)} placeholder="Ej: 12345678901234" />
           </div>
           <div>
-            <label style={labelStyle}>Fecha de vencimiento del CAI</label>
-            <input type="date" style={inputStyle} value={caiVencimiento} onChange={(e) => setCaiVencimiento(e.target.value)} />
+            <label style={labelStyle}>Fecha de vencimiento del CAE</label>
+            <input type="date" style={inputStyle} value={caeVencimiento} onChange={(e) => setCaeVencimiento(e.target.value)} />
           </div>
         </div>
         <button
           type="button"
           className="btn btn-primary"
-          disabled={!caiNumero.trim() || !caiVencimiento || saving}
+          disabled={!caeNumero.trim() || !caeVencimiento || saving}
           style={
-            !caiNumero.trim() || !caiVencimiento
+            !caeNumero.trim() || !caeVencimiento
               ? { background: '#cdd5d0', color: '#7a8580', cursor: 'not-allowed', borderColor: '#cdd5d0' }
               : undefined
           }
-          onClick={() => patch('adjuntar_factura', { cai_numero: caiNumero, cai_vencimiento: caiVencimiento })}
+          onClick={() => patch('adjuntar_factura', { cae_numero: caeNumero, cae_vencimiento: caeVencimiento })}
         >
           {saving ? 'Guardando...' : 'Confirmar adjunto en el portal'}
         </button>
@@ -538,7 +538,7 @@ export function CobrosWizard({
                 onClick={() => {
                   if (
                     window.confirm(
-                      '¿Confirmar que no fue aprobado? Se enviará un mail de excepción a Swiss Medical con la factura y los datos del CAI.',
+                      '¿Confirmar que no fue aprobado? Se enviará un mail de excepción a Swiss Medical con la factura y los datos del CAE.',
                     )
                   ) {
                     sendException();

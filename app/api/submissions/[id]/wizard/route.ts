@@ -42,7 +42,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       wizard_estado, wizard_paso,
       enviado_en, cantidad_partes, monto_total,
       comprobante_smg_path, factura_path,
-      cai_numero, cai_vencimiento,
+      cae_numero, cae_vencimiento,
       factura_adjuntada_en, wizard_completado_en,
       partes_incluidos
     `,
@@ -125,49 +125,22 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     update.wizard_estado = 'factura_instrucciones';
     update.wizard_paso = 5;
   } else if (action === 'factura_emitida') {
-    const cae = body.cae as string | undefined;
-    const caeFechaVto = body.caeFechaVto as string | undefined;
-    const pdfBase64 = body.pdfBase64 as string | undefined;
-    const pdfFileName = body.pdfFileName as string | undefined;
-
-    if (!cae?.trim()) {
-      return NextResponse.json({ error: 'Falta el CAE' }, { status: 400 });
-    }
-
-    update.cai_numero = cae.trim();
-    if (caeFechaVto) {
-      const digits = String(caeFechaVto).replace(/\D/g, '');
-      update.cai_vencimiento =
-        digits.length === 8
-          ? `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`
-          : String(caeFechaVto);
-    }
-
-    if (pdfBase64 && pdfFileName) {
-      const buffer = Buffer.from(pdfBase64, 'base64');
-      const path = `${userId}/${sub.periodo}_factura.pdf`;
-      const { error: upErr } = await supabaseAdmin.storage
-        .from(BUCKET_SUBMISSIONS)
-        .upload(path, buffer, { contentType: 'application/pdf', upsert: true });
-      if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
-      update.factura_path = path;
-    }
-
+    // CAE, PDF y factura_path ya se persisten al emitir (POST /api/arca/factura).
     update.wizard_estado = 'factura_instrucciones';
     update.wizard_paso = 5;
   } else if (action === 'adjuntar_factura') {
-    const caiNumero = body.cai_numero as string | null;
-    const caiVencimiento = body.cai_vencimiento as string | null;
+    const caeNumero = body.cae_numero as string | null;
+    const caeVencimiento = body.cae_vencimiento as string | null;
 
-    if (!caiNumero?.trim()) {
-      return NextResponse.json({ error: 'Falta el número de CAI' }, { status: 400 });
+    if (!caeNumero?.trim()) {
+      return NextResponse.json({ error: 'Falta el número de CAE' }, { status: 400 });
     }
-    if (!caiVencimiento?.trim()) {
-      return NextResponse.json({ error: 'Falta la fecha de vencimiento del CAI' }, { status: 400 });
+    if (!caeVencimiento?.trim()) {
+      return NextResponse.json({ error: 'Falta la fecha de vencimiento del CAE' }, { status: 400 });
     }
 
-    update.cai_numero = caiNumero.trim();
-    update.cai_vencimiento = caiVencimiento.trim();
+    update.cae_numero = caeNumero.trim();
+    update.cae_vencimiento = caeVencimiento.trim();
     update.factura_adjuntada_en = new Date().toISOString();
     update.wizard_estado = 'factura_adjuntada';
     update.wizard_paso = 6;
@@ -217,7 +190,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     .select(
       `
       id, periodo, obra_social,
-      factura_path, cai_numero, cai_vencimiento,
+      factura_path, cae_numero, cae_vencimiento,
       cantidad_partes, partes_incluidos
     `,
     )
@@ -269,8 +242,8 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   <table style="border-collapse:collapse;font-size:14px;margin-top:8px;">
     <tr><td style="padding:6px 12px;border:1px solid #e0e0e0;font-weight:600;">Período</td><td style="padding:6px 12px;border:1px solid #e0e0e0;">${label}</td></tr>
     <tr><td style="padding:6px 12px;border:1px solid #e0e0e0;font-weight:600;">Cantidad de partes</td><td style="padding:6px 12px;border:1px solid #e0e0e0;">${sub.cantidad_partes ?? '—'}</td></tr>
-    ${sub.cai_numero ? `<tr><td style="padding:6px 12px;border:1px solid #e0e0e0;font-weight:600;">CAI</td><td style="padding:6px 12px;border:1px solid #e0e0e0;">${sub.cai_numero}</td></tr>` : ''}
-    ${sub.cai_vencimiento ? `<tr><td style="padding:6px 12px;border:1px solid #e0e0e0;font-weight:600;">Vencimiento CAI</td><td style="padding:6px 12px;border:1px solid #e0e0e0;">${sub.cai_vencimiento}</td></tr>` : ''}
+    ${sub.cae_numero ? `<tr><td style="padding:6px 12px;border:1px solid #e0e0e0;font-weight:600;">CAE</td><td style="padding:6px 12px;border:1px solid #e0e0e0;">${sub.cae_numero}</td></tr>` : ''}
+    ${sub.cae_vencimiento ? `<tr><td style="padding:6px 12px;border:1px solid #e0e0e0;font-weight:600;">Vencimiento CAE</td><td style="padding:6px 12px;border:1px solid #e0e0e0;">${sub.cae_vencimiento}</td></tr>` : ''}
   </table>
   <p style="color:#666;font-size:12px;margin-top:24px;">Enviado automáticamente por Trazá.</p>
 </body></html>`,

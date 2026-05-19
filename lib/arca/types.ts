@@ -11,6 +11,6 @@ export interface FacturaCResult {
   cae?: string;
   caeFechaVto?: string;
   errores?: string[];
-  pdfBase64?: string | null;
-  pdfFileName?: string | null;
+  pdfPath?: string | null;
+  pdfUrl?: string | null;
 }

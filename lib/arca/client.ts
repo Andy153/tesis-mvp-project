@@ -1,5 +1,3 @@
-import fs from 'fs'
-import path from 'path'
 import forge from 'node-forge'
 import { createClientAsync } from 'soap'
 import { supabaseAdmin } from '@/lib/supabase-admin'
@@ -14,11 +12,22 @@ interface TicketAcceso {
   expiresAt: Date
 }
 
-// Cache en memoria por servicio (mismo proceso / mismo módulo)
+export type ArcaAuthOpts = {
+  cuit: string
+  certPem: string
+  keyPem: string
+  ambiente: 'desarrollo' | 'produccion'
+}
+
+// Cache en memoria por cuit + servicio (mismo proceso / mismo módulo)
 const ticketCache: Record<string, TicketAcceso> = {}
 
-function afipCuit(): string {
-  return String(process.env.AFIP_CUIT ?? '23452350319').trim()
+function ticketCacheKey(cuit: string, service: string): string {
+  return `${String(cuit).trim()}:${service}`
+}
+
+function wsaaWsdl(ambiente: ArcaAuthOpts['ambiente']): string {
+  return ambiente === 'produccion' ? WSAA_WSDL_PROD : WSAA_WSDL_HOMO
 }
 
 function isTicketValid(ticket: TicketAcceso): boolean {
@@ -155,49 +164,9 @@ function buildTRA(service: string): string {
 </loginTicketRequest>`
 }
 
-function readCertPem(): string {
-  const envCert = process.env.AFIP_CERT_PEM
-  if (envCert && envCert.trim().includes('BEGIN CERTIFICATE')) {
-    return envCert
-  }
-
-  const certPath = path.resolve(
-    process.cwd(),
-    process.env.AFIP_CERT_PATH || 'certs/traza_homo.crt',
-  )
-  if (!fs.existsSync(certPath)) {
-    throw new Error(
-      'Cert no disponible: defina AFIP_CERT_PEM (env var) o AFIP_CERT_PATH (archivo)',
-    )
-  }
-  return fs.readFileSync(certPath, 'utf8')
-}
-
-function readKeyPem(): string {
-  const envKey = process.env.AFIP_KEY_PEM
-  if (envKey && envKey.trim().includes('PRIVATE KEY')) {
-    return envKey
-  }
-
-  const keyPath = path.resolve(
-    process.cwd(),
-    process.env.AFIP_KEY_PATH || 'certs/traza_homo.key',
-  )
-  if (!fs.existsSync(keyPath)) {
-    throw new Error(
-      'Key no disponible: defina AFIP_KEY_PEM (env var) o AFIP_KEY_PATH (archivo)',
-    )
-  }
-  return fs.readFileSync(keyPath, 'utf8')
-}
-
-function signTRA(tra: string): string {
-  const certSource = process.env.AFIP_CERT_PEM ? 'env' : 'filesystem'
-  const keySource = process.env.AFIP_KEY_PEM ? 'env' : 'filesystem'
-  console.log('[WSAA] signing TRA with cert from', certSource, 'and key from', keySource)
-
-  const certPem = readCertPem()
-  const keyPem = readKeyPem()
+function signTRA(tra: string, certPem: string, keyPem: string): string {
+  console.log('[WSAA] signing TRA with provided cert/key')
+  console.log('[WSAA] cert source: storage')
   const cert = forge.pki.certificateFromPem(certPem)
   const key = forge.pki.privateKeyFromPem(keyPem)
 
@@ -237,11 +206,17 @@ function extractAfipFault(error: unknown): string | null {
   return parts.join(': ')
 }
 
-export async function getTicketAcceso(service = 'wsfe'): Promise<TicketAcceso> {
-  const cuit = afipCuit()
+export async function getTicketAcceso(
+  service = 'wsfe',
+  opts: ArcaAuthOpts,
+): Promise<TicketAcceso> {
+  const cuit = String(opts.cuit).trim()
+  const { certPem, keyPem, ambiente } = opts
+  const cacheKey = ticketCacheKey(cuit, service)
+
   console.log('[WSAA] getTicketAcceso:', { service, cuit, cuitType: typeof cuit })
 
-  const cached = ticketCache[service]
+  const cached = ticketCache[cacheKey]
   if (cached && isTicketValid(cached)) {
     console.log('[WSAA] reusing TA from memory')
     return cached
@@ -250,24 +225,22 @@ export async function getTicketAcceso(service = 'wsfe'): Promise<TicketAcceso> {
   const supabaseTicket = await readTaFromSupabase(cuit, service)
   if (supabaseTicket) {
     console.log('[WSAA] reusing TA from Supabase')
-    ticketCache[service] = supabaseTicket
+    ticketCache[cacheKey] = supabaseTicket
     return supabaseTicket
   }
 
   console.log('[WSAA] no cached TA, requesting new from AFIP')
 
-  const isProduction = process.env.AFIP_AMBIENTE === 'produccion'
-  const wsdl = isProduction ? WSAA_WSDL_PROD : WSAA_WSDL_HOMO
-
+  const wsdl = wsaaWsdl(ambiente)
   const tra = buildTRA(service)
-  const cms = signTRA(tra)
+  const cms = signTRA(tra, certPem, keyPem)
 
   try {
     const client = await createClientAsync(wsdl)
     const [result] = await client.loginCmsAsync({ in0: cms })
     const responseXml = result?.loginCmsReturn ?? result?.return ?? ''
     const ticket = parseTicket(responseXml)
-    ticketCache[service] = ticket
+    ticketCache[cacheKey] = ticket
     await writeTaToSupabase(cuit, service, ticket)
     console.log('[WSAA] new TA cached in memory + Supabase')
     return ticket

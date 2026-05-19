@@ -1,10 +1,16 @@
-import { NextResponse } from 'next/server'
+import { auth } from '@clerk/nextjs/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { emitirFacturaC } from '@/lib/arca/facturacion'
 
-export async function POST(request: Request) {
+export async function POST(req: NextRequest) {
+  const { userId } = await auth()
+  if (!userId) {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  }
+
   let body: Record<string, unknown>
   try {
-    body = await request.json()
+    body = await req.json()
   } catch {
     return NextResponse.json({ error: 'Body JSON inválido' }, { status: 400 })
   }
@@ -33,6 +39,7 @@ export async function POST(request: Request) {
 
   try {
     const resultado = await emitirFacturaC({
+      clerkUserId: userId,
       monto: Number(importeTotal),
       receptorCuit: cuitReceptor != null && cuitReceptor !== '' ? String(cuitReceptor) : undefined,
       periodoDesde: String(periodoDesde),
@@ -54,6 +61,9 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
+    if (message.includes('Datos fiscales incompletos en el perfil')) {
+      return NextResponse.json({ exito: false, errores: [message] }, { status: 400 })
+    }
     return NextResponse.json({ exito: false, errores: [message] }, { status: 500 })
   }
 }

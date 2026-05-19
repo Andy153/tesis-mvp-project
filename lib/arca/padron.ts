@@ -1,5 +1,5 @@
 import { createClientAsync } from 'soap'
-import { getTicketAcceso } from './client'
+import { getTicketAcceso, type ArcaAuthOpts } from './client'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 
 const PADRON_WSDL_HOMO =
@@ -31,12 +31,15 @@ export interface PadronData {
   rawResponse: unknown
 }
 
-function padronWsdl(): string {
-  return process.env.AFIP_AMBIENTE === 'produccion' ? PADRON_WSDL_PROD : PADRON_WSDL_HOMO
+function padronWsdl(ambiente: ArcaAuthOpts['ambiente']): string {
+  return ambiente === 'produccion' ? PADRON_WSDL_PROD : PADRON_WSDL_HOMO
 }
 
-function afipCuitRepresentada(): number {
-  return parseInt(process.env.AFIP_CUIT || '23452350319', 10)
+export type ConsultarPadronOpts = {
+  cuitRepresentada: string
+  certPem: string
+  keyPem: string
+  ambiente: ArcaAuthOpts['ambiente']
 }
 
 function normalizeCuit(cuit: string): string {
@@ -205,8 +208,11 @@ function parsePadronResponse(raw: unknown, cuit: string): PadronData {
   }
 }
 
-export async function consultarPadron(cuit: string): Promise<PadronData> {
-  const cuitNorm = normalizeCuit(cuit)
+export async function consultarPadron(
+  cuitConsultado: string,
+  opts: ConsultarPadronOpts,
+): Promise<PadronData> {
+  const cuitNorm = normalizeCuit(cuitConsultado)
   if (cuitNorm.length !== 11) {
     throw new Error('CUIT inválido (debe tener 11 dígitos)')
   }
@@ -217,14 +223,20 @@ export async function consultarPadron(cuit: string): Promise<PadronData> {
     return cached
   }
 
-  const ta = await getTicketAcceso('ws_sr_padron_a13')
-  const client = await createClientAsync(padronWsdl())
+  const cuitRepresentada = String(opts.cuitRepresentada).trim()
+  const ta = await getTicketAcceso('ws_sr_padron_a13', {
+    cuit: cuitRepresentada,
+    certPem: opts.certPem,
+    keyPem: opts.keyPem,
+    ambiente: opts.ambiente,
+  })
+  const client = await createClientAsync(padronWsdl(opts.ambiente))
 
   try {
     const [result] = await client.getPersonaAsync({
       token: ta.token,
       sign: ta.sign,
-      cuitRepresentada: afipCuitRepresentada(),
+      cuitRepresentada: Number(cuitRepresentada),
       idPersona: Number(cuitNorm),
     })
 

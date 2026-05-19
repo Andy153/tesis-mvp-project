@@ -6,6 +6,7 @@ const isPublicRoute = createRouteMatcher([
   '/sign-up/secretaria(.*)',
   // Cron endpoints must bypass Clerk auth (they use Authorization: Bearer <CRON_SECRET>)
   '/api/cron(.*)',
+  '/api/arca/test-padron',
 ]);
 
 export default clerkMiddleware(async (auth, request) => {

@@ -2162,8 +2162,22 @@ html[data-theme='dark'] .modal-overlay {
   }
 
   .doc-preview {
-    min-height: 280px;
-    max-height: 80vh;
+    position: static;
+    top: auto;
+    min-height: 0;
+    max-height: none;
+    height: auto;
+  }
+
+  .doc-preview-body {
+    flex: none;
+    overflow: visible;
+    max-height: none;
+  }
+
+  .analysis-body {
+    overflow-y: visible;
+    flex: none;
   }
 
   .analysis-summary {

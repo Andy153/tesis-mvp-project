@@ -383,7 +383,7 @@ export function DocumentsView({
           <div>Podés ajustar el filtro o escribir otra palabra en la búsqueda.</div>
         </div>
       ) : (
-        <div className="errors-table">
+        <div className="errors-table docs-table">
           <table>
             <thead>
               <tr>

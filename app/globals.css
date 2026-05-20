@@ -70,8 +70,6 @@ body {
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
-  overflow-wrap: break-word;
-  word-break: break-word;
   transition: background-color 0.35s ease, color 0.35s ease;
 }
 
@@ -666,8 +664,40 @@ html[data-theme='dark'] .cobros-wizard > p {
 }
 .planilla-detail-grid > div:nth-child(even) {
   min-width: 0;
+}
+
+/* Word wrap — narrativo / paneles anchos (no tablas) */
+.cobros-wizard,
+.cobros-wizard__step-body,
+.planilla-detail-grid > div:nth-child(even),
+.analysis-detail,
+.analysis-result,
+.analysis-body,
+.finding,
+.finding-body,
+.finding-title,
+.suggestion,
+.suggestion-desc {
   overflow-wrap: break-word;
   word-break: break-word;
+}
+
+/* Tabla Mis documentos — wrap por palabras, sin partir letra a letra */
+.docs-table th,
+.docs-table td {
+  word-break: normal;
+  overflow-wrap: normal;
+  white-space: normal;
+}
+.docs-table th:nth-child(3),
+.docs-table td:nth-child(3) {
+  min-width: 140px;
+}
+.docs-table .err-msg,
+.docs-table .err-hint {
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: normal;
 }
 
 /* Cards / panels */
@@ -2200,12 +2230,6 @@ html[data-theme='dark'] .modal-overlay {
   gap: 12px;
   margin-bottom: 10px;
   flex-wrap: wrap;
-}
-
-.errors-table th,
-.errors-table td {
-  overflow-wrap: break-word;
-  word-break: break-word;
 }
 
 /* ——— Responsive layout ——— */

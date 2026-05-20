@@ -97,7 +97,19 @@ export function Sidebar({ active, setActive, errorCount, mobileOpen, onCloseMobi
       >
         <Icon name="x" size={20} />
       </button>
-      <div className="brand">
+      <div
+        className="brand brand--clickable"
+        role="button"
+        tabIndex={0}
+        aria-label="Ir al dashboard"
+        onClick={() => setActive('dashboard')}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setActive('dashboard');
+          }
+        }}
+      >
         <Logo size={40} variant="dark" />
         <span className="brand__wordmark">Trazá</span>
       </div>

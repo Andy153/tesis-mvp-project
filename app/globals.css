@@ -310,6 +310,21 @@ html[data-theme='dark'] .brand-logo__wordmark {
   color: #0f3d2e;
   letter-spacing: 0;
 }
+html[data-theme='dark'] .brand__wordmark {
+  color: var(--text);
+}
+.brand--clickable {
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background 0.12s;
+}
+.brand--clickable:hover {
+  background: var(--bg-sunken);
+}
+.brand--clickable:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .app-mob-header__brand {
   display: inline-flex;
   align-items: center;

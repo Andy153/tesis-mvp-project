@@ -67,7 +67,7 @@ export function InstalarAppCard() {
         aria-controls="instalar-app-panel"
         onClick={() => setOpen((v) => !v)}
       >
-        <span className="instalar-app-header__title">Agregá Trazá a tu pantalla de inicio</span>
+        <span className="instalar-app-header__title">Agregá Trazá a tu celular</span>
         <ChevronDown
           size={22}
           strokeWidth={2}
@@ -84,7 +84,7 @@ export function InstalarAppCard() {
         <div className="instalar-app-collapse__inner">
           <div className="instalar-app-body">
             <p className="field-hint instalar-app-subtitle">
-              Accedé más rápido desde la pantalla de inicio de tu celular.
+              Seguí estos pasos para tener acceso directo desde tu pantalla de inicio.
             </p>
 
             <div

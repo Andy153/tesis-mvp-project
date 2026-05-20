@@ -461,7 +461,7 @@ export function ProfileView() {
           </div>
         )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 60px', gap: 10, alignItems: 'center' }}>
+        <div className="profile-prepaga-grid">
           <div style={{ color: 'var(--text-soft)', fontWeight: 700, fontSize: 12 }}>Obra social</div>
           <div style={{ color: 'var(--text-soft)', fontWeight: 700, fontSize: 12 }}>Código</div>
           <div />

@@ -794,7 +794,7 @@ function StoredFilesPanel({
         </div>
       )}
       {err && <div style={{ color: 'var(--error)', marginBottom: 10, fontSize: 12 }}>{err}</div>}
-      <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: 10, fontSize: 13 }}>
+      <div className="planilla-detail-grid">
         <div style={{ color: 'var(--text-soft)', fontWeight: 700 }}>Fecha</div>
         <div>
           {editing ? (

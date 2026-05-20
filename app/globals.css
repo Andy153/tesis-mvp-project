@@ -600,6 +600,56 @@ html[data-theme='dark'] .btn-danger {
   color: var(--error);
 }
 
+/* Cobros wizard — Swiss Medical post-envío */
+.cobros-wizard__step-body {
+  background: var(--bg-panel);
+}
+html[data-theme='dark'] .cobros-wizard .cobros-wizard__step-body .btn:not(.btn-primary):not(.btn-danger) {
+  color: var(--text);
+}
+html[data-theme='dark'] .cobros-wizard .cobros-wizard__step-actions .btn:not(.btn-primary) {
+  color: var(--text);
+}
+html[data-theme='dark'] .cobros-wizard .cobros-wizard__step-body .btn-primary,
+html[data-theme='dark'] .cobros-wizard .cobros-wizard__step-actions .btn-primary {
+  color: #fff;
+}
+html[data-theme='dark'] .cobros-wizard .cobros-wizard__step-body .btn-primary:hover,
+html[data-theme='dark'] .cobros-wizard .cobros-wizard__step-actions .btn-primary:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #0f1115;
+}
+html[data-theme='dark'] .cobros-wizard .cobros-wizard__btn-muted {
+  color: var(--text-muted);
+}
+html[data-theme='dark'] .cobros-wizard p {
+  color: var(--text-muted);
+}
+html[data-theme='dark'] .cobros-wizard a {
+  color: var(--accent);
+}
+html[data-theme='dark'] .cobros-wizard label {
+  color: var(--text-soft);
+}
+
+/* Planilla generada — detalle de la carga */
+.planilla-detail-grid {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 10px;
+  font-size: 13px;
+}
+.planilla-detail-grid > div:nth-child(odd) {
+  color: var(--text-soft);
+  font-weight: 700;
+}
+.planilla-detail-grid > div:nth-child(even) {
+  min-width: 0;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
 /* Cards / panels */
 .panel {
   background: var(--bg-panel);
@@ -2180,6 +2230,10 @@ html[data-theme='dark'] .modal-overlay {
     flex: none;
   }
 
+  .planilla-detail-grid {
+    grid-template-columns: minmax(0, 120px) minmax(0, 1fr);
+  }
+
   .analysis-summary {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -2296,6 +2350,17 @@ html[data-theme='dark'] .modal-overlay {
 }
 
 @media (max-width: 640px) {
+  .planilla-detail-grid {
+    grid-template-columns: 1fr;
+    gap: 2px 0;
+  }
+  .planilla-detail-grid > div:nth-child(odd) {
+    padding-top: 10px;
+  }
+  .planilla-detail-grid > div:nth-child(even) {
+    padding-bottom: 6px;
+  }
+
   .cal-shell { grid-template-columns: 1fr; }
   .proj-summary-grid { grid-template-columns: 1fr; }
   .proj-kpi-value { font-size: 16px !important; }

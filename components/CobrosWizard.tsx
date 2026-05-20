@@ -113,7 +113,7 @@ function Step({ numero, titulo, activo, completado, children }: StepProps) {
           {titulo}
         </span>
       </div>
-      {activo && children && <div style={{ padding: '16px 20px', background: 'white' }}>{children}</div>}
+      {activo && children && <div className="cobros-wizard__step-body" style={{ padding: '16px 20px' }}>{children}</div>}
     </div>
   );
 }
@@ -300,7 +300,7 @@ export function CobrosWizard({
   };
 
   return (
-    <div>
+    <div className="cobros-wizard">
       <p style={{ fontSize: 13, color: '#555', marginBottom: 16 }}>
         Liquidación <strong>{periodoLabel(sub.periodo)}</strong> · {sub.cantidad_partes ?? 0} parte(s) enviados el{' '}
         {new Date(sub.enviado_en).toLocaleDateString('es-AR')}
@@ -387,7 +387,7 @@ export function CobrosWizard({
         </a>
         <br />
         <p style={{ fontSize: 13, color: '#888', margin: '0 0 12px' }}>¿Aparece el comprobante?</p>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div className="cobros-wizard__step-actions" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button type="button" className="btn btn-primary" disabled={saving} onClick={() => patch('comprobante_disponible')}>
             Sí, aparece el comprobante
           </button>
@@ -395,7 +395,7 @@ export function CobrosWizard({
             Todavía no — vuelvo después
           </button>
         </div>
-        <button type="button" className="btn" style={{ marginTop: 12, fontSize: 13, color: '#666' }} onClick={goBack} disabled={saving}>
+        <button type="button" className="btn cobros-wizard__btn-muted" style={{ marginTop: 12, fontSize: 13, color: '#666' }} onClick={goBack} disabled={saving}>
           ← Volver al paso anterior
         </button>
       </Step>

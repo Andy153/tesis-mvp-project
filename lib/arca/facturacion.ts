@@ -1,4 +1,3 @@
-import { createClientAsync } from 'soap'
 import { getProfileFiscalFromDB } from '@/lib/profile-db'
 import { getTicketAcceso, type ArcaAuthOpts } from './client'
 import { consultarPadron } from './padron'
@@ -11,6 +10,7 @@ import {
 } from './factura-storage'
 import { generarPDFFacturaC } from './pdf-factura'
 import { readUserCertPem, readUserKeyPem } from './profile-certs'
+import { createArcaSoapClient } from './soap-client'
 
 const WSFE_WSDL_HOMO = 'https://wswhomo.afip.gov.ar/wsfev1/service.asmx?WSDL'
 const WSFE_WSDL_PROD = 'https://servicios1.afip.gov.ar/wsfev1/service.asmx?WSDL'
@@ -137,7 +137,7 @@ export async function emitirFacturaC(params: EmitirFacturaCParams): Promise<{
     Cuit: cuitEmisor,
   }
 
-  const client = await createClientAsync(wsfeWsdl(profile.ambiente))
+  const client = await createArcaSoapClient(wsfeWsdl(profile.ambiente))
 
   const [ultimoRaw] = await client.FECompUltimoAutorizadoAsync({
     Auth: auth,

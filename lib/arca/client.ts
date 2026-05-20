@@ -1,9 +1,9 @@
 import forge from 'node-forge'
-import { createClientAsync } from 'soap'
+import { createArcaSoapClient } from './soap-client'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 
 const WSAA_WSDL_HOMO = 'https://wsaahomo.afip.gov.ar/ws/services/LoginCms?WSDL'
-const WSAA_WSDL_PROD = 'https://servicios1.afip.gov.ar/ws/services/LoginCms?WSDL'
+const WSAA_WSDL_PROD = 'https://wsaa.afip.gov.ar/ws/services/LoginCms?WSDL'
 const TA_CACHE_MARGIN_MS = 2 * 60 * 1000
 
 interface TicketAcceso {
@@ -236,7 +236,7 @@ export async function getTicketAcceso(
   const cms = signTRA(tra, certPem, keyPem)
 
   try {
-    const client = await createClientAsync(wsdl)
+    const client = await createArcaSoapClient(wsdl)
     const [result] = await client.loginCmsAsync({ in0: cms })
     const responseXml = result?.loginCmsReturn ?? result?.return ?? ''
     const ticket = parseTicket(responseXml)

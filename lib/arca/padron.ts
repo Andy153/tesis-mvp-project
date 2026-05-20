@@ -1,5 +1,5 @@
-import { createClientAsync } from 'soap'
 import { getTicketAcceso, type ArcaAuthOpts } from './client'
+import { createArcaSoapClient } from './soap-client'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 
 const PADRON_WSDL_HOMO =
@@ -230,7 +230,7 @@ export async function consultarPadron(
     keyPem: opts.keyPem,
     ambiente: opts.ambiente,
   })
-  const client = await createClientAsync(padronWsdl(opts.ambiente))
+  const client = await createArcaSoapClient(padronWsdl(opts.ambiente))
 
   try {
     const [result] = await client.getPersonaAsync({

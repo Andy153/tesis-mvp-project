@@ -7,6 +7,7 @@ import { PinManagementCard } from './profile/PinManagementCard';
 import { InvitacionSecretariaCard } from './profile/InvitacionSecretariaCard';
 import { CuentaFiscalCard } from './profile/CuentaFiscalCard';
 import { CertificadoArcaCard } from './profile/CertificadoArcaCard';
+import { InstalarAppCard } from './profile/InstalarAppCard';
 import type { ProfileDB } from '@/lib/profile-db';
 import type { ThemeMode, UserProfile } from '@/lib/profile';
 import {
@@ -539,6 +540,8 @@ export function ProfileView() {
           <CertificadoArcaCard dbProfile={dbProfile} profileLoading={loading} />
         </>
       )}
+
+      <InstalarAppCard />
 
       <PinManagementCard />
       <InvitacionSecretariaCard />

@@ -324,7 +324,7 @@ export function CobrosWizard({
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
         <button
           type="button"
-          className="btn"
+          className="btn cobros-wizard__btn-muted"
           style={{ fontSize: 12, color: '#666' }}
           disabled={saving}
           onClick={() => {
@@ -428,7 +428,7 @@ export function CobrosWizard({
         >
           {saving ? 'Subiendo...' : 'Subir comprobante'}
         </button>
-        <button type="button" className="btn" style={{ marginTop: 12, marginLeft: 12, marginRight: 12, fontSize: 13, color: '#666' }} onClick={goBack} disabled={saving}>
+        <button type="button" className="btn cobros-wizard__btn-muted" style={{ marginTop: 12, marginLeft: 12, marginRight: 12, fontSize: 13, color: '#666' }} onClick={goBack} disabled={saving}>
           ← Volver al paso anterior
         </button>
       </Step>
@@ -448,7 +448,7 @@ export function CobrosWizard({
         />
         <button
           type="button"
-          className="btn"
+          className="btn cobros-wizard__btn-muted"
           style={{ marginTop: 12, marginLeft: 0, marginRight: 0, fontSize: 13, color: '#666' }}
           onClick={goBack}
           disabled={saving}
@@ -490,7 +490,7 @@ export function CobrosWizard({
         >
           {saving ? 'Guardando...' : 'Confirmar adjunto en el portal'}
         </button>
-        <button type="button" className="btn" style={{ marginTop: 12, marginBottom: 12, marginLeft: 12, marginRight: 12, fontSize: 13, color: '#666' }} onClick={goBack} disabled={saving}>
+        <button type="button" className="btn cobros-wizard__btn-muted" style={{ marginTop: 12, marginBottom: 12, marginLeft: 12, marginRight: 12, fontSize: 13, color: '#666' }} onClick={goBack} disabled={saving}>
           ← Volver al paso anterior
         </button>
       </Step>
@@ -550,7 +550,7 @@ export function CobrosWizard({
             </div>
           </div>
         )}
-        <button type="button" className="btn" style={{ marginTop: 12, fontSize: 13, color: '#666' }} onClick={goBack} disabled={saving}>
+        <button type="button" className="btn cobros-wizard__btn-muted" style={{ marginTop: 12, fontSize: 13, color: '#666' }} onClick={goBack} disabled={saving}>
           ← Volver al paso anterior
         </button>
       </Step>

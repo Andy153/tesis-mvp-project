@@ -608,7 +608,7 @@ html[data-theme='dark'] .cobros-wizard .cobros-wizard__step-body .btn:not(.btn-p
   color: var(--text);
 }
 html[data-theme='dark'] .cobros-wizard .cobros-wizard__step-actions .btn:not(.btn-primary) {
-  color: var(--text);
+  color: var(--text) !important;
 }
 html[data-theme='dark'] .cobros-wizard .cobros-wizard__step-body .btn-primary,
 html[data-theme='dark'] .cobros-wizard .cobros-wizard__step-actions .btn-primary {
@@ -621,16 +621,22 @@ html[data-theme='dark'] .cobros-wizard .cobros-wizard__step-actions .btn-primary
   color: #0f1115;
 }
 html[data-theme='dark'] .cobros-wizard .cobros-wizard__btn-muted {
-  color: var(--text-muted);
+  color: var(--text) !important;
 }
-html[data-theme='dark'] .cobros-wizard p {
-  color: var(--text-muted);
+/* Inline color en <p>/<span> del TSX — !important solo en dark para legibilidad */
+html[data-theme='dark'] .cobros-wizard__step-body p,
+html[data-theme='dark'] .cobros-wizard__step-body span,
+html[data-theme='dark'] .cobros-wizard__step-body strong {
+  color: var(--text) !important;
+}
+html[data-theme='dark'] .cobros-wizard__step-body a {
+  color: var(--accent) !important;
+}
+html[data-theme='dark'] .cobros-wizard__step-body label {
+  color: var(--text-soft) !important;
 }
 html[data-theme='dark'] .cobros-wizard a {
   color: var(--accent);
-}
-html[data-theme='dark'] .cobros-wizard label {
-  color: var(--text-soft);
 }
 
 /* Planilla generada — detalle de la carga */

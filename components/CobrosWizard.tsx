@@ -76,11 +76,11 @@ function Step({ numero, titulo, activo, completado, children }: StepProps) {
 
   return (
     <div
+      className="cobros-wizard__step"
       style={{
         border: `1.5px solid ${borderColor}`,
         borderRadius: 10,
         marginBottom: 10,
-        overflow: 'hidden',
       }}
     >
       <div
@@ -406,9 +406,14 @@ export function CobrosWizard({
           Descargá el comprobante desde el portal y subilo acá para tener el registro en Trazá.
         </p>
         <img src="/wizard/paso3_comprobante.png" alt="Descargar comprobante y verificar Aprobado" style={{ width: '100%', borderRadius: 8, margin: '12px 0', border: '1px solid #e0e0e0' }} />
-        <div style={{ marginBottom: 12 }}>
+        <div className="cobros-wizard__file-input-wrap">
           <label style={labelStyle}>Comprobante SMG (PDF)</label>
-          <input type="file" accept="application/pdf" onChange={(e) => setComprobanteFile(e.target.files?.[0] ?? null)} style={{ fontSize: 13 }} />
+          <input
+            type="file"
+            className="cobros-wizard__file-input"
+            accept="application/pdf"
+            onChange={(e) => setComprobanteFile(e.target.files?.[0] ?? null)}
+          />
         </div>
         <button
           type="button"

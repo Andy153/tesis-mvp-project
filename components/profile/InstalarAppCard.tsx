@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { Check, Globe, MoreHorizontal, MoreVertical, PlusSquare, Share } from 'lucide-react';
+import { Check, ChevronDown, Globe, MoreHorizontal, MoreVertical, PlusSquare, Share } from 'lucide-react';
 import { useMounted } from '@/lib/use-mounted';
 
 type PlatformTab = 'iphone' | 'android';
@@ -53,57 +53,79 @@ function InstallSteps({ steps, footnote }: { steps: InstallStep[]; footnote: str
 
 export function InstalarAppCard() {
   const mounted = useMounted();
+  const [open, setOpen] = useState(false);
   const [platform, setPlatform] = useState<PlatformTab>('iphone');
 
   if (!mounted) return null;
 
   return (
-    <div className="panel profile-fiscal-card instalar-app-card" style={{ padding: 16, marginTop: 14 }}>
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ fontWeight: 800, fontSize: '1.05rem', color: 'var(--text)' }}>
-          Agregá Trazá a tu pantalla de inicio
-        </div>
-        <p className="field-hint" style={{ marginTop: 4, marginBottom: 0 }}>
-          Accedé más rápido desde la pantalla de inicio de tu celular.
-        </p>
-      </div>
+    <div className="panel profile-fiscal-card instalar-app-card" style={{ padding: 0, marginTop: 14, overflow: 'hidden' }}>
+      <button
+        type="button"
+        className="instalar-app-header"
+        aria-expanded={open}
+        aria-controls="instalar-app-panel"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span className="instalar-app-header__title">Agregá Trazá a tu pantalla de inicio</span>
+        <ChevronDown
+          size={22}
+          strokeWidth={2}
+          className={`instalar-app-header__chevron${open ? ' instalar-app-header__chevron--open' : ''}`}
+          aria-hidden
+        />
+      </button>
 
       <div
-        className="segmented-control instalar-app-tabs"
-        role="tablist"
-        aria-label="Plataforma de instalación"
+        id="instalar-app-panel"
+        className={`instalar-app-collapse${open ? ' instalar-app-collapse--open' : ''}`}
+        aria-hidden={!open}
       >
-        <button
-          type="button"
-          role="tab"
-          aria-selected={platform === 'iphone'}
-          className={`segmented-option${platform === 'iphone' ? ' active' : ''}`}
-          onClick={() => setPlatform('iphone')}
-        >
-          iPhone
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={platform === 'android'}
-          className={`segmented-option${platform === 'android' ? ' active' : ''}`}
-          onClick={() => setPlatform('android')}
-        >
-          Android
-        </button>
-      </div>
+        <div className="instalar-app-collapse__inner">
+          <div className="instalar-app-body">
+            <p className="field-hint instalar-app-subtitle">
+              Accedé más rápido desde la pantalla de inicio de tu celular.
+            </p>
 
-      {platform === 'iphone' ? (
-        <InstallSteps
-          steps={IPHONE_STEPS}
-          footnote="Solo funciona desde Safari. En Chrome u otros navegadores esta opción no aparece."
-        />
-      ) : (
-        <InstallSteps
-          steps={ANDROID_STEPS}
-          footnote="Solo funciona desde Chrome. En otros navegadores esta opción puede no estar disponible."
-        />
-      )}
+            <div
+              className="segmented-control instalar-app-tabs"
+              role="tablist"
+              aria-label="Plataforma de instalación"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={platform === 'iphone'}
+                className={`segmented-option${platform === 'iphone' ? ' active' : ''}`}
+                onClick={() => setPlatform('iphone')}
+              >
+                iPhone
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={platform === 'android'}
+                className={`segmented-option${platform === 'android' ? ' active' : ''}`}
+                onClick={() => setPlatform('android')}
+              >
+                Android
+              </button>
+            </div>
+
+            {platform === 'iphone' ? (
+              <InstallSteps
+                steps={IPHONE_STEPS}
+                footnote="Solo funciona desde Safari. En Chrome u otros navegadores esta opción no aparece."
+              />
+            ) : (
+              <InstallSteps
+                steps={ANDROID_STEPS}
+                footnote="Solo funciona desde Chrome. En otros navegadores esta opción puede no estar disponible."
+              />
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

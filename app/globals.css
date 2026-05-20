@@ -2827,6 +2827,62 @@ html[data-theme='dark'] .modal-overlay {
 }
 
 /* Perfil — agregar Trazá a pantalla de inicio (PWA) */
+.instalar-app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: var(--tap-min);
+  padding: 16px 18px;
+  margin: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition: background 0.15s ease;
+}
+.instalar-app-header:hover {
+  background: var(--bg-sunken);
+}
+.instalar-app-header:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.instalar-app-header__title {
+  font-weight: 800;
+  font-size: 1.05rem;
+  line-height: 1.25;
+  color: var(--text);
+}
+.instalar-app-header__chevron {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: transform 0.25s ease, color 0.15s ease;
+}
+.instalar-app-header__chevron--open {
+  transform: rotate(180deg);
+  color: var(--accent-ink);
+}
+.instalar-app-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.3s ease;
+}
+.instalar-app-collapse--open {
+  grid-template-rows: 1fr;
+}
+.instalar-app-collapse__inner {
+  overflow: hidden;
+}
+.instalar-app-body {
+  padding: 0 18px 18px;
+  border-top: 1px solid var(--border);
+}
+.instalar-app-subtitle {
+  margin: 14px 0 16px;
+}
 .instalar-app-tabs.segmented-control {
   width: 100%;
   max-width: 280px;

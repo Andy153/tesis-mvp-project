@@ -248,6 +248,32 @@ export function DocumentsView({
     }
   }, [ready, markPresentedInCloud]);
 
+  const isSwissMedicalFile = useCallback(
+    (f: FileEntry) => {
+      const prepaga =
+        normalizePrepaga(f.aiParteExtract?.cobertura?.prepaga) ||
+        normalizePrepaga(f.analysis?.detected?.prepagas?.[0]) ||
+        normalizePrepaga(f.raw_text_light) ||
+        normalizePrepaga(f.raw_text) ||
+        normalizePrepaga(f.text);
+      return prepaga === 'SWISS MEDICAL';
+    },
+    [],
+  );
+
+  /** OK o listo para presentar, sin errores de análisis — misma noción que la tabla de cobro. */
+  const isValidCobroDocument = useCallback((f: FileEntry) => {
+    const { estado } = getEstadoEfectivo(f as unknown as HistoryItem);
+    if (estado === 'con_errores' || f.analysis?.overall === 'error') return false;
+    if (f.analysis?.overall === 'ok') return true;
+    return estado === 'listo_para_presentar';
+  }, []);
+
+  const validCobroDocuments = useMemo(
+    () => ready.filter((f) => isSwissMedicalFile(f) && isValidCobroDocument(f)),
+    [ready, isSwissMedicalFile, isValidCobroDocument],
+  );
+
   const counts = useMemo(() => {
     return {
       all: ready.length,
@@ -345,7 +371,7 @@ export function DocumentsView({
         </div>
       )}
 
-      <CobrosBanner key={refreshKey} />
+      {validCobroDocuments.length > 0 && <CobrosBanner key={refreshKey} />}
       <div style={{ marginBottom: 16 }}>
         <SwissMedicalCloseButton onSent={() => setRefreshKey((k) => k + 1)} />
       </div>

@@ -92,7 +92,7 @@ export function useWizardProgress(
       todoCompleto,
       porcentaje,
       isStepCompleto: (id: WizardStepId) => completados.has(id),
-      isLoading: fiscal.isLoading ?? false,
+      isLoading: (fiscal as any).loading ?? (fiscal as any).isLoading ?? false,
     };
   }, [fiscal, tieneFacturaEmitida]);
 }

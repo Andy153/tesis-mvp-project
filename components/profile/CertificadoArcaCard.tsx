@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { isFiscalProfileComplete } from '@/lib/profile-fiscal-ui'
 import { notifyCertStatusUpdated } from '@/lib/use-fiscal-profile'
 import type { ProfileDB } from '@/lib/profile-db'
+import { WizardArcaSetup } from './WizardArcaSetup'
+import { useWizardProgress } from './wizard-arca/useWizardProgress'
 
 type CertStatus = {
   hasKey: boolean
@@ -58,6 +60,9 @@ export function CertificadoArcaCard({ dbProfile, profileLoading }: CertificadoAr
   const [uploadSuccess, setUploadSuccess] = useState(false)
   const [certUploadedAt, setCertUploadedAt] = useState<string | null>(null)
   const certInputRef = useRef<HTMLInputElement>(null)
+
+  const [wizardOpen, setWizardOpen] = useState(false)
+  const wizardProgress = useWizardProgress()
 
   const certReady = Boolean(certStatus?.hasKey && certStatus?.hasCert)
 
@@ -130,7 +135,6 @@ export function CertificadoArcaCard({ dbProfile, profileLoading }: CertificadoAr
 
   function handleGenerarCsr() {
     if (!fiscalComplete) return
-
     if (certStatus?.hasKey) {
       const ok = window.confirm(
         'Ya tenés una clave privada guardada. Si generás un CSR nuevo, la clave anterior dejará de servir y el certificado que tengas en ARCA quedará invalidado.\n\n¿Querés regenerar la clave y el CSR?',
@@ -139,7 +143,6 @@ export function CertificadoArcaCard({ dbProfile, profileLoading }: CertificadoAr
       void generateCsr(true)
       return
     }
-
     void generateCsr(false)
   }
 
@@ -176,7 +179,6 @@ export function CertificadoArcaCard({ dbProfile, profileLoading }: CertificadoAr
       const fd = new FormData()
       fd.append('file', certFile)
       if (force) fd.append('force', 'true')
-
       const r = await fetch('/api/profile/fiscal/upload-cert', {
         method: 'POST',
         body: fd,
@@ -223,8 +225,11 @@ export function CertificadoArcaCard({ dbProfile, profileLoading }: CertificadoAr
   const disabled = profileLoading || statusLoading || !fiscalComplete || generating
   const uploadDisabled =
     profileLoading || statusLoading || !fiscalComplete || uploading || !certStatus?.hasKey
-
   const certUploadedLabel = certUploadedAt ? formatCertUploadedAt(certUploadedAt) : null
+
+  const wizardCompletados = wizardProgress.completados.size
+  const wizardLoading = wizardProgress.isLoading
+  const wizardCompleto = wizardProgress.todoCompleto
 
   return (
     <div
@@ -238,10 +243,47 @@ export function CertificadoArcaCard({ dbProfile, profileLoading }: CertificadoAr
             Clave privada en Trazá y certificado emitido por ARCA para facturar.
           </p>
         </div>
-        {!profileLoading && fiscalComplete && !statusLoading && (
-          <span className={certBadgeClass(certStatus)}>{certBadgeLabel(certStatus)}</span>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {wizardCompleto && (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              style={{ fontSize: 13, padding: '6px 12px' }}
+              onClick={() => setWizardOpen(true)}
+              title="Revisar guía paso a paso"
+            >
+              ✨ Ver guía
+            </button>
+          )}
+          {!profileLoading && fiscalComplete && !statusLoading && (
+            <span className={certBadgeClass(certStatus)}>{certBadgeLabel(certStatus)}</span>
+          )}
+        </div>
       </div>
+
+      {/* ───── Banner adaptativo: aparece solo si el wizard no está completo ───── */}
+      {fiscalComplete && !wizardLoading && !wizardCompleto && (
+        <button
+          type="button"
+          onClick={() => setWizardOpen(true)}
+          className={wizardCompletados <= 2 ? 'wizard-cta wizard-cta--primary' : 'wizard-cta wizard-cta--secondary'}
+        >
+          <div className="wizard-cta__icon">{wizardCompletados <= 2 ? '✨' : '📝'}</div>
+          <div className="wizard-cta__body">
+            <div className="wizard-cta__title">
+              {wizardCompletados === 0 && '¿Primera vez? Te guiamos paso a paso'}
+              {wizardCompletados > 0 && wizardCompletados <= 2 && 'Continuá la configuración de ARCA'}
+              {wizardCompletados > 2 && `Te falta poco — ${wizardCompletados} de 10 pasos completos`}
+            </div>
+            <div className="wizard-cta__hint">
+              {wizardCompletados <= 2
+                ? 'Abrí la guía interactiva para configurar todo, sin saber técnico.'
+                : 'Volvé a la guía para terminar la configuración.'}
+            </div>
+          </div>
+          <div className="wizard-cta__arrow">→</div>
+        </button>
+      )}
 
       {!fiscalComplete && !profileLoading && (
         <div
@@ -453,7 +495,8 @@ export function CertificadoArcaCard({ dbProfile, profileLoading }: CertificadoAr
           )}
         </>
       )}
+
+      <WizardArcaSetup open={wizardOpen} onOpenChange={setWizardOpen} />
     </div>
   )
 }
-

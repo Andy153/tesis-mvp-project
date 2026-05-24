@@ -281,6 +281,22 @@ function StepContent({
           <ExternalLinkButton href="https://serviciosweb.afip.gob.ar/genericos/comprobantes/cai.aspx">
             Abrir portal de ARCA
           </ExternalLinkButton>
+          <figure style={{ margin: "18px 0 0", padding: 0 }}>
+            <img
+              src="/wizard-arca/step-02-tipo-pv.png"
+              alt="Listado de Puntos de Venta en ARCA destacando el tipo Web Services"
+              style={{
+                width: "100%",
+                height: "auto",
+                borderRadius: 8,
+                border: "1px solid var(--border, #e5e7eb)",
+                display: "block",
+              }}
+            />
+            <figcaption style={{ marginTop: 10, fontSize: 13, color: "var(--text-muted, #6b7280)", lineHeight: 1.5 }}>
+              <strong>¿Por qué?</strong> Cada tipo de PV define cómo se emiten los comprobantes. "Web Services" permite que Trazá los emita automáticamente vía API. Los otros tipos solo funcionan desde el portal web de ARCA.
+            </figcaption>
+          </figure>
           <ManualStepCheck
             stepId="crear-pv-webservices"
             label="Creé un PV tipo Web Services en ARCA"
@@ -357,6 +373,22 @@ function StepContent({
           <ExternalLinkButton href="https://auth.afip.gob.ar/contribuyente/">
             Ir al portal de ARCA
           </ExternalLinkButton>
+          <figure style={{ margin: "18px 0 0", padding: 0 }}>
+            <img
+              src="/wizard-arca/step-04-buscar-servicio.png"
+              alt="Buscador del portal de ARCA con el servicio Administración de Certificados Digitales destacado"
+              style={{
+                width: "100%",
+                height: "auto",
+                borderRadius: 8,
+                border: "1px solid var(--border, #e5e7eb)",
+                display: "block",
+              }}
+            />
+            <figcaption style={{ marginTop: 10, fontSize: 13, color: "var(--text-muted, #6b7280)", lineHeight: 1.5 }}>
+              <strong>Tip:</strong> desde la home del portal de ARCA, usá el buscador con el texto "certificados digitales". El servicio correcto aparece destacado con la descripción "Administre aquí sus Certificados Digitales para webservices".
+            </figcaption>
+          </figure>
           <ManualStepCheck
             stepId="entrar-portal-certs"
             label="Entré a Administración de Certificados Digitales"
@@ -372,28 +404,48 @@ function StepContent({
         <>
           <p>
             Dentro de “Administración de Certificados Digitales” vas a crear un nuevo certificado
-            pegando el CSR que generaste en el paso 3.
+            subiendo el archivo CSR que generaste en el paso 3.
           </p>
+          <CalloutWarning>
+            Antes de empezar, asegurate de tener el archivo <code>.csr</code> descargado en tu
+            computadora. Si todavía no lo descargaste, volvé al paso 3 y clickeá{" "}
+            <strong>"Descargar .csr"</strong> en Trazá.
+          </CalloutWarning>
           <h4 style={{ marginTop: 18, marginBottom: 8 }}>Pasos en ARCA</h4>
           <ol style={{ paddingLeft: 20, lineHeight: 1.7, fontSize: 14 }}>
-            <li>Click en <strong>“Agregar alias”</strong></li>
+            <li>Click en <strong>“Agregar alias”</strong> en la pantalla anterior</li>
             <li>
-              En “Alias”, poné un nombre identificable, por ejemplo{" "}
+              En <strong>Alias</strong>, poné un nombre identificable, por ejemplo{" "}
               <code>TrazaProd</code> o <code>Traza</code>
             </li>
             <li>
-              Pegá el <strong>CSR completo</strong> que copiaste en el paso 3 (incluyendo las
-              líneas <code>-----BEGIN CERTIFICATE REQUEST-----</code> y{" "}
-              <code>-----END CERTIFICATE REQUEST-----</code>)
+              Click en <strong>"Choose File"</strong> y seleccioná el archivo{" "}
+              <code>solicitud_arca.csr</code> que descargaste de Trazá
             </li>
-            <li>Confirmá</li>
+            <li>Click en <strong>"Agregar alias"</strong> (botón azul) para confirmar</li>
             <li>
               El certificado queda creado con estado <strong>VÁLIDO</strong>
             </li>
           </ol>
+          <figure style={{ margin: "18px 0 0", padding: 0 }}>
+            <img
+              src="/wizard-arca/step-05-pegar-csr.png"
+              alt="Formulario de creación de certificado en ARCA con los 3 pasos destacados"
+              style={{
+                width: "100%",
+                height: "auto",
+                borderRadius: 8,
+                border: "1px solid var(--border, #e5e7eb)",
+                display: "block",
+              }}
+            />
+            <figcaption style={{ marginTop: 10, fontSize: 13, color: "var(--text-muted, #6b7280)", lineHeight: 1.5 }}>
+              <strong>Tip:</strong> el campo es para subir un archivo <code>.csr</code>, no para pegar texto. Usá el botón <strong>"Descargar .csr"</strong> en Trazá (paso 3) en lugar de "Copiar CSR".
+            </figcaption>
+          </figure>
           <ManualStepCheck
             stepId="crear-certificado"
-            label="Creé el certificado y pegué el CSR"
+            label="Creé el certificado y subí el archivo .csr"
             isCompleto={isCompleto}
             onChange={onManualToggle}
           />
@@ -464,6 +516,22 @@ function StepContent({
               <strong>“Servicio Consulta Padrón A13”</strong>
             </li>
           </ol>
+          <figure style={{ margin: "18px 0 0", padding: 0 }}>
+            <img
+              src="/wizard-arca/step-06-nueva-relacion.png"
+              alt="Pantalla del Administrador de Relaciones de ARCA destacando el botón Nueva Relación"
+              style={{
+                width: "100%",
+                height: "auto",
+                borderRadius: 8,
+                border: "1px solid var(--border, #e5e7eb)",
+                display: "block",
+              }}
+            />
+            <figcaption style={{ marginTop: 10, fontSize: 13, color: "var(--text-muted, #6b7280)", lineHeight: 1.5 }}>
+              <strong>¡Atención!</strong> Hay dos botones parecidos: usá <strong>"Nueva Relación"</strong>, NO "Adherir Servicio". Si usás el botón equivocado, ARCA te va a tirar el error "El dador de la autorización no debe ser igual al autorizado" y no vas a poder facturar.
+            </figcaption>
+          </figure>
           <ManualStepCheck
             stepId="adherir-servicios"
             label="Adherí Facturación Electrónica y Padrón A13 vía Nueva Relación"
@@ -497,6 +565,22 @@ function StepContent({
             </li>
             <li>Guardalo en un lugar fácil de encontrar, lo vas a usar ya</li>
           </ol>
+          <figure style={{ margin: "18px 0 0", padding: 0 }}>
+            <img
+              src="/wizard-arca/step-07-descargar-crt.png"
+              alt="Pantalla de detalle del certificado en ARCA con el botón de descarga destacado"
+              style={{
+                width: "100%",
+                height: "auto",
+                borderRadius: 8,
+                border: "1px solid var(--border, #e5e7eb)",
+                display: "block",
+              }}
+            />
+            <figcaption style={{ marginTop: 10, fontSize: 13, color: "var(--text-muted, #6b7280)", lineHeight: 1.5 }}>
+              <strong>Tip:</strong> el botón de descarga es el icono pequeño al final de cada fila, en la columna "Descargar". Click ahí y el archivo <code>.crt</code> se baja automáticamente.
+            </figcaption>
+          </figure>
           <ManualStepCheck
             stepId="descargar-crt"
             label="Descargué el archivo .crt"

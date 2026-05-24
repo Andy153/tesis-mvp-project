@@ -8,6 +8,7 @@ import {
   getFacturacionBlockedTitle,
   useFiscalProfile,
 } from '@/lib/use-fiscal-profile';
+import { EmitirNotaCreditoModal } from '@/components/documentos/EmitirNotaCreditoModal';
 
 export interface FacturaARCAProps {
   submissionId: string;
@@ -20,6 +21,7 @@ export interface FacturaARCAProps {
 type Estado = 'idle' | 'loading' | 'exito' | 'error';
 
 const SWISS_MEDICAL_CUIT = '30692317714';
+const SWISS_MEDICAL_RAZON_SOCIAL = 'Swiss Medical S.A.';
 
 function lastDayOfMonth(periodo: string): string {
   const [year, month] = periodo.split('-').map(Number);
@@ -49,6 +51,10 @@ function periodoLabel(p: string): string {
 
 function formatPesos(monto: number): string {
   return `$${monto.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function formatNumeroComprobanteDisplay(ptoVta: number, nro: number): string {
+  return `${String(ptoVta).padStart(4, '0')}-${String(nro).padStart(8, '0')}`;
 }
 
 function Spinner() {
@@ -85,6 +91,9 @@ export function FacturaARCA({ submissionId, monto, periodo, onExito, onError }: 
   const [mensajeError, setMensajeError] = useState<string | null>(null);
   const [continuando, setContinuando] = useState(false);
   const [montoManual, setMontoManual] = useState('');
+  // --- NC ---
+  const [ncModalAbierto, setNcModalAbierto] = useState(false);
+  const [ncEmitida, setNcEmitida] = useState<{ cae: string; numero: number; pdfUrl?: string } | null>(null);
 
   const necesitaMontoManual = monto === 0;
   const montoFacturar = necesitaMontoManual ? Number(montoManual) || 0 : monto;
@@ -171,6 +180,20 @@ export function FacturaARCA({ submissionId, monto, periodo, onExito, onError }: 
   };
 
   if (estado === 'exito') {
+    // Datos para el modal de NC (solo si hay factura emitida con número)
+    const facturaParaNC =
+      nroComprobanteEmitido != null && caeEmitido
+        ? {
+            // El PV se infiere del perfil del usuario en el server.
+            // Acá mostramos solo el número para el resumen.
+            numero: formatNumeroComprobanteDisplay(0, nroComprobanteEmitido).replace(/^0{4}-/, ''),
+            fecha: new Date().toLocaleDateString('es-AR'),
+            receptorRazonSocial: SWISS_MEDICAL_RAZON_SOCIAL,
+            monto: formatPesos(montoFacturar),
+            cae: caeEmitido,
+          }
+        : null;
+
     return (
       <div>
         <div
@@ -226,6 +249,42 @@ export function FacturaARCA({ submissionId, monto, periodo, onExito, onError }: 
             </p>
           )}
         </div>
+
+        {/* Banner de NC ya emitida sobre esta factura */}
+        {ncEmitida ? (
+          <div
+            style={{
+              marginTop: 12,
+              padding: 12,
+              background: '#fff4d6',
+              border: '1px solid #e0b94a',
+              borderRadius: 8,
+              color: '#7a5a00',
+              fontSize: 13,
+            }}
+          >
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>
+              ⚠ Esta factura fue anulada con Nota de Crédito N° {String(ncEmitida.numero).padStart(8, '0')}
+            </div>
+            <div style={{ fontSize: 12 }}>
+              CAE NC: {ncEmitida.cae}
+              {ncEmitida.pdfUrl ? (
+                <>
+                  {' · '}
+                  <a
+                    href={ncEmitida.pdfUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: '#7a5a00', textDecoration: 'underline', fontWeight: 600 }}
+                  >
+                    Descargar PDF de la NC
+                  </a>
+                </>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
         <button
           type="button"
           className="btn btn-primary"
@@ -235,6 +294,42 @@ export function FacturaARCA({ submissionId, monto, periodo, onExito, onError }: 
         >
           {continuando ? 'Guardando…' : 'Continuar al paso 5 →'}
         </button>
+
+        {/* Botón discreto para emitir NC. Se oculta si ya hay una NC emitida. */}
+        {facturaParaNC && !ncEmitida ? (
+          <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid #e5e7eb' }}>
+            <button
+              type="button"
+              onClick={() => setNcModalAbierto(true)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#B91C1C',
+                fontSize: 13,
+                cursor: 'pointer',
+                padding: 0,
+                textDecoration: 'underline',
+              }}
+            >
+              ¿Algo salió mal? Emitir Nota de Crédito
+            </button>
+          </div>
+        ) : null}
+
+        {ncModalAbierto && facturaParaNC ? (
+          <EmitirNotaCreditoModal
+            submissionAnuladaId={submissionId}
+            facturaOriginal={facturaParaNC}
+            onClose={() => setNcModalAbierto(false)}
+            onSuccess={(resultado) => {
+              setNcEmitida({
+                cae: resultado.cae,
+                numero: resultado.numeroComprobante,
+                pdfUrl: resultado.pdfUrl,
+              });
+            }}
+          />
+        ) : null}
       </div>
     );
   }

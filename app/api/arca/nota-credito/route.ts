@@ -1,0 +1,62 @@
+import { auth } from '@clerk/nextjs/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { emitirNotaCreditoC } from '@/lib/arca/nota-credito'
+
+export async function POST(req: NextRequest) {
+  const { userId } = await auth()
+  if (!userId) {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  }
+
+  let body: Record<string, unknown>
+  try {
+    body = await req.json()
+  } catch {
+    return NextResponse.json({ error: 'Body JSON inválido' }, { status: 400 })
+  }
+
+  const { submissionAnuladaId, motivo } = body
+
+  if (submissionAnuladaId == null || submissionAnuladaId === '') {
+    return NextResponse.json(
+      { error: 'Falta el campo requerido: submissionAnuladaId' },
+      { status: 400 },
+    )
+  }
+
+  try {
+    const resultado = await emitirNotaCreditoC({
+      clerkUserId: userId,
+      submissionAnuladaId: String(submissionAnuladaId),
+      motivo:
+        typeof motivo === 'string' && motivo.trim() ? motivo.trim() : null,
+    })
+
+    return NextResponse.json({
+      exito: true,
+      notaCreditoId: resultado.notaCreditoId,
+      nroComprobante: resultado.numeroComprobante,
+      cae: resultado.cae,
+      caeFechaVto: resultado.caeVencimiento,
+      fechaEmision: resultado.fechaEmision,
+      pdfPath: resultado.pdfPath,
+      pdfUrl: resultado.pdfUrl,
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+
+    // Errores de validación (factura no existe, ya tiene NC, etc.) → 400
+    if (
+      message.includes('No se encontró') ||
+      message.includes('ya tiene una Nota de Crédito') ||
+      message.includes('no tiene CAE') ||
+      message.includes('no tiene número de comprobante') ||
+      message.includes('no tiene monto total') ||
+      message.includes('No se puede emitir una Nota de Crédito sobre otra')
+    ) {
+      return NextResponse.json({ exito: false, errores: [message] }, { status: 400 })
+    }
+
+    return NextResponse.json({ exito: false, errores: [message] }, { status: 500 })
+  }
+}

@@ -1,5 +1,4 @@
 import { getProfileFiscalFromDB } from '@/lib/profile-db'
-import { getTicketAcceso, type ArcaAuthOpts } from './client'
 import { consultarPadron } from './padron'
 import {
   createFacturaSignedUrl,
@@ -7,14 +6,15 @@ import {
   formatCaeVencimientoForDb,
   persistFacturaEmitidaToSubmission,
   uploadFacturaPdf,
+  type ReceptorPersistible,
 } from './factura-storage'
 import { generarPDFFacturaC } from './pdf-factura'
-import { readUserCertPem, readUserKeyPem } from './profile-certs'
-import { createArcaSoapClient } from './soap-client'
-
-const WSFE_WSDL_HOMO = 'https://wswhomo.afip.gov.ar/wsfev1/service.asmx?WSDL'
-const WSFE_WSDL_PROD = 'https://servicios1.afip.gov.ar/wsfev1/service.asmx?WSDL'
-const CBTE_TIPO_FACTURA_C = 11
+import {
+  buildWsfeContext,
+  CBTE_TIPO_FACTURA_C,
+  getProximoNumeroComprobante,
+  solicitarCaeWSFE,
+} from './wsfe-client'
 
 const CONDICION_IVA_LABELS: Record<number, string> = {
   1: 'IVA Responsable Inscripto',
@@ -50,30 +50,62 @@ function toYYYYMMDD(value: string): string {
   return String(todayYYYYMMDD())
 }
 
-function wsfeWsdl(ambiente: ArcaAuthOpts['ambiente']): string {
-  return ambiente === 'produccion' ? WSFE_WSDL_PROD : WSFE_WSDL_HOMO
-}
-
 function todayYYYYMMDD(): number {
   const d = new Date()
   const pad = (n: number) => String(n).padStart(2, '0')
   return parseInt(`${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`, 10)
 }
 
-function formatAfipMessages(items: unknown): string {
-  if (!items) return ''
-  const list = Array.isArray(items) ? items : [items]
-  return list
-    .map((item) => {
-      if (!item || typeof item !== 'object') return String(item)
-      const { Code, Msg } = item as { Code?: number | string; Msg?: string }
-      return Code != null ? `${Code}: ${Msg ?? ''}` : String(Msg ?? item)
-    })
-    .join('; ')
-}
-
 function roundMonto(monto: number): number {
   return Math.round(monto * 100) / 100
+}
+
+/**
+ * Resuelve los datos del receptor para una emisión nueva.
+ *
+ * Reglas:
+ *   - Sin CUIT → Consumidor Final, condición IVA 5, CUIT NULL en DB.
+ *   - Con CUIT → consulta padrón, usa razón social provista o la del padrón.
+ *
+ * El campo `cuit` del retorno es `null` si no se emite a un CUIT identificado,
+ * lo que se persiste como NULL en DB (semánticamente correcto vs guardar "0").
+ */
+async function resolverReceptor(
+  params: EmitirFacturaCParams,
+  ctx: {
+    cuitEmisor: string
+    certPem: string
+    keyPem: string
+    ambiente: 'desarrollo' | 'produccion'
+  },
+): Promise<{
+  cuitDigits: string | null
+  razonSocial: string
+  condicionIVAId: number
+}> {
+  if (!params.receptorCuit) {
+    return {
+      cuitDigits: null,
+      razonSocial: params.receptorRazonSocial?.trim() || 'Consumidor Final',
+      condicionIVAId: 5,
+    }
+  }
+
+  const cuitDigits = params.receptorCuit.replace(/\D/g, '')
+
+  const padron = await consultarPadron(params.receptorCuit, {
+    cuitRepresentada: ctx.cuitEmisor,
+    certPem: ctx.certPem,
+    keyPem: ctx.keyPem,
+    ambiente: ctx.ambiente,
+  })
+
+  return {
+    cuitDigits,
+    razonSocial:
+      params.receptorRazonSocial?.trim() || padron.razonSocial || 'Consumidor Final',
+    condicionIVAId: padron.condicionIVACodigo,
+  }
 }
 
 export async function emitirFacturaC(params: EmitirFacturaCParams): Promise<{
@@ -85,18 +117,8 @@ export async function emitirFacturaC(params: EmitirFacturaCParams): Promise<{
   pdfUrl: string
 }> {
   const profile = await getProfileFiscalFromDB(params.clerkUserId)
-  const certPem = await readUserCertPem(params.clerkUserId)
-  const keyPem = await readUserKeyPem(params.clerkUserId)
 
-  const arcaAuth: ArcaAuthOpts = {
-    cuit: profile.cuit,
-    certPem,
-    keyPem,
-    ambiente: profile.ambiente,
-  }
-
-  const cuitEmisor = parseInt(profile.cuit.replace(/\D/g, ''), 10)
-  const ptoVta = profile.puntoVenta
+  // --- Fechas y monto ---
   const cbteFch = todayYYYYMMDD()
   const fechaEmision = String(cbteFch)
   const periodoDesde = params.periodoDesde ? toYYYYMMDD(params.periodoDesde) : fechaEmision
@@ -110,54 +132,39 @@ export async function emitirFacturaC(params: EmitirFacturaCParams): Promise<{
   }
   const monto = roundMonto(params.monto)
 
-  const docTipo = params.receptorCuit ? 80 : 99
-  const docNro = params.receptorCuit
-    ? parseInt(params.receptorCuit.replace(/\D/g, ''), 10)
-    : 0
+  // --- Contexto WSFE (cliente SOAP + auth WSAA) ---
+  // buildWsfeContext lee certificados y obtiene ticket. También usamos los PEMs
+  // localmente para resolverReceptor (consulta padrón), así que los leemos aparte.
+  // Lo dejamos así por ahora; si quisiéramos compartir certs, exponer desde wsfe-client.
+  const { readUserCertPem, readUserKeyPem } = await import('./profile-certs')
+  const certPem = await readUserCertPem(params.clerkUserId)
+  const keyPem = await readUserKeyPem(params.clerkUserId)
 
-  let condicionIVAReceptor = 5
-  let receptorRazonSocial = params.receptorRazonSocial?.trim() || 'Consumidor Final'
-
-  if (params.receptorCuit) {
-    const padron = await consultarPadron(params.receptorCuit, {
-      cuitRepresentada: profile.cuit,
-      certPem,
-      keyPem,
-      ambiente: profile.ambiente,
-    })
-    condicionIVAReceptor = padron.condicionIVACodigo
-    receptorRazonSocial =
-      params.receptorRazonSocial?.trim() || padron.razonSocial || 'Consumidor Final'
-  }
-
-  const ticket = await getTicketAcceso('wsfe', arcaAuth)
-  const auth = {
-    Token: ticket.token,
-    Sign: ticket.sign,
-    Cuit: cuitEmisor,
-  }
-
-  const client = await createArcaSoapClient(wsfeWsdl(profile.ambiente))
-
-  const [ultimoRaw] = await client.FECompUltimoAutorizadoAsync({
-    Auth: auth,
-    PtoVta: ptoVta,
-    CbteTipo: CBTE_TIPO_FACTURA_C,
+  const ctx = await buildWsfeContext(params.clerkUserId, {
+    cuit: profile.cuit,
+    puntoVenta: profile.puntoVenta,
+    ambiente: profile.ambiente,
   })
-  console.log('[WSFE] FECompUltimoAutorizado response:', JSON.stringify(ultimoRaw, null, 2))
 
-  const ultimoResult = ultimoRaw?.FECompUltimoAutorizadoResult
-  if (ultimoResult?.Errors) {
-    throw new Error(`FECompUltimoAutorizado: ${formatAfipMessages(ultimoResult.Errors.Err)}`)
-  }
+  // --- Receptor: padrón o Consumidor Final ---
+  const receptor = await resolverReceptor(params, {
+    cuitEmisor: profile.cuit,
+    certPem,
+    keyPem,
+    ambiente: profile.ambiente,
+  })
 
-  const ultimoAutorizado = Number(ultimoResult?.CbteNro ?? 0)
-  const nextNumber = ultimoAutorizado + 1
+  const docTipo = receptor.cuitDigits ? 80 : 99
+  const docNro = receptor.cuitDigits ? parseInt(receptor.cuitDigits, 10) : 0
 
+  // --- Próximo número de Factura C ---
+  const nextNumber = await getProximoNumeroComprobante(ctx, CBTE_TIPO_FACTURA_C)
+
+  // --- Solicitar CAE ---
   const feCAEReq = {
     FeCabReq: {
       CantReg: 1,
-      PtoVta: ptoVta,
+      PtoVta: profile.puntoVenta,
       CbteTipo: CBTE_TIPO_FACTURA_C,
     },
     FeDetReq: {
@@ -166,7 +173,7 @@ export async function emitirFacturaC(params: EmitirFacturaCParams): Promise<{
           Concepto: 2,
           DocTipo: docTipo,
           DocNro: docNro,
-          CondicionIVAReceptorId: condicionIVAReceptor,
+          CondicionIVAReceptorId: receptor.condicionIVAId,
           CbteDesde: nextNumber,
           CbteHasta: nextNumber,
           CbteFch: cbteFch,
@@ -186,98 +193,68 @@ export async function emitirFacturaC(params: EmitirFacturaCParams): Promise<{
     },
   }
 
-  console.log('[WSFE] FECAERequest:', JSON.stringify(feCAEReq, null, 2))
+  const { cae, caeVencimiento, numeroComprobante } = await solicitarCaeWSFE(ctx, feCAEReq)
 
-  const [solicitarRaw] = await client.FECAESolicitarAsync({
-    Auth: auth,
-    FeCAEReq: feCAEReq,
-  })
-  console.log('[WSFE] FECAESolicitar response:', JSON.stringify(solicitarRaw, null, 2))
+  // --- PDF ---
+  const condicionIVALabel =
+    CONDICION_IVA_LABELS[receptor.condicionIVAId] ?? `Condición IVA ${receptor.condicionIVAId}`
 
-  const solicitarResult = solicitarRaw?.FECAESolicitarResult
-  if (!solicitarResult) {
-    throw new Error('FECAESolicitar: respuesta vacía')
-  }
-
-  if (solicitarResult.Errors) {
-    throw new Error(`FECAESolicitar: ${formatAfipMessages(solicitarResult.Errors.Err)}`)
-  }
-
-  const detRaw = solicitarResult.FeDetResp?.FECAEDetResponse
-  const detList = detRaw == null ? [] : Array.isArray(detRaw) ? detRaw : [detRaw]
-  const det = detList[0]
-
-  if (!det) {
-    throw new Error('FECAESolicitar: sin FECAEDetResponse')
-  }
-
-  if (det.Resultado === 'A') {
-    if (!det.CAE) {
-      throw new Error('FECAESolicitar: autorizado sin CAE')
-    }
-
-    const cae = String(det.CAE)
-    const caeVencimiento = String(det.CAEFchVto)
-    const condicionIVALabel =
-      CONDICION_IVA_LABELS[condicionIVAReceptor] ?? `Condición IVA ${condicionIVAReceptor}`
-
-    const pdfBuffer = await generarPDFFacturaC({
-      emisor: {
-        razonSocial: profile.razonSocial,
-        cuit: profile.cuit,
-        condicionIVA: profile.condicionIVA,
-        domicilio: profile.domicilioFiscal,
-        puntoVenta: profile.puntoVenta,
-      },
-      receptor: {
-        cuit: params.receptorCuit?.replace(/\D/g, '') || '0',
-        razonSocial: receptorRazonSocial,
-        condicionIVA: condicionIVALabel,
-      },
-      factura: {
-        numero: nextNumber,
-        fechaEmision,
-        periodoDesde,
-        periodoHasta,
-        descripcion: params.descripcion?.trim() || 'Servicios profesionales',
-        monto,
-        cae,
-        caeVencimiento,
-        tipoDocRec: docTipo,
-        nroDocRec: docNro,
-      },
-    })
-
-    const pdfPath = facturaStoragePath(params.clerkUserId, params.periodo)
-    await uploadFacturaPdf(pdfPath, pdfBuffer)
-
-    const caeVencimientoDb = formatCaeVencimientoForDb(caeVencimiento)
-    await persistFacturaEmitidaToSubmission({
-      submissionId: params.submissionId,
-      clerkUserId: params.clerkUserId,
-      facturaPath: pdfPath,
-      caeNumero: cae,
-      caeVencimiento: caeVencimientoDb,
-    })
-
-    const pdfUrl = await createFacturaSignedUrl(pdfPath)
-
-    return {
+  const pdfBuffer = await generarPDFFacturaC({
+    emisor: {
+      razonSocial: profile.razonSocial,
+      cuit: profile.cuit,
+      condicionIVA: profile.condicionIVA,
+      domicilio: profile.domicilioFiscal,
+      puntoVenta: profile.puntoVenta,
+    },
+    receptor: {
+      cuit: receptor.cuitDigits || '0',
+      razonSocial: receptor.razonSocial,
+      condicionIVA: condicionIVALabel,
+    },
+    factura: {
+      numero: numeroComprobante,
+      fechaEmision,
+      periodoDesde,
+      periodoHasta,
+      descripcion: params.descripcion?.trim() || 'Servicios profesionales',
+      monto,
       cae,
       caeVencimiento,
-      numeroComprobante: nextNumber,
-      fechaEmision,
-      pdfPath,
-      pdfUrl,
-    }
+      tipoDocRec: docTipo,
+      nroDocRec: docNro,
+    },
+  })
+
+  const pdfPath = facturaStoragePath(params.clerkUserId, params.periodo)
+  await uploadFacturaPdf(pdfPath, pdfBuffer)
+
+  // --- Persistencia (incluye receptor para soportar NC más adelante) ---
+  const caeVencimientoDb = formatCaeVencimientoForDb(caeVencimiento)
+  const receptorParaDb: ReceptorPersistible = {
+    cuit: receptor.cuitDigits,
+    razonSocial: receptor.razonSocial,
+    condicionIVAId: receptor.condicionIVAId,
   }
 
-  if (det.Resultado === 'R') {
-    const obs = formatAfipMessages(det.Observaciones?.Obs)
-    const errs = formatAfipMessages(det.Errors?.Err)
-    const parts = [obs, errs].filter(Boolean)
-    throw new Error(`FECAESolicitar rechazado: ${parts.join(' | ') || 'sin detalle'}`)
-  }
+  await persistFacturaEmitidaToSubmission({
+    submissionId: params.submissionId,
+    clerkUserId: params.clerkUserId,
+    facturaPath: pdfPath,
+    caeNumero: cae,
+    caeVencimiento: caeVencimientoDb,
+    numeroComprobante: numeroComprobante,
+    receptor: receptorParaDb,
+  })
 
-  throw new Error(`FECAESolicitar: resultado inesperado "${String(det.Resultado)}"`)
+  const pdfUrl = await createFacturaSignedUrl(pdfPath)
+
+  return {
+    cae,
+    caeVencimiento,
+    numeroComprobante,
+    fechaEmision,
+    pdfPath,
+    pdfUrl,
+  }
 }

@@ -294,7 +294,7 @@ function StepContent({
               }}
             />
             <figcaption style={{ marginTop: 10, fontSize: 13, color: "var(--text-muted, #6b7280)", lineHeight: 1.5 }}>
-              <strong>¿Por qué?</strong> Cada tipo de PV define cómo se emiten los comprobantes. "Web Services" permite que Trazá los emita automáticamente vía API. Los otros tipos solo funcionan desde el portal web de ARCA.
+              <strong>¿Por qué?</strong> Cada tipo de PV define cómo se emiten los comprobantes. “Web Services” permite que Trazá los emita automáticamente vía API. Los otros tipos solo funcionan desde el portal web de ARCA.
             </figcaption>
           </figure>
           <ManualStepCheck
@@ -386,7 +386,7 @@ function StepContent({
               }}
             />
             <figcaption style={{ marginTop: 10, fontSize: 13, color: "var(--text-muted, #6b7280)", lineHeight: 1.5 }}>
-              <strong>Tip:</strong> desde la home del portal de ARCA, usá el buscador con el texto "certificados digitales". El servicio correcto aparece destacado con la descripción "Administre aquí sus Certificados Digitales para webservices".
+              <strong>Tip:</strong> desde la home del portal de ARCA, usá el buscador con el texto “certificados digitales”. El servicio correcto aparece destacado con la descripción “Administre aquí sus Certificados Digitales para webservices”.
             </figcaption>
           </figure>
           <ManualStepCheck
@@ -409,7 +409,7 @@ function StepContent({
           <CalloutWarning>
             Antes de empezar, asegurate de tener el archivo <code>.csr</code> descargado en tu
             computadora. Si todavía no lo descargaste, volvé al paso 3 y clickeá{" "}
-            <strong>"Descargar .csr"</strong> en Trazá.
+            <strong>“Descargar .csr”</strong> en Trazá.
           </CalloutWarning>
           <h4 style={{ marginTop: 18, marginBottom: 8 }}>Pasos en ARCA</h4>
           <ol style={{ paddingLeft: 20, lineHeight: 1.7, fontSize: 14 }}>
@@ -419,10 +419,10 @@ function StepContent({
               <code>TrazaProd</code> o <code>Traza</code>
             </li>
             <li>
-              Click en <strong>"Choose File"</strong> y seleccioná el archivo{" "}
+              Click en <strong>“Choose File”</strong> y seleccioná el archivo{" "}
               <code>solicitud_arca.csr</code> que descargaste de Trazá
             </li>
-            <li>Click en <strong>"Agregar alias"</strong> (botón azul) para confirmar</li>
+            <li>Click en <strong>“Agregar alias”</strong> (botón azul) para confirmar</li>
             <li>
               El certificado queda creado con estado <strong>VÁLIDO</strong>
             </li>
@@ -440,7 +440,7 @@ function StepContent({
               }}
             />
             <figcaption style={{ marginTop: 10, fontSize: 13, color: "var(--text-muted, #6b7280)", lineHeight: 1.5 }}>
-              <strong>Tip:</strong> el campo es para subir un archivo <code>.csr</code>, no para pegar texto. Usá el botón <strong>"Descargar .csr"</strong> en Trazá (paso 3) en lugar de "Copiar CSR".
+              <strong>Tip:</strong> el campo es para subir un archivo <code>.csr</code>, no para pegar texto. Usá el botón <strong>“Descargar .csr”</strong> en Trazá (paso 3) en lugar de “Copiar CSR”.
             </figcaption>
           </figure>
           <ManualStepCheck
@@ -529,7 +529,7 @@ function StepContent({
               }}
             />
             <figcaption style={{ marginTop: 10, fontSize: 13, color: "var(--text-muted, #6b7280)", lineHeight: 1.5 }}>
-              <strong>¡Atención!</strong> Hay dos botones parecidos: usá <strong>"Nueva Relación"</strong>, NO "Adherir Servicio". Si usás el botón equivocado, ARCA te va a tirar el error "El dador de la autorización no debe ser igual al autorizado" y no vas a poder facturar.
+              <strong>¡Atención!</strong> Hay dos botones parecidos: usá <strong>“Nueva Relación”</strong>, NO “Adherir Servicio”. Si usás el botón equivocado, ARCA te va a tirar el error “El dador de la autorización no debe ser igual al autorizado” y no vas a poder facturar.
             </figcaption>
           </figure>
           <ManualStepCheck
@@ -578,7 +578,7 @@ function StepContent({
               }}
             />
             <figcaption style={{ marginTop: 10, fontSize: 13, color: "var(--text-muted, #6b7280)", lineHeight: 1.5 }}>
-              <strong>Tip:</strong> el botón de descarga es el icono pequeño al final de cada fila, en la columna "Descargar". Click ahí y el archivo <code>.crt</code> se baja automáticamente.
+              <strong>Tip:</strong> el botón de descarga es el icono pequeño al final de cada fila, en la columna “Descargar”. Click ahí y el archivo <code>.crt</code> se baja automáticamente.
             </figcaption>
           </figure>
           <ManualStepCheck

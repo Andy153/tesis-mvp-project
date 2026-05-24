@@ -2,6 +2,7 @@ import { supabaseAdmin } from '@/lib/supabase-admin'
 
 type SubmissionWithPartes = {
   partes_incluidos?: unknown
+  cantidad_partes?: number | null
 }
 
 export function includedLiquidacionIds(submission: SubmissionWithPartes): string[] {
@@ -24,9 +25,13 @@ export async function filterSubmissionsWithLiveLiquidaciones<T extends Submissio
   const rows = submissions ?? []
   const ids = Array.from(new Set(rows.flatMap((s) => includedLiquidacionIds(s))))
 
-  // Legacy submissions without partes_incluidos cannot be checked safely, so keep
-  // them. Current submissions always include liquidacion_id per part.
-  if (ids.length === 0) return rows
+  // Envíos sin partes vinculadas (0 partes o JSON vacío): no mostrar wizard de cobros.
+  if (ids.length === 0) {
+    return rows.filter((s) => {
+      const n = s.cantidad_partes
+      return n != null && n > 0
+    })
+  }
 
   const { data, error } = await supabaseAdmin
     .from('liquidaciones')

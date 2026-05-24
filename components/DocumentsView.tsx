@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from './Icon';
-import type { FileEntry } from '@/lib/types';
+import type { FileEntry, RemoveFileResult, SmgDeleteBlockPayload } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import { getEstadoEfectivo, type HistoryItem } from '@/lib/history';
 import { markAsPresented } from '@/lib/tracking';
@@ -11,6 +11,49 @@ import { SwissMedicalCloseButton } from './SwissMedicalCloseButton';
 import { ReviewModal } from './ReviewModal';
 
 type FilterKey = 'all' | 'error' | 'warn' | 'ok';
+
+async function deleteLiquidacionById(
+  liquidacionId: string,
+  options?: { force?: boolean },
+): Promise<RemoveFileResult> {
+  const forceQ = options?.force ? '&force=1' : '';
+  try {
+    const policyRes = await fetch(
+      `/api/liquidaciones/deletion-policy?liquidacion_id=${encodeURIComponent(liquidacionId)}${forceQ}`,
+    );
+    const policy = await policyRes.json();
+    if (!policy.allowed) {
+      return {
+        ok: false,
+        blocked: true,
+        message:
+          policy.message ??
+          'Este documento no puede eliminarse porque el proceso con Swiss Medical ya está en curso.',
+        canForceDelete: policy.canForceDelete === true,
+      };
+    }
+    const del = await fetch(
+      `/api/liquidaciones/${liquidacionId}?force=${options?.force ? '1' : '0'}`,
+      { method: 'DELETE' },
+    );
+    if (del.status === 409) {
+      const body = await del.json();
+      return {
+        ok: false,
+        blocked: true,
+        message: body.error ?? 'No se puede eliminar este documento.',
+        canForceDelete: body.canForceDelete === true,
+      };
+    }
+    if (!del.ok) {
+      return { ok: false, message: 'No se pudo eliminar el registro en la nube.' };
+    }
+    window.dispatchEvent(new CustomEvent('traza:swiss-periods-refresh'));
+    return { ok: true };
+  } catch {
+    return { ok: false, message: 'Error de red al eliminar el documento.' };
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Panel de documentos pendientes de revisión
@@ -160,11 +203,13 @@ export function DocumentsView({
   onOpenFile,
   onUpdateTracking,
   onRemoveFile,
+  onSmgDeleteBlocked,
 }: {
   files: FileEntry[];
   onOpenFile: (id: string) => void;
   onUpdateTracking: (id: string, updater: (item: FileEntry) => FileEntry) => void;
-  onRemoveFile: (id: string) => void;
+  onRemoveFile: (id: string) => Promise<RemoveFileResult>;
+  onSmgDeleteBlocked?: (payload: SmgDeleteBlockPayload) => void;
 }) {
   const normalizePrepaga = (raw: string | null | undefined) => {
     const s = String(raw || '').trim();
@@ -314,10 +359,18 @@ export function DocumentsView({
           onDelete={(id) => {
             if (!window.confirm('¿Eliminar este registro de liquidación en la nube? No se puede deshacer.')) return;
             void (async () => {
-              try {
-                const r = await fetch(`/api/liquidaciones/${id}`, { method: 'DELETE' });
-                if (r.ok) setRefreshKey((k) => k + 1);
-              } catch { /* ignore */ }
+              const result = await deleteLiquidacionById(id);
+              if (result.ok === false) {
+                if (result.blocked && result.message) {
+                  onSmgDeleteBlocked?.({
+                    liquidacionId: id,
+                    message: result.message,
+                    canForceDelete: result.canForceDelete === true,
+                  });
+                }
+                return;
+              }
+              setRefreshKey((k) => k + 1);
             })();
           }}
         />
@@ -358,9 +411,21 @@ export function DocumentsView({
                   type="button"
                   className="btn btn-danger"
                   onClick={() => {
-                    onRemoveFile(confirmRemoveId);
-                    setConfirmRemoveId(null);
-                    setRefreshKey((k) => k + 1);
+                    void (async () => {
+                      const result = await onRemoveFile(confirmRemoveId);
+                      if (result.ok === false) {
+                        if (result.blocked && result.message) {
+                          onSmgDeleteBlocked?.({
+                            fileId: confirmRemoveId,
+                            message: result.message,
+                            canForceDelete: result.canForceDelete === true,
+                          });
+                        }
+                        return;
+                      }
+                      setConfirmRemoveId(null);
+                      setRefreshKey((k) => k + 1);
+                    })();
                   }}
                 >
                   Sí, sacarlo

@@ -6,6 +6,7 @@
 
 import { auth } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
+import { getDeletionPolicyForLiquidacion } from '@/lib/workflow-processes'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { runChecks, type CheckInputs } from '@/lib/checks'
 
@@ -262,9 +263,11 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 // ============================================================================
 // DELETE: cancelar (borra documento + extracción + liquidación + archivo)
 // ============================================================================
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(req: Request, { params }: { params: { id: string } }) {
   const { userId } = await auth()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const force = new URL(req.url).searchParams.get('force') === '1'
 
   // Traer document_id y storage_path
   const { data: liq, error: liqErr } = await supabaseAdmin
@@ -276,6 +279,19 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
 
   if (liqErr) return NextResponse.json({ error: liqErr.message }, { status: 500 })
   if (!liq) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  const policy = await getDeletionPolicyForLiquidacion(userId, params.id, { force })
+  if (!policy.allowed) {
+    return NextResponse.json(
+      {
+        error: policy.message ?? 'No se puede eliminar este documento.',
+        code: policy.code ?? 'SMG_PROCESS_LOCKED',
+        etapa: policy.etapa ?? null,
+        canForceDelete: policy.canForceDelete ?? false,
+      },
+      { status: 409 },
+    )
+  }
 
   const storagePath = (liq.documents as any)?.storage_path
   const documentId = liq.document_id

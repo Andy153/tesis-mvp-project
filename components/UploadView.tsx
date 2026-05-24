@@ -8,7 +8,7 @@ import { extractText, analyzeDocument, findSpans } from '@/lib/analyzer';
 import { crossCheck, extractStructured, requiresAuthorization } from '@/lib/authz';
 import { TRAZA_NOMENCLADOR_FULL } from '@/lib/nomenclador.js';
 import { applyPlanillaValidationFindings } from '@/lib/swissCxExport';
-import type { AuthState, FileEntry, Finding, Span, Thumbnail } from '@/lib/types';
+import type { AuthState, FileEntry, Finding, RemoveFileResult, Span, Thumbnail } from '@/lib/types';
 
 const NOMEN_FOR_EXTRACT = TRAZA_NOMENCLADOR_FULL as Record<string, { entries?: Array<{ desc: string }> }>;
 const PIPE = '[TRAZA_PIPELINE]';
@@ -16,7 +16,7 @@ const PIPE = '[TRAZA_PIPELINE]';
 interface Props {
   files: FileEntry[];
   onAddFile: (entry: FileEntry) => void;
-  onRemoveFile: (id: string) => void;
+  onRemoveFile: (id: string) => Promise<RemoveFileResult>;
   onSelectFile: (id: string | null) => void;
   selectedFileId: string | null;
   authStates: Record<string, AuthState | undefined>;
@@ -613,8 +613,16 @@ export function UploadView({
                   type="button"
                   className="btn btn-danger"
                   onClick={() => {
-                    onRemoveFile(confirmDelete.id);
-                    setConfirmDelete(null);
+                    void (async () => {
+                      const result = await onRemoveFile(confirmDelete.id);
+                      if (result.ok) {
+                        setConfirmDelete(null);
+                        return;
+                      }
+                      if (result.ok === false && result.blocked) {
+                        setConfirmDelete(null);
+                      }
+                    })();
                   }}
                 >
                   Sí, sacarlo

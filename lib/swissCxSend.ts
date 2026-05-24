@@ -3,6 +3,7 @@ import { readFile } from 'fs/promises'
 import path from 'path'
 import { Resend } from 'resend'
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { syncWorkflowFromSubmission, upsertWorkflowProcess } from '@/lib/workflow-processes'
 import { generateSwissCxFiles } from '@/lib/swissCxExport'
 import { buildSwissRowsForPeriod, type ParteInfo } from '@/lib/swissCxBuild'
 import { includedLiquidacionIds } from '@/lib/monthlySubmissions'
@@ -293,11 +294,28 @@ export async function sendSwissMonthlyForUser(
     submissionId = inserted.id
   }
 
+  await upsertWorkflowProcess({
+    clerkUserId: userId,
+    obraSocial: 'swiss_medical',
+    periodo,
+    etapa: 'enviando',
+    monthlySubmissionId: submissionId,
+    metadata: { status: 'enviando' },
+  })
+
   const markFailed = async (msg: string) => {
     await supabaseAdmin
       .from('monthly_submissions')
       .update({ status: 'fallido', error_message: msg, updated_at: new Date().toISOString() })
       .eq('id', submissionId)
+    await upsertWorkflowProcess({
+      clerkUserId: userId,
+      obraSocial: 'swiss_medical',
+      periodo,
+      etapa: 'fallido',
+      monthlySubmissionId: submissionId,
+      metadata: { status: 'fallido', error_message: msg },
+    })
   }
 
   try {
@@ -463,6 +481,21 @@ export async function sendSwissMonthlyForUser(
         error: finalErr,
       })
     }
+
+    await upsertWorkflowProcess({
+      clerkUserId: userId,
+      obraSocial: 'swiss_medical',
+      periodo,
+      etapa: 'cobros_wizard',
+      monthlySubmissionId: submissionId,
+      metadata: {
+        status: 'enviado',
+        wizard_estado: 'esperando_comprobante',
+        wizard_paso: 1,
+        liquidacion_ids: liquidacionIds,
+        resend_message_id: resendMessageId,
+      },
+    })
 
     return {
       ok: true,

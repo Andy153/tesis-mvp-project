@@ -1,4 +1,5 @@
 import type { Analysis, CrossCheckFinding, StructuredDoc } from './types';
+import { lookupNomencladorEntry } from './nomenclador-lookup';
 import { TRAZA_PREPAGAS } from './traza-constants';
 
 export const TRAZA_CIRUGIA_PREFIXES = [
@@ -232,6 +233,11 @@ export function extractStructured(
   for (const c of codes) {
     if (nomenclador[c]) {
       result.codigo = c;
+      break;
+    }
+    const hit = lookupNomencladorEntry(c);
+    if (hit) {
+      result.codigo = hit.code;
       break;
     }
   }

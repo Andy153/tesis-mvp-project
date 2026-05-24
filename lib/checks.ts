@@ -10,6 +10,8 @@
 // - Calcular el estado_revision y los motivos resultantes
 
 import { TRAZA_NOMENCLADOR_RAW, TRAZA_PROC_KEYWORDS } from './nomenclador'
+import { TRAZA_NOMENCLADOR_FASGO_RAW } from './nomenclador-fasgo'
+import { lookupNomencladorEntry, type NomencladorSource } from './nomenclador-lookup'
 
 // ============================================================================
 // Tipos
@@ -19,6 +21,7 @@ export type CheckCode =
   | 'PREPAGA_NO_SWISS'
   | 'PREPAGA_AUSENTE'
   | 'CODIGO_AUSENTE'
+  | 'CODIGO_FASGO_FALLBACK'
   | 'SANATORIO_AUSENTE'
   | 'AFILIADO_AUSENTE'
   | 'PLAZO_VENCIDO'
@@ -52,7 +55,9 @@ export type CheckResult = {
   warnings: CheckIssue[]
   estado_revision: EstadoRevision | null // null si fuera_de_alcance (no es Swiss)
   isOutOfScope: boolean // true si la prepaga no es Swiss
-  autoFilledCode: string | null // si rellenamos un código por keywords
+  autoFilledCode: string | null // si rellenamos un código por keywords o similitud
+  /** Origen del código inferido (Swiss primero; FASGO solo si Swiss no matcheó). */
+  autoFilledCodeSource?: NomencladorSource | null
 }
 
 // ============================================================================
@@ -217,7 +222,8 @@ function tokensSimilares(a: string, b: string): boolean {
  *   - F2 mínimo: 0.25 (debajo de eso, retornar null y bloquear).
  *   - Empate: gana descripción más corta y, sub-empate, código numérico menor.
  */
-export function findCodeBySimilarity(
+export function findCodeBySimilarityInCatalog(
+  raw: Record<string, { desc: string; specialty: string }>,
   ...fuentes: Array<string | null | undefined>
 ): string | null {
   const tokensSet = new Set<string>()
@@ -233,7 +239,6 @@ export function findCodeBySimilarity(
   const MIN_F2 = 0.25
   const BETA2 = 4 // β² con β=2
 
-  const raw = TRAZA_NOMENCLADOR_RAW as Record<string, { desc: string; specialty: string }>
   let best: { code: string; score: number; descLen: number } | null = null
 
   for (const code of Object.keys(raw)) {
@@ -268,6 +273,38 @@ export function findCodeBySimilarity(
   return best?.code ?? null
 }
 
+/** Similitud Swiss; si no hay match, mismo algoritmo sobre nomenclador FASGO. */
+export function findCodeBySimilarity(
+  ...fuentes: Array<string | null | undefined>
+): string | null {
+  return (
+    findCodeBySimilarityInCatalog(
+      TRAZA_NOMENCLADOR_RAW as Record<string, { desc: string; specialty: string }>,
+      ...fuentes,
+    ) ??
+    findCodeBySimilarityInCatalog(
+      TRAZA_NOMENCLADOR_FASGO_RAW as Record<string, { desc: string; specialty: string }>,
+      ...fuentes,
+    )
+  )
+}
+
+export function findCodeBySimilarityWithSource(
+  ...fuentes: Array<string | null | undefined>
+): { code: string; source: NomencladorSource } | null {
+  const swiss = findCodeBySimilarityInCatalog(
+    TRAZA_NOMENCLADOR_RAW as Record<string, { desc: string; specialty: string }>,
+    ...fuentes,
+  )
+  if (swiss) return { code: swiss, source: 'swiss' }
+  const fasgo = findCodeBySimilarityInCatalog(
+    TRAZA_NOMENCLADOR_FASGO_RAW as Record<string, { desc: string; specialty: string }>,
+    ...fuentes,
+  )
+  if (fasgo) return { code: fasgo, source: 'fasgo' }
+  return null
+}
+
 // ============================================================================
 // Motor principal
 // ============================================================================
@@ -286,7 +323,7 @@ export function runChecks(input: CheckInputs, now: Date = new Date()): CheckResu
       field: 'prepaga',
     })
     // Sin prepaga, no podemos saber si es Swiss. Lo tratamos como bloqueado, no fuera_de_alcance.
-    return finalizeResult(blockers, warnings, autoFilledCode, false)
+    return finalizeResult(blockers, warnings, autoFilledCode, null, false)
   }
 
   if (!isSwissMedical(input.prepaga)) {
@@ -298,15 +335,42 @@ export function runChecks(input: CheckInputs, now: Date = new Date()): CheckResu
       estado_revision: null,
       isOutOfScope: true,
       autoFilledCode: null,
+      autoFilledCodeSource: null,
     }
   }
 
   // ---- B3: código de nomenclador ----
   // Si la IA no devolvió código:
-  //   1) probar el matcher curado de keywords (preciso, pocos falsos positivos).
-  //   2) fallback: similitud de tokens contra TRAZA_NOMENCLADOR_RAW completo.
-  // Sólo bloqueamos si ambos fallan.
+  //   1) matcher curado de keywords (Swiss).
+  //   2) similitud Swiss, luego FASGO como fallback.
+  // Si vino código explícito: validar contra Swiss; si no está, contra FASGO.
   let codigoFinal = input.codigoNomenclador
+  let autoFilledCodeSource: NomencladorSource | null = null
+
+  if (!isEmpty(codigoFinal)) {
+    const lookup = lookupNomencladorEntry(codigoFinal)
+    if (!lookup) {
+      blockers.push({
+        code: 'CODIGO_AUSENTE',
+        severity: 'blocker',
+        message:
+          'El código de nomenclador no figura en el nomenclador Swiss Medical ni en el nomenclador FASGO.',
+        field: 'codigo_nomenclador',
+      })
+    } else {
+      codigoFinal = lookup.code
+      if (lookup.source === 'fasgo') {
+        warnings.push({
+          code: 'CODIGO_FASGO_FALLBACK',
+          severity: 'warning',
+          message:
+            'El código fue reconocido en el nomenclador FASGO (no está en Swiss Medical).',
+          field: 'codigo_nomenclador',
+        })
+      }
+    }
+  }
+
   if (isEmpty(codigoFinal)) {
     // Fuentes posibles del parte. El orden importa para keywords (probamos
     // primero el campo más limpio), pero para similitud las combinamos todas.
@@ -328,15 +392,29 @@ export function runChecks(input: CheckInputs, now: Date = new Date()): CheckResu
       }
     }
 
-    // Paso 2: similitud sobre todo el contexto combinado. Más tokens = mejor
-    // pick (la entrada del nomenclador que cubra más del parte gana).
+    // Paso 2: similitud Swiss → FASGO.
     if (!inferred) {
-      inferred = findCodeBySimilarity(...fuentes)
+      const sim = findCodeBySimilarityWithSource(...fuentes)
+      if (sim) {
+        inferred = sim.code
+        autoFilledCodeSource = sim.source
+      }
+    } else {
+      autoFilledCodeSource = 'swiss'
     }
 
     if (inferred) {
       codigoFinal = inferred
       autoFilledCode = inferred
+      if (autoFilledCodeSource === 'fasgo') {
+        warnings.push({
+          code: 'CODIGO_FASGO_FALLBACK',
+          severity: 'warning',
+          message:
+            'Código inferido desde el nomenclador FASGO (descripción ginecológica; no hubo match en Swiss).',
+          field: 'codigo_nomenclador',
+        })
+      }
     } else {
       blockers.push({
         code: 'CODIGO_AUSENTE',
@@ -388,13 +466,14 @@ export function runChecks(input: CheckInputs, now: Date = new Date()): CheckResu
     }
   }
 
-  return finalizeResult(blockers, warnings, autoFilledCode, false)
+  return finalizeResult(blockers, warnings, autoFilledCode, autoFilledCodeSource, false)
 }
 
 function finalizeResult(
   blockers: CheckIssue[],
   warnings: CheckIssue[],
   autoFilledCode: string | null,
+  autoFilledCodeSource: NomencladorSource | null,
   isOutOfScope: boolean,
 ): CheckResult {
   let estado_revision: EstadoRevision | null
@@ -405,7 +484,14 @@ function finalizeResult(
   } else {
     estado_revision = 'en_revision'
   }
-  return { blockers, warnings, estado_revision, isOutOfScope, autoFilledCode }
+  return {
+    blockers,
+    warnings,
+    estado_revision,
+    isOutOfScope,
+    autoFilledCode,
+    autoFilledCodeSource: autoFilledCode ? autoFilledCodeSource : null,
+  }
 }
 
 // ============================================================================

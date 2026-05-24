@@ -55,6 +55,14 @@ export function SwissMedicalCloseButton({ onSent }: { onSent?: () => void }) {
     loadPeriods()
   }, [])
 
+  useEffect(() => {
+    const handler = () => {
+      void loadPeriods()
+    }
+    window.addEventListener('traza:swiss-periods-refresh', handler)
+    return () => window.removeEventListener('traza:swiss-periods-refresh', handler)
+  }, [])
+
   const selectedInfo = periods.find((p) => p.periodo === selected)
   const hasAnySendable = periods.some((p) => !p.ya_enviado && p.cantidad_pendientes > 0)
   const canSend =

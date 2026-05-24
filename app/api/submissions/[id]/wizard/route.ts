@@ -7,6 +7,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { syncWorkflowFromSubmission } from '@/lib/workflow-processes';
 import { extractMontoFromComprobante } from '@/lib/arca/extractMonto';
 import { Resend } from 'resend';
 
@@ -174,6 +175,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     .eq('clerk_user_id', userId);
 
   if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
+
+  await syncWorkflowFromSubmission(params.id, userId);
 
   return NextResponse.json({ ok: true, wizard_estado: update.wizard_estado });
 }

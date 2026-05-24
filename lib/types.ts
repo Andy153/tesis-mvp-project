@@ -9,6 +9,17 @@ export type EstadoCobro =
   | 'cobrado'
   | 'rechazado';
 
+export type RemoveFileResult =
+  | { ok: true }
+  | { ok: false; blocked?: boolean; message?: string; canForceDelete?: boolean };
+
+export type SmgDeleteBlockPayload = {
+  fileId?: string;
+  liquidacionId?: string;
+  message: string;
+  canForceDelete: boolean;
+};
+
 export type TrackingCobro = {
   estado: EstadoCobro;
   fechaPresentacion?: string;

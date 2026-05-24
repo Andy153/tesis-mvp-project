@@ -12,7 +12,8 @@ import { DashboardView } from './DashboardView';
 import { CobrosView } from './dashboard/CobrosView';
 import { CobrosGuard } from '@/components/cobros/CobrosGuard';
 import { AutoAssignRole } from '@/components/auth/AutoAssignRole';
-import type { AuthState, FileEntry } from '@/lib/types';
+import { SmgDeletionBlockedCard } from './SmgDeletionBlockedCard';
+import type { AuthState, FileEntry, RemoveFileResult, SmgDeleteBlockPayload } from '@/lib/types';
 import { loadHistory, saveHistory } from '@/lib/history';
 import { buildSwissCxRow } from '@/lib/swissCxExport';
 import { applyThemeMode, DEFAULT_PROFILE, loadProfile } from '@/lib/profile';
@@ -24,6 +25,8 @@ export default function TrazaApp() {
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [authStates, setAuthStates] = useState<Record<string, AuthState | undefined>>({});
   const [uploadVirgin, setUploadVirgin] = useState(false);
+  const [smgDeleteBlock, setSmgDeleteBlock] = useState<SmgDeleteBlockPayload | null>(null);
+  const [smgForceDeleting, setSmgForceDeleting] = useState(false);
   // Mismo valor inicial en SSR y primer render del cliente (evita hydration mismatch:
   // loadProfile() en el servidor usa DEFAULT_PROFILE; en el cliente lee localStorage).
   const [userProfile, setUserProfile] = useState(DEFAULT_PROFILE);
@@ -127,22 +130,83 @@ export default function TrazaApp() {
     });
   }
 
-  function removeFile(id: string) {
+  async function deleteLiquidacionForced(liquidacionId: string): Promise<RemoveFileResult> {
+    try {
+      const policyRes = await fetch(
+        `/api/liquidaciones/deletion-policy?liquidacion_id=${encodeURIComponent(liquidacionId)}&force=1`,
+      );
+      const policy = await policyRes.json();
+      if (!policy.allowed) {
+        return {
+          ok: false,
+          blocked: true,
+          message: policy.message ?? 'No se puede eliminar este documento.',
+          canForceDelete: policy.canForceDelete === true,
+        };
+      }
+      const del = await fetch(`/api/liquidaciones/${liquidacionId}?force=1`, { method: 'DELETE' });
+      if (del.status === 409) {
+        const body = await del.json();
+        return {
+          ok: false,
+          blocked: true,
+          message: body.error ?? 'No se puede eliminar este documento.',
+          canForceDelete: body.canForceDelete === true,
+        };
+      }
+      if (!del.ok) return { ok: false, message: 'No se pudo eliminar el registro en la nube.' };
+      window.dispatchEvent(new CustomEvent('traza:swiss-periods-refresh'));
+      return { ok: true };
+    } catch {
+      return { ok: false, message: 'Error de red al eliminar el documento.' };
+    }
+  }
+
+  async function removeFile(id: string, options?: { force?: boolean }): Promise<RemoveFileResult> {
     const victim = files.find((f) => f.id === id);
     const docId = victim?.documentId;
+    const forceQ = options?.force ? '&force=1' : '';
     if (docId) {
-      void (async () => {
-        try {
-          const r = await fetch(`/api/liquidaciones?document_id=${encodeURIComponent(docId)}`);
-          const j = await r.json();
-          for (const liq of j.liquidaciones ?? []) {
-            await fetch(`/api/liquidaciones/${liq.id}`, { method: 'DELETE' });
-          }
-        } catch {
-          /* ignore */
+      try {
+        const policyRes = await fetch(
+          `/api/liquidaciones/deletion-policy?document_id=${encodeURIComponent(docId)}${forceQ}`,
+        );
+        const policy = await policyRes.json();
+        if (!policy.allowed) {
+          return {
+            ok: false,
+            blocked: true,
+            message:
+              policy.message ??
+              'Este documento no puede eliminarse porque el proceso con Swiss Medical ya está en curso.',
+            canForceDelete: policy.canForceDelete === true,
+          };
         }
-      })();
+
+        const r = await fetch(`/api/liquidaciones?document_id=${encodeURIComponent(docId)}`);
+        const j = await r.json();
+        for (const liq of j.liquidaciones ?? []) {
+          const del = await fetch(`/api/liquidaciones/${liq.id}?force=${options?.force ? '1' : '0'}`, {
+            method: 'DELETE',
+          });
+          if (del.status === 409) {
+            const body = await del.json();
+            return {
+              ok: false,
+              blocked: true,
+              message: body.error ?? 'No se puede eliminar este documento.',
+              canForceDelete: body.canForceDelete === true,
+            };
+          }
+          if (!del.ok) {
+            return { ok: false, message: 'No se pudo eliminar el registro en la nube.' };
+          }
+        }
+      } catch {
+        return { ok: false, message: 'Error de red al eliminar el documento.' };
+      }
     }
+
     setFiles((prev) => prev.filter((f) => f.id !== id));
     if (selectedFileId === id) setSelectedFileId(null);
     setAuthStates((prev) => {
@@ -150,6 +214,8 @@ export default function TrazaApp() {
       delete copy[id];
       return copy;
     });
+    window.dispatchEvent(new CustomEvent('traza:swiss-periods-refresh'));
+    return { ok: true };
   }
 
   function updateFileTracking(id: string, updater: (item: FileEntry) => FileEntry) {
@@ -261,6 +327,42 @@ export default function TrazaApp() {
 
   return (
     <>
+      {smgDeleteBlock && (
+        <SmgDeletionBlockedCard
+          message={smgDeleteBlock.message}
+          onClose={() => setSmgDeleteBlock(null)}
+          forceDeleting={smgForceDeleting}
+          onForceDelete={
+            smgDeleteBlock.canForceDelete
+              ? () => {
+                  void (async () => {
+                    setSmgForceDeleting(true);
+                    let result: RemoveFileResult;
+                    if (smgDeleteBlock.fileId) {
+                      result = await removeFile(smgDeleteBlock.fileId, { force: true });
+                    } else if (smgDeleteBlock.liquidacionId) {
+                      result = await deleteLiquidacionForced(smgDeleteBlock.liquidacionId);
+                    } else {
+                      result = { ok: false, message: 'No se pudo identificar el documento.' };
+                    }
+                    setSmgForceDeleting(false);
+                    if (result.ok) {
+                      setSmgDeleteBlock(null);
+                      return;
+                    }
+                    if (result.ok === false && result.message) {
+                      setSmgDeleteBlock({
+                        ...smgDeleteBlock,
+                        message: result.message,
+                        canForceDelete: result.canForceDelete === true,
+                      });
+                    }
+                  })();
+                }
+              : undefined
+          }
+        />
+      )}
       <AutoAssignRole />
       <div className="app">
         <header className="app-mob-header">
@@ -310,7 +412,17 @@ export default function TrazaApp() {
           <UploadView
             files={files}
             onAddFile={upsertFile}
-            onRemoveFile={removeFile}
+            onRemoveFile={async (fileId) => {
+              const result = await removeFile(fileId);
+              if (result.ok === false && result.blocked && result.message) {
+                setSmgDeleteBlock({
+                  fileId,
+                  message: result.message,
+                  canForceDelete: result.canForceDelete === true,
+                });
+              }
+              return result;
+            }}
             onSelectFile={setSelectedFileId}
             selectedFileId={selectedFileId}
             authStates={authStates}
@@ -342,7 +454,23 @@ export default function TrazaApp() {
           />
         )}
         {active === 'documents' && (
-          <DocumentsView files={files} onOpenFile={openFile} onUpdateTracking={updateFileTracking} onRemoveFile={removeFile} />
+          <DocumentsView
+            files={files}
+            onOpenFile={openFile}
+            onUpdateTracking={updateFileTracking}
+            onRemoveFile={async (fileId) => {
+              const result = await removeFile(fileId);
+              if (result.ok === false && result.blocked && result.message) {
+                setSmgDeleteBlock({
+                  fileId,
+                  message: result.message,
+                  canForceDelete: result.canForceDelete === true,
+                });
+              }
+              return result;
+            }}
+            onSmgDeleteBlocked={(payload) => setSmgDeleteBlock(payload)}
+          />
         )}
         {active === 'errors' && <ErrorsView files={files} authStates={authStates} onOpenFile={openFile} />}
         {active === 'settings' && <ProfileView />}

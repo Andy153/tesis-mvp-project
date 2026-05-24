@@ -2027,6 +2027,9 @@ html[data-theme='dark'] .cal-cell.muted .cal-daynum {
   z-index: 9990;
   animation: modalOverlayIn 0.18s ease-out both;
 }
+.smg-deletion-modal {
+  z-index: 10050;
+}
 .modal-card {
   position: relative;
   z-index: 9991;

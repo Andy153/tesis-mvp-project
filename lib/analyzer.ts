@@ -4,9 +4,14 @@ import { extractStructured } from './authz';
 import { parteExtractToAnalysisText } from './ai/parteExtractToAnalysisText';
 import type { ParteQuirurgicoExtract } from './ai/schemas';
 import { TRAZA_NOMENCLADOR_FULL, TRAZA_PROC_KEYWORDS } from './nomenclador.js';
+import { TRAZA_NOMENCLADOR_FASGO_FULL } from './nomenclador-fasgo.js';
 import { TRAZA_PREPAGAS, TRAZA_REQUIRED_FIELDS, TRAZA_SANATORIOS } from './traza-constants';
 import { matchScore } from './semantic';
-import { findCodeByDescription, findCodeBySimilarity } from './checks';
+import {
+  findCodeByDescription,
+  findCodeBySimilarityWithSource,
+} from './checks';
+import { lookupNomencladorEntry } from './nomenclador-lookup';
 
 let _pendingDocumentId: string | null = null
 
@@ -572,8 +577,19 @@ function softTitleCaseInstitution(raw: string) {
   return { out, applied: out !== s };
 }
 
-type NomenRow = { entries: Array<{ desc: string; specialty?: string }>; ambiguous?: boolean };
+type NomenRow = {
+  entries: Array<{ desc: string; specialty?: string }>;
+  ambiguous?: boolean;
+  source?: 'swiss' | 'fasgo';
+};
 const NOMEN = TRAZA_NOMENCLADOR_FULL as Record<string, NomenRow>;
+const NOMEN_FASGO = TRAZA_NOMENCLADOR_FASGO_FULL as Record<string, NomenRow>;
+
+function getNomencladorRow(code: string): { row: NomenRow; source: 'swiss' | 'fasgo' } | null {
+  if (NOMEN[code]) return { row: NOMEN[code], source: 'swiss' };
+  if (NOMEN_FASGO[code]) return { row: NOMEN_FASGO[code], source: 'fasgo' };
+  return null;
+}
 
 type ProcKw = { keywords: string[]; code: string };
 const PROC_KEYWORDS = TRAZA_PROC_KEYWORDS as ProcKw[];
@@ -1848,7 +1864,7 @@ export function analyzeDocument(
         const kwLower = stripAccents(kw.toLowerCase());
         if (hasWholeWord(lower, kw)) {
           wholeWordHits++;
-          const entryInNomen = NOMEN[entry.code];
+          const entryInNomen = getNomencladorRow(entry.code)?.row;
           const descSugerido = entryInNomen?.entries?.[0]?.desc || '';
           procedureGuess = { keyword: kw, code: entry.code, desc: descSugerido };
           break;
@@ -1876,14 +1892,26 @@ export function analyzeDocument(
     const descripcionTecnica = (aiParteExtract.procedimiento as any)?.descripcion_tecnica ?? null;
     const diagnosticoOperatorio = (aiParteExtract.procedimiento as any)?.diagnostico_operatorio ?? null;
 
-    const inferred =
+    let inferred: string | null =
       findCodeByDescription(tipoRealizado) ||
       findCodeByDescription(descripcionTecnica) ||
-      findCodeByDescription(diagnosticoOperatorio) ||
-      findCodeBySimilarity(tipoRealizado, descripcionTecnica, diagnosticoOperatorio);
+      findCodeByDescription(diagnosticoOperatorio);
+    let inferredSource: 'swiss' | 'fasgo' = 'swiss';
+    if (!inferred) {
+      const sim = findCodeBySimilarityWithSource(
+        tipoRealizado,
+        descripcionTecnica,
+        diagnosticoOperatorio,
+      );
+      if (sim) {
+        inferred = sim.code;
+        inferredSource = sim.source;
+      }
+    }
 
     if (inferred) {
-      const entryInNomen = NOMEN[inferred];
+      const nomenHit = getNomencladorRow(inferred);
+      const entryInNomen = nomenHit?.row;
       const descSugerido = entryInNomen?.entries?.[0]?.desc || '';
       // Usamos el campo más específico disponible como "keyword" para el
       // resaltado del span; si nada hay, fallback al primer término del
@@ -1896,7 +1924,7 @@ export function analyzeDocument(
       const keyword = keywordRaw.split(/[\s,.;:]+/).filter(Boolean)[0] || '';
       procedureGuess = { keyword, code: inferred, desc: descSugerido };
       console.log(
-        `${PIPE} analyze:procedureGuess source=ai_extract_fallback code=${inferred} kw=${keyword}`,
+        `${PIPE} analyze:procedureGuess source=ai_extract_fallback nomen=${inferredSource} code=${inferred} kw=${keyword}`,
       );
     }
   }
@@ -1920,8 +1948,10 @@ export function analyzeDocument(
   const discarded: Array<{ raw: string; normalized: string; reason: string }> = [];
   for (const raw of rawCodes) {
     const normalized = raw.replace(/-/g, '.');
-    if (NOMEN[normalized]) validCodes.push(normalized);
-    else if (NOMEN[raw]) validCodes.push(raw);
+    const hitNorm = lookupNomencladorEntry(normalized);
+    const hitRaw = lookupNomencladorEntry(raw);
+    if (hitNorm) validCodes.push(hitNorm.code);
+    else if (hitRaw) validCodes.push(hitRaw.code);
     else discarded.push({ raw, normalized, reason: 'not_in_nomenclador' });
   }
   const maskCode = (c: string) => {
@@ -1951,7 +1981,9 @@ export function analyzeDocument(
   if (!isPartogramOnly && validCodes.length > 0) {
     console.log(`${PIPE} nomenclador:matching attempt=yes reason=valid_codes_present`);
     for (const code of validCodes) {
-      const nomen = NOMEN[code];
+      const nomenHit = getNomencladorRow(code);
+      const nomen = nomenHit?.row;
+      if (!nomen) continue;
       const practices = nomen.entries || [];
       const isAmbiguous = !!nomen.ambiguous;
 

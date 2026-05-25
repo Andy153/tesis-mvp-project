@@ -129,7 +129,7 @@ export async function insertNotaCreditoSubmission(params: {
       monto_total: params.montoTotal,
       mail_destinatario: params.mailDestinatario,
       cantidad_partes: 0,
-      status: 'emitido',
+      status: 'enviado',
       partes_incluidos: [],
       cae_numero: params.caeNumero,
       cae_vencimiento: params.caeVencimiento,

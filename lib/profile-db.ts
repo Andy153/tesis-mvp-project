@@ -1,3 +1,4 @@
+import { getEffectiveAfipAmbiente } from './arca/emision-config'
 import { supabaseAdmin } from './supabase-admin'
 
 export type ProfileDB = {
@@ -57,7 +58,7 @@ export async function getProfileFiscalFromDB(clerkUserId: string): Promise<Profi
     )
   }
 
-  const ambiente = profile.afip_ambiente === 'produccion' ? 'produccion' : 'desarrollo'
+  const ambiente = getEffectiveAfipAmbiente(profile.afip_ambiente)
 
   return {
     clerkUserId: profile.clerk_user_id,

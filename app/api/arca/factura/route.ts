@@ -1,5 +1,6 @@
 import { auth } from '@clerk/nextjs/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { getReceptorFacturaEmision } from '@/lib/arca/emision-config'
 import { emitirFacturaC } from '@/lib/arca/facturacion'
 
 export async function POST(req: NextRequest) {
@@ -15,11 +16,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Body JSON inválido' }, { status: 400 })
   }
 
-  const { cuitReceptor, importeTotal, periodoDesde, periodoHasta, periodo, submissionId } = body
+  const { importeTotal, periodoDesde, periodoHasta, periodo, submissionId } = body
+  const receptor = getReceptorFacturaEmision()
 
   if (
-    cuitReceptor == null ||
-    cuitReceptor === '' ||
     importeTotal == null ||
     periodoDesde == null ||
     periodoDesde === '' ||
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         error:
-          'Faltan campos requeridos: cuitReceptor, importeTotal, periodoDesde, periodoHasta, periodo, submissionId',
+          'Faltan campos requeridos: importeTotal, periodoDesde, periodoHasta, periodo, submissionId',
       },
       { status: 400 },
     )
@@ -45,7 +45,8 @@ export async function POST(req: NextRequest) {
       submissionId: String(submissionId),
       periodo: String(periodo),
       monto: Number(importeTotal),
-      receptorCuit: cuitReceptor != null && cuitReceptor !== '' ? String(cuitReceptor) : undefined,
+      receptorCuit: receptor.cuit,
+      receptorRazonSocial: receptor.razonSocial,
       periodoDesde: String(periodoDesde),
       periodoHasta: String(periodoHasta),
       descripcion:
@@ -56,6 +57,11 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       exito: true,
+      ambiente: resultado.ambiente,
+      receptor: {
+        cuit: receptor.cuit,
+        razonSocial: receptor.razonSocial,
+      },
       nroComprobante: resultado.numeroComprobante,
       cae: resultado.cae,
       caeFechaVto: resultado.caeVencimiento,

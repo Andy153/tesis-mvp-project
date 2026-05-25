@@ -43,7 +43,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       wizard_estado, wizard_paso,
       enviado_en, cantidad_partes, monto_total,
       comprobante_smg_path, factura_path,
-      cae_numero, cae_vencimiento,
+      cae_numero, cae_vencimiento, numero_comprobante,
       factura_adjuntada_en, wizard_completado_en,
       partes_incluidos
     `,
@@ -54,6 +54,28 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  // Solo si emitió factura pero el wizard quedó en paso 4 con estado de comprobante (sin avanzar).
+  // No aplicar si el usuario volvió atrás desde el paso 5 (paso 4 + factura_instrucciones).
+  if (
+    data.cae_numero &&
+    (data.wizard_paso ?? 0) === 4 &&
+    data.wizard_estado === 'comprobante_subido'
+  ) {
+    const { error: healErr } = await supabaseAdmin
+      .from('monthly_submissions')
+      .update({
+        wizard_estado: 'factura_instrucciones',
+        wizard_paso: 5,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', params.id)
+      .eq('clerk_user_id', userId);
+    if (!healErr) {
+      data.wizard_paso = 5;
+      data.wizard_estado = 'factura_instrucciones';
+    }
+  }
 
   return NextResponse.json({ submission: data });
 }
@@ -152,6 +174,18 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   } else if (action === 'descartar_seguimiento') {
     update.wizard_estado = 'descartado';
     update.wizard_completado_en = new Date().toISOString();
+  } else if (action === 'reiniciar_cobro') {
+    // Nuevo parte en el mismo período: reiniciar seguimiento de cobro sin borrar el envío de planilla.
+    update.wizard_estado = 'esperando_comprobante';
+    update.wizard_paso = 1;
+    update.wizard_completado_en = null;
+    update.comprobante_smg_path = null;
+    update.factura_path = null;
+    update.cae_numero = null;
+    update.cae_vencimiento = null;
+    update.factura_adjuntada_en = null;
+    update.monto_total = null;
+    update.numero_comprobante = null;
   } else if (action === 'go_back') {
     const nuevoPaso = Math.max(1, (sub.wizard_paso ?? 1) - 1);
     const estadosPorPaso: Record<number, string> = {

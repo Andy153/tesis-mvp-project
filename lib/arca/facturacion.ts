@@ -109,6 +109,7 @@ async function resolverReceptor(
 }
 
 export async function emitirFacturaC(params: EmitirFacturaCParams): Promise<{
+  ambiente: 'desarrollo' | 'produccion'
   cae: string
   caeVencimiento: string
   numeroComprobante: number
@@ -250,6 +251,7 @@ export async function emitirFacturaC(params: EmitirFacturaCParams): Promise<{
   const pdfUrl = await createFacturaSignedUrl(pdfPath)
 
   return {
+    ambiente: profile.ambiente,
     cae,
     caeVencimiento,
     numeroComprobante,

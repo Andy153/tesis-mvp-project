@@ -8,7 +8,7 @@ const STEPS = [
   {
     n: 1,
     title: 'Subís el documento',
-    body: 'Parte quirúrgico y autorización en un solo lugar.',
+    body: 'Parte y autorización en un solo lugar.',
     tag: 'Paso 1',
     panelTitle: 'Carga en segundos',
     panelDesc: 'Arrastrás el PDF o la foto del parte. Trazá lo asocia a la liquidación del mes.',
@@ -18,7 +18,7 @@ const STEPS = [
   {
     n: 2,
     title: 'La IA extrae y valida',
-    body: 'Datos, códigos y requisitos según Swiss u OSDE.',
+    body: 'Datos y códigos según Swiss u OSDE.',
     tag: 'Paso 2',
     panelTitle: 'Validación automática',
     panelDesc: 'Cruzamos nomenclador, vigencia de autorización y plazos antes de que presentes.',
@@ -28,7 +28,7 @@ const STEPS = [
   {
     n: 3,
     title: 'Se inicia la facturación',
-    body: 'Flujo ante la prepaga, con ARCA cuando corresponde.',
+    body: 'Presentación ante la prepaga y ARCA.',
     tag: 'Paso 3',
     panelTitle: 'Presentación ordenada',
     panelDesc: 'Armamos el envío según las reglas de cada prepaga — sin reescribir planillas.',
@@ -38,7 +38,7 @@ const STEPS = [
   {
     n: 4,
     title: 'Tenés visibilidad',
-    body: 'Estado del cobro y qué corregir a tiempo.',
+    body: 'Cobro, rechazos y qué corregir.',
     tag: 'Paso 4',
     panelTitle: 'Dashboard de cobros',
     panelDesc: 'Proyección del mes, rechazos y próximos vencimientos en un solo panel.',
@@ -66,7 +66,7 @@ export function LandingHowItWorks() {
   return (
     <section className={styles.section} aria-labelledby="landing-how-title">
       <p className={styles.sectionLabel}>Cómo funciona</p>
-      <h2 id="landing-how-title" className="page-title">
+      <h2 id="landing-how-title" className={styles.landingSectionTitle}>
         De el parte al cobro, en cuatro pasos
       </h2>
       <p className="page-subtitle">
@@ -89,7 +89,7 @@ export function LandingHowItWorks() {
               onClick={() => setActive(i)}
             >
               <span className={styles.stepBtnNum}>{s.n}</span>
-              <span>
+              <span className={styles.stepBtnCopy}>
                 <span className={styles.stepBtnTitle}>{s.title}</span>
                 <span className={styles.stepBtnBody}>{s.body}</span>
               </span>

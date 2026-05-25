@@ -1,3 +1,6 @@
+'use client';
+
+import { useEffect, useState } from 'react';
 import {
   AlertTriangle,
   Building2,
@@ -11,150 +14,209 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import styles from './landing.module.css';
 
-type Feature = {
-  icon: LucideIcon;
-  title: string;
-  body: string;
-  preview?: { k: string; v: string }[];
-};
-
-const SUBSECTIONS: {
+type Capability = {
   id: string;
   title: string;
-  subtitle: string;
-  features: Feature[];
-}[] = [
+  body: string;
+  outcome: string;
+  icon: LucideIcon;
+};
+
+type Pillar = {
+  id: string;
+  title: string;
+  lead: string;
+  context: string;
+  capabilities: Capability[];
+};
+
+const PILLARS: Pillar[] = [
   {
     id: 'envio',
     title: 'Del parte al envío',
-    subtitle: 'Automatizamos la carga, validación y presentación ante la prepaga.',
-    features: [
+    lead: 'Menos carga manual, menos errores antes de presentar.',
+    context:
+      'Hoy el parte se reescribe, el código se duda y la prepaga recibe algo incompleto. Acá el documento entra una vez y sale validado para Swiss Medical u OSDE.',
+    capabilities: [
       {
-        icon: Upload,
+        id: 'lectura',
         title: 'Lectura automática del parte',
-        body: 'Extraemos paciente, procedimiento y códigos sin reescribir a mano.',
-        preview: [
-          { k: 'Paciente', v: 'OK' },
-          { k: 'Código 11010202', v: 'Swiss' },
-          { k: 'Autorización', v: 'Vigente' },
-        ],
+        body: 'Paciente, procedimiento y códigos extraídos del PDF o la foto — sin tipear de nuevo.',
+        outcome: 'El parte deja de ser una transcripción manual.',
+        icon: Upload,
       },
       {
-        icon: FileCheck,
+        id: 'facturacion',
         title: 'Inicio de facturación',
-        body: 'Arrancamos el proceso ante Swiss Medical u OSDE según corresponda.',
+        body: 'Arrancamos el proceso ante la prepaga con los datos ya ordenados.',
+        outcome: 'Un solo clic para abrir la liquidación del mes.',
+        icon: FileCheck,
       },
       {
-        icon: Building2,
+        id: 'prepagas',
         title: 'Swiss Medical y OSDE',
-        body: 'Reglas, nomenclador y requisitos específicos de cada prepaga.',
+        body: 'Nomenclador, reglas y requisitos distintos según la obra social.',
+        outcome: 'Validación con el código que corresponde a cada prepaga.',
+        icon: Building2,
       },
       {
-        icon: FileText,
+        id: 'trazabilidad',
         title: 'Trazabilidad de punta a punta',
-        body: 'Historial claro desde el documento hasta el envío.',
+        body: 'Sabés qué se subió, cuándo y en qué estado quedó cada envío.',
+        outcome: 'Historial claro desde el documento hasta la presentación.',
+        icon: FileText,
       },
     ],
   },
   {
     id: 'cobro',
     title: 'Control del cobro',
-    subtitle: 'Visibilidad de plazos, rechazos y proyección para no perder un peso.',
-    features: [
+    lead: 'Sabrás qué entra, qué se rechazó y qué hacer antes de que venza el plazo.',
+    context:
+      'Después del envío el médico queda a ciegas: mails genéricos, plazos que vencen y honorarios que no llegan. Trazá concentra cobro, rechazos y facturación en un solo lugar.',
+    capabilities: [
       {
-        icon: AlertTriangle,
+        id: 'avisos',
         title: 'Avisos a tiempo',
-        body: 'Te enterás del rechazo antes de que venza el plazo para reclamar.',
+        body: 'Alertas cuando hay rechazo o vencimiento — no cuando ya es tarde.',
+        outcome: 'Tiempo real para reclamar o corregir.',
+        icon: AlertTriangle,
       },
       {
-        icon: Sparkles,
+        id: 'correccion',
         title: 'Qué corregir, en cada caso',
-        body: 'Indicaciones concretas — no un mail genérico de la prepaga.',
+        body: 'Indicaciones concretas por parte, no un mail genérico de la prepaga.',
+        outcome: 'Menos idas y vueltas con administración.',
+        icon: Sparkles,
       },
       {
-        icon: Wallet,
+        id: 'proyeccion',
         title: 'Cuánto y cuándo cobrás',
         body: 'Proyección del mes y partes pendientes por prepaga.',
+        outcome: 'Visibilidad de caja sin armar planillas aparte.',
+        icon: Wallet,
       },
       {
-        icon: Receipt,
+        id: 'arca',
         title: 'ARCA integrado',
-        body: 'Facturación oficial desde la misma plataforma.',
+        body: 'Facturación oficial desde la misma plataforma cuando corresponde.',
+        outcome: 'Del cobro a la factura sin cambiar de sistema.',
+        icon: Receipt,
       },
     ],
   },
 ];
 
-function FeatureCard({
-  feature,
-  featured,
-}: {
-  feature: Feature;
-  featured?: boolean;
-}) {
-  const Icon = feature.icon;
-  return (
-    <article
-      className={[
-        styles.featureCard,
-        featured ? styles.featureCardFeatured : '',
-      ].join(' ')}
-    >
-      <div className={styles.featureCardTop}>
-        <div className={styles.featureIcon}>
-          <Icon size={20} aria-hidden />
-        </div>
-        <div>
-          <h4 className={styles.featureTitle}>{feature.title}</h4>
-          <p className={styles.featureBody}>{feature.body}</p>
-        </div>
-      </div>
-      {feature.preview && (
-        <div className={styles.featureMiniPreview} aria-hidden>
-          {feature.preview.map((r) => (
-            <div key={r.k} className={styles.featureMiniRow}>
-              <span>{r.k}</span>
-              <strong>{r.v}</strong>
-            </div>
-          ))}
-        </div>
-      )}
-    </article>
-  );
-}
+const AUTO_MS = 5500;
 
 export function LandingFeatures() {
+  const [pillarIndex, setPillarIndex] = useState(0);
+  const [capIndex, setCapIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
+
+  const pillar = PILLARS[pillarIndex];
+  const capability = pillar.capabilities[capIndex];
+  const CapIcon = capability.icon;
+
+  useEffect(() => {
+    setCapIndex(0);
+  }, [pillarIndex]);
+
+  useEffect(() => {
+    if (paused) return;
+    const id = window.setInterval(() => {
+      setCapIndex((i) => (i + 1) % pillar.capabilities.length);
+    }, AUTO_MS);
+    return () => window.clearInterval(id);
+  }, [paused, pillar.capabilities.length, pillarIndex]);
+
   return (
     <section className={styles.section} aria-labelledby="landing-features-title">
       <p className={styles.sectionLabel}>Qué resuelve</p>
-      <h2 id="landing-features-title" className="page-title">
+      <h2 id="landing-features-title" className={styles.landingSectionTitle}>
         Lo que hoy resolvemos en la práctica
       </h2>
       <p className="page-subtitle">
-        Dos frentes claros: lo que pasa con el parte y lo que pasa con tu cobro.
+        No es una lista de funciones sueltas: son los dos dolores que más escuchamos en consultorio,
+        y cómo Trazá los ataca hoy con Swiss Medical y OSDE.
       </p>
 
-      <div className={styles.featureSections}>
-        {SUBSECTIONS.map((sub, subIndex) => (
-          <div
-            key={sub.id}
-            id={`features-${sub.id}`}
-            className={styles.featureSubsection}
-          >
-            <div className={styles.featureSubsectionHead}>
-              <span className={styles.featureSubsectionNum}>{subIndex + 1}</span>
-              <div>
-                <h3 className={styles.featureSubsectionTitle}>{sub.title}</h3>
-                <p className={styles.featureSubsectionSubtitle}>{sub.subtitle}</p>
-              </div>
-            </div>
-            <div className={styles.featureGrid}>
-              {sub.features.map((f, i) => (
-                <FeatureCard key={f.title} feature={f} featured={i === 0} />
-              ))}
+      <div
+        className={styles.solveLayout}
+        onMouseEnter={() => setPaused(true)}
+        onMouseLeave={() => setPaused(false)}
+      >
+        <div className={styles.solveAside}>
+          <div className={styles.solvePillars} role="tablist" aria-label="Frentes de la plataforma">
+            {PILLARS.map((p, i) => (
+              <button
+                key={p.id}
+                type="button"
+                role="tab"
+                aria-selected={i === pillarIndex}
+                className={[
+                  styles.solvePillarBtn,
+                  i === pillarIndex ? styles.solvePillarBtnActive : '',
+                ].join(' ')}
+                onClick={() => setPillarIndex(i)}
+              >
+                <span className={styles.solvePillarNum}>{i + 1}</span>
+                <span className={styles.solvePillarCopy}>
+                  <span className={styles.solvePillarTitle}>{p.title}</span>
+                  <span className={styles.solvePillarLead}>{p.lead}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <ul className={styles.solveCapList} aria-label={`Capacidades: ${pillar.title}`}>
+            {pillar.capabilities.map((cap, i) => {
+              const RowIcon = cap.icon;
+              return (
+                <li key={cap.id}>
+                  <button
+                    type="button"
+                    className={[
+                      styles.solveCapBtn,
+                      i === capIndex ? styles.solveCapBtnActive : '',
+                    ].join(' ')}
+                    onClick={() => setCapIndex(i)}
+                    aria-current={i === capIndex ? 'true' : undefined}
+                  >
+                    <RowIcon size={16} aria-hidden />
+                    <span>{cap.title}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+
+        <div className={styles.solvePanel} role="tabpanel">
+          <div className={styles.solvePanelVisual} key={`${pillar.id}-${capability.id}`}>
+            <span className={styles.solvePanelTag}>{pillar.title}</span>
+            <h3 className={styles.solvePanelTitle}>{capability.title}</h3>
+            <p className={styles.solvePanelContext}>{pillar.context}</p>
+            <p className={styles.solvePanelDesc}>{capability.body}</p>
+            <p className={styles.solvePanelOutcome}>
+              <strong>En la práctica:</strong> {capability.outcome}
+            </p>
+            <div className={styles.solvePanelIconWrap} aria-hidden>
+              <CapIcon size={40} strokeWidth={1.25} />
             </div>
           </div>
-        ))}
+
+          <div className={styles.solveProgress} aria-hidden>
+            {pillar.capabilities.map((_, i) => (
+              <div key={i} className={styles.solveProgressDot}>
+                <div
+                  className={styles.solveProgressDotFill}
+                  style={{ width: i <= capIndex ? '100%' : '0%' }}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </section>
   );

@@ -6,9 +6,11 @@ import {
   formatCaeVencimientoForDb,
   insertNotaCreditoSubmission,
   notaCreditoStoragePath,
+  revertirWizardAPasoFacturaTrasNotaCredito,
   uploadFacturaPdf,
   type ReceptorPersistible,
 } from './factura-storage'
+import { syncWorkflowFromSubmission } from '@/lib/workflow-processes'
 import { generarPDFNotaCreditoC } from './pdf-nota-credito'
 import {
   buildWsfeContext,
@@ -347,6 +349,14 @@ export async function emitirNotaCreditoC(params: EmitirNotaCreditoCParams): Prom
     ncPath: pdfPath,
     receptor,
   })
+
+  const wizardRevertido = await revertirWizardAPasoFacturaTrasNotaCredito({
+    submissionId: facturaOriginal.id,
+    clerkUserId: params.clerkUserId,
+  })
+  if (wizardRevertido) {
+    await syncWorkflowFromSubmission(facturaOriginal.id, params.clerkUserId)
+  }
 
   // --- 13) URL firmada para descarga inmediata ---
   const pdfUrl = await createFacturaSignedUrl(pdfPath)

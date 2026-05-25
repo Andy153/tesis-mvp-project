@@ -17,6 +17,7 @@ type Submission = {
   factura_path: string | null;
   cae_numero: string | null;
   cae_vencimiento: string | null;
+  numero_comprobante: number | null;
   factura_adjuntada_en: string | null;
   wizard_completado_en: string | null;
 };
@@ -321,7 +322,37 @@ export function CobrosWizard({
         </div>
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'flex-end',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 8,
+          marginBottom: 12,
+        }}
+      >
+        {paso > 1 && (
+          <button
+            type="button"
+            className="btn"
+            style={{ fontSize: 12 }}
+            disabled={saving}
+            onClick={() => {
+              if (
+                window.confirm(
+                  '¿Reiniciar el proceso de cobro desde el paso 1?\n\n' +
+                    `El envío de planilla de ${periodoLabel(sub.periodo)} con otro parte sigue registrado en Trazá, pero vas a cargar comprobante, factura y adjunto de nuevo para este parte.\n\n` +
+                    'Se borran en este seguimiento: comprobante SMG, factura ARCA (CAE/PDF) y datos de adjunto en portal.',
+                )
+              ) {
+                patch('reiniciar_cobro');
+              }
+            }}
+          >
+            Reiniciar cobro desde paso 1
+          </button>
+        )}
         <button
           type="button"
           className="btn cobros-wizard__btn-muted"
@@ -340,6 +371,24 @@ export function CobrosWizard({
           Descartar seguimiento
         </button>
       </div>
+
+      {paso > 1 && (
+        <div
+          style={{
+            marginBottom: 14,
+            padding: '12px 14px',
+            borderRadius: 8,
+            background: '#fff7ed',
+            border: '1px solid #fdba74',
+            fontSize: 13,
+            lineHeight: 1.45,
+            color: '#9a3412',
+          }}
+        >
+          Si cargaste un <strong>parte nuevo</strong> en el mismo período que otro envío, usá{' '}
+          <strong>Reiniciar cobro desde paso 1</strong> para no quedar en el paso de un parte anterior.
+        </div>
+      )}
 
       {/* Paso 1 */}
       <Step numero={1} titulo="Esperá 48 horas para que Swiss Medical procese la liquidación" activo={paso === 1} completado={paso > 1}>
@@ -444,8 +493,22 @@ export function CobrosWizard({
           submissionId={sub.id}
           monto={sub.monto_total ?? 0}
           periodo={sub.periodo}
+          facturaYaEmitida={
+            sub.cae_numero
+              ? {
+                  cae: sub.cae_numero,
+                  caeVencimiento: sub.cae_vencimiento,
+                  nroComprobante: sub.numero_comprobante,
+                  pdfPath: sub.factura_path,
+                }
+              : undefined
+          }
           onExito={async () => {
             await patch('factura_emitida', {});
+          }}
+          onNotaCreditoEmitida={async () => {
+            await load();
+            onUpdate?.();
           }}
           onError={(mensaje) => {
             console.error('Error emitiendo factura:', mensaje);

@@ -83,6 +83,8 @@ export async function persistFacturaEmitidaToSubmission(params: {
       receptor_cuit: params.receptor.cuit,
       receptor_razon_social: params.receptor.razonSocial,
       receptor_condicion_iva_id: params.receptor.condicionIVAId,
+      wizard_estado: 'factura_instrucciones',
+      wizard_paso: 5,
       updated_at: new Date().toISOString(),
     })
     .eq('id', params.submissionId)
@@ -91,6 +93,50 @@ export async function persistFacturaEmitidaToSubmission(params: {
   if (error) {
     throw new Error(`No se pudo actualizar la liquidación: ${error.message}`)
   }
+}
+
+/**
+ * Tras anular la factura con NC durante el wizard de cobros SMG, vuelve al paso 4
+ * y limpia datos fiscales para poder emitir una factura nueva.
+ */
+export async function revertirWizardAPasoFacturaTrasNotaCredito(params: {
+  submissionId: string
+  clerkUserId: string
+}): Promise<boolean> {
+  const { data: sub, error: readErr } = await supabaseAdmin
+    .from('monthly_submissions')
+    .select('wizard_estado, wizard_paso')
+    .eq('id', params.submissionId)
+    .eq('clerk_user_id', params.clerkUserId)
+    .maybeSingle()
+
+  if (readErr || !sub) return false
+
+  const estado = sub.wizard_estado as string | null
+  const paso = Number(sub.wizard_paso ?? 0)
+  if (!estado || estado === 'descartado' || estado === 'aprobado') return false
+  if (paso < 4) return false
+
+  const { error: updErr } = await supabaseAdmin
+    .from('monthly_submissions')
+    .update({
+      wizard_paso: 4,
+      wizard_estado: 'comprobante_subido',
+      wizard_completado_en: null,
+      cae_numero: null,
+      cae_vencimiento: null,
+      factura_path: null,
+      numero_comprobante: null,
+      factura_adjuntada_en: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', params.submissionId)
+    .eq('clerk_user_id', params.clerkUserId)
+
+  if (updErr) {
+    throw new Error(`No se pudo actualizar el wizard tras la NC: ${updErr.message}`)
+  }
+  return true
 }
 
 /**

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { formatCaeDate } from '@/lib/arca/utils';
 import { navigateToPerfil } from '@/lib/traza-nav';
 import {
@@ -14,14 +14,29 @@ export interface FacturaARCAProps {
   submissionId: string;
   monto: number;
   periodo: string;
+  /** Si la liquidación ya tiene factura emitida (reabrir wizard / volver al paso 4). */
+  facturaYaEmitida?: {
+    cae: string;
+    caeVencimiento: string | null;
+    nroComprobante: number | null;
+    pdfPath: string | null;
+  };
   onExito: (cae: string, caeFechaVto: string, nroComprobante: number) => void | Promise<void>;
   onError: (mensaje: string) => void;
+  /** Tras NC durante el wizard de cobros: recargar submission (vuelve al paso 4). */
+  onNotaCreditoEmitida?: () => void | Promise<void>;
 }
 
 type Estado = 'idle' | 'loading' | 'exito' | 'error';
 
-const SWISS_MEDICAL_CUIT = '30692317714';
 const SWISS_MEDICAL_RAZON_SOCIAL = 'Swiss Medical S.A.';
+
+type EmisionConfig = {
+  ambiente: 'desarrollo' | 'produccion';
+  ambienteFuente: 'env' | 'perfil';
+  receptor: { cuit: string; cuitFormateado: string; razonSocial: string };
+  esProduccion: boolean;
+};
 
 function lastDayOfMonth(periodo: string): string {
   const [year, month] = periodo.split('-').map(Number);
@@ -74,19 +89,35 @@ function Spinner() {
   );
 }
 
-export function FacturaARCA({ submissionId, monto, periodo, onExito, onError }: FacturaARCAProps) {
+export function FacturaARCA({
+  submissionId,
+  monto,
+  periodo,
+  facturaYaEmitida,
+  onExito,
+  onError,
+  onNotaCreditoEmitida,
+}: FacturaARCAProps) {
   const {
     loading: fiscalLoading,
+    profile,
     complete: fiscalComplete,
     certReady,
     canFacturar,
   } = useFiscalProfile();
-  const [estado, setEstado] = useState<Estado>('idle');
-  const [caeEmitido, setCaeEmitido] = useState<string | null>(null);
-  const [caeFechaVtoEmitido, setCaeFechaVtoEmitido] = useState<string | null>(null);
-  const [nroComprobanteEmitido, setNroComprobanteEmitido] = useState<number | null>(null);
+  const [estado, setEstado] = useState<Estado>(() =>
+    facturaYaEmitida?.cae ? 'exito' : 'idle',
+  );
+  const [caeEmitido, setCaeEmitido] = useState<string | null>(facturaYaEmitida?.cae ?? null);
+  const [caeFechaVtoEmitido, setCaeFechaVtoEmitido] = useState<string | null>(
+    facturaYaEmitida?.caeVencimiento ?? null,
+  );
+  const [nroComprobanteEmitido, setNroComprobanteEmitido] = useState<number | null>(
+    facturaYaEmitida?.nroComprobante ?? null,
+  );
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [pdfPath, setPdfPath] = useState<string | null>(null);
+  const [pdfPath, setPdfPath] = useState<string | null>(facturaYaEmitida?.pdfPath ?? null);
+  const [ambienteEmitido, setAmbienteEmitido] = useState<'desarrollo' | 'produccion' | null>(null);
   const [refreshingPdfUrl, setRefreshingPdfUrl] = useState(false);
   const [mensajeError, setMensajeError] = useState<string | null>(null);
   const [continuando, setContinuando] = useState(false);
@@ -94,9 +125,54 @@ export function FacturaARCA({ submissionId, monto, periodo, onExito, onError }: 
   // --- NC ---
   const [ncModalAbierto, setNcModalAbierto] = useState(false);
   const [ncEmitida, setNcEmitida] = useState<{ cae: string; numero: number; pdfUrl?: string } | null>(null);
+  const [emisionConfig, setEmisionConfig] = useState<EmisionConfig | null>(null);
+  const [configLoading, setConfigLoading] = useState(true);
 
   const necesitaMontoManual = monto === 0;
   const montoFacturar = necesitaMontoManual ? Number(montoManual) || 0 : monto;
+
+  const ambienteEfectivo = ambienteEmitido ?? emisionConfig?.ambiente ?? 'desarrollo';
+  const ambienteLabel = ambienteEfectivo === 'produccion' ? 'Producción' : 'Homologación';
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      setConfigLoading(true);
+      try {
+        const r = await fetch('/api/arca/emision-config');
+        const j = await r.json();
+        if (!cancelled && r.ok) setEmisionConfig(j as EmisionConfig);
+      } catch {
+        if (!cancelled) setEmisionConfig(null);
+      } finally {
+        if (!cancelled) setConfigLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!facturaYaEmitida?.cae || !facturaYaEmitida.pdfPath) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const r = await fetch('/api/arca/factura/pdf-url', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pdfPath: facturaYaEmitida.pdfPath }),
+        });
+        const j = await r.json();
+        if (!cancelled && r.ok) setPdfUrl(j.pdfUrl ?? null);
+      } catch {
+        /* enlace opcional al reabrir */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [facturaYaEmitida?.cae, facturaYaEmitida?.pdfPath]);
 
   const emitir = async () => {
     const blockedMsg = getFacturacionBlockedMessage(fiscalComplete, certReady);
@@ -114,7 +190,6 @@ export function FacturaARCA({ submissionId, monto, periodo, onExito, onError }: 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          cuitReceptor: SWISS_MEDICAL_CUIT,
           importeTotal: montoFacturar,
           periodoDesde: `${periodo}-01`,
           periodoHasta: lastDayOfMonth(periodo),
@@ -135,6 +210,9 @@ export function FacturaARCA({ submissionId, monto, periodo, onExito, onError }: 
       setNroComprobanteEmitido(j.nroComprobante ?? null);
       setPdfUrl(j.pdfUrl ?? null);
       setPdfPath(j.pdfPath ?? null);
+      if (j.ambiente === 'produccion' || j.ambiente === 'desarrollo') {
+        setAmbienteEmitido(j.ambiente);
+      }
       setEstado('exito');
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Error de conexión';
@@ -206,6 +284,9 @@ export function FacturaARCA({ submissionId, monto, periodo, onExito, onError }: 
           }}
         >
           <div style={{ fontWeight: 700, marginBottom: 8 }}>✓ Factura emitida correctamente</div>
+          <p style={{ fontSize: 12, margin: '0 0 8px', color: '#3d6b55' }}>
+            Ambiente ARCA: <strong>{ambienteLabel}</strong>
+          </p>
           {caeEmitido && (
             <p style={{ fontSize: 14, margin: '4px 0' }}>
               <strong>CAE:</strong> {caeEmitido}
@@ -321,12 +402,20 @@ export function FacturaARCA({ submissionId, monto, periodo, onExito, onError }: 
             submissionAnuladaId={submissionId}
             facturaOriginal={facturaParaNC}
             onClose={() => setNcModalAbierto(false)}
-            onSuccess={(resultado) => {
+            onSuccess={async (resultado) => {
               setNcEmitida({
                 cae: resultado.cae,
                 numero: resultado.numeroComprobante,
                 pdfUrl: resultado.pdfUrl,
               });
+              setEstado('idle');
+              setCaeEmitido(null);
+              setCaeFechaVtoEmitido(null);
+              setNroComprobanteEmitido(null);
+              setPdfUrl(null);
+              setPdfPath(null);
+              setContinuando(false);
+              await onNotaCreditoEmitida?.();
             }}
           />
         ) : null}
@@ -357,7 +446,7 @@ export function FacturaARCA({ submissionId, monto, periodo, onExito, onError }: 
     );
   }
 
-  if (fiscalLoading) {
+  if (fiscalLoading || configLoading) {
     return (
       <p style={{ fontSize: 14, color: 'var(--text-muted)', margin: 0 }}>
         Verificando configuración para facturar…
@@ -428,9 +517,49 @@ export function FacturaARCA({ submissionId, monto, periodo, onExito, onError }: 
           Monto a facturar: <strong style={{ color: '#1f5d3a' }}>{formatPesos(monto)}</strong>
         </p>
       )}
-      <p style={{ fontSize: 14, color: '#555', margin: '0 0 16px' }}>
+      <p style={{ fontSize: 14, color: '#555', margin: '0 0 12px' }}>
         Período: <strong>{periodoLabel(periodo)}</strong>
       </p>
+
+      {emisionConfig && (
+        <div
+          style={{
+            padding: 14,
+            marginBottom: 16,
+            borderRadius: 10,
+            border: emisionConfig.esProduccion ? '2px solid #b45309' : '1px solid #7bc398',
+            background: emisionConfig.esProduccion ? '#fff7ed' : '#e8f5ee',
+            color: emisionConfig.esProduccion ? '#9a3412' : '#1f5d3a',
+          }}
+          role="alert"
+        >
+          <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: 14 }}>
+            {emisionConfig.esProduccion
+              ? 'Vas a emitir una factura REAL en AFIP (producción)'
+              : 'Emisión en homologación (sin validez fiscal)'}
+          </p>
+          <p style={{ margin: '0 0 6px', fontSize: 13 }}>
+            <strong>Ambiente:</strong> {ambienteLabel}
+            {emisionConfig.ambienteFuente === 'env' ? ' (definido en AFIP_AMBIENTE del servidor)' : ''}
+          </p>
+          <p style={{ margin: '0 0 6px', fontSize: 13 }}>
+            <strong>Receptor:</strong> {emisionConfig.receptor.razonSocial} (CUIT{' '}
+            {emisionConfig.receptor.cuitFormateado})
+          </p>
+          {emisionConfig.esProduccion ? (
+            <p style={{ margin: 0, fontSize: 12, lineHeight: 1.45 }}>
+              El CAE quedará registrado en AFIP. Verificá monto y período antes de confirmar. Necesitás
+              certificado de <strong>producción</strong> cargado en Tu perfil.
+            </p>
+          ) : (
+            <p style={{ margin: 0, fontSize: 12, lineHeight: 1.45 }}>
+              Para facturas reales, configurá <code>AFIP_AMBIENTE=produccion</code> en{' '}
+              <code>.env.local</code> y reiniciá el servidor.
+            </p>
+          )}
+        </div>
+      )}
+
       <button
         type="button"
         className="btn btn-primary"
@@ -452,7 +581,11 @@ export function FacturaARCA({ submissionId, monto, periodo, onExito, onError }: 
         )}
       </button>
       <p style={{ fontSize: 12, color: '#888', margin: '12px 0 0' }}>
-        Se emitirá a Swiss Medical · Factura C · Homologación
+        Factura C · {ambienteLabel}
+        {emisionConfig
+          ? ` · ${emisionConfig.receptor.razonSocial}`
+          : ''}
+        {facturaYaEmitida?.cae ? ' · Ya tenés una factura emitida para este período' : ''}
       </p>
     </div>
   );

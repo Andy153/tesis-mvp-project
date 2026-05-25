@@ -20,6 +20,24 @@ type TabId = (typeof TABS)[number]['id'];
 
 const AUTO_MS = 4500;
 
+const PREVIEW_CALENDAR_WEEKDAYS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'] as const;
+const PREVIEW_CALENDAR_CREDITED = new Set([3, 8, 12, 15, 19, 22, 27]);
+const PREVIEW_CALENDAR_TOOLTIP_DAY = 15;
+
+/** Mayo 2026 — empieza viernes (4 celdas vacías con semana Lun–Dom). */
+const PREVIEW_CALENDAR_CELLS: { day: number | null; credited?: boolean; tooltip?: boolean }[] = [
+  ...Array.from({ length: 4 }, () => ({ day: null as number | null })),
+  ...Array.from({ length: 31 }, (_, i) => {
+    const day = i + 1;
+    return {
+      day,
+      credited: PREVIEW_CALENDAR_CREDITED.has(day),
+      tooltip: day === PREVIEW_CALENDAR_TOOLTIP_DAY,
+    };
+  }),
+  ...Array.from({ length: 35 - 4 - 31 }, () => ({ day: null as number | null })),
+];
+
 export function LandingAppPreview({ className }: { className?: string }) {
   const [tab, setTab] = useState<TabId>('upload');
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -202,22 +220,52 @@ export function LandingAppPreview({ className }: { className?: string }) {
                   <strong>2 partes</strong>
                 </div>
               </div>
-              <div className={styles.previewBars} aria-hidden>
-                {[
-                  { label: 'Sem 1', h: 45 },
-                  { label: 'Sem 2', h: 62 },
-                  { label: 'Sem 3', h: 38 },
-                  { label: 'Sem 4', h: 88 },
-                ].map((b) => (
-                  <div key={b.label} className={styles.previewBarCol}>
-                    <div className={styles.previewBarTrack}>
-                      <div className={styles.previewBarFill} style={{ height: `${b.h}%` }} />
+              <div className={styles.previewCalendar} aria-hidden>
+                <div className={styles.previewCalendarHead}>
+                  <span className={styles.previewCalendarMonth}>Mayo 2026</span>
+                  <span className={styles.previewCalendarLegend}>
+                    <span className={styles.previewCalendarLegendDot} />
+                    Acreditado
+                  </span>
+                </div>
+                <div className={styles.previewCalendarWeekdays}>
+                  {PREVIEW_CALENDAR_WEEKDAYS.map((d) => (
+                    <span key={d} className={styles.previewCalendarWeekday}>
+                      {d}
+                    </span>
+                  ))}
+                </div>
+                <div className={styles.previewCalendarGrid}>
+                  {PREVIEW_CALENDAR_CELLS.map((cell, i) => (
+                    <div
+                      key={i}
+                      className={[
+                        styles.previewCalendarDay,
+                        cell.day == null ? styles.previewCalendarDayEmpty : '',
+                        cell.credited ? styles.previewCalendarDayCredited : '',
+                        cell.tooltip ? styles.previewCalendarDayTooltip : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                    >
+                      {cell.day != null ? (
+                        <>
+                          <span className={styles.previewCalendarDayNum}>{cell.day}</span>
+                          {cell.credited && (
+                            <span className={styles.previewCalendarDot} aria-hidden />
+                          )}
+                          {cell.tooltip && (
+                            <span className={styles.previewCalendarChip}>
+                              Cobro acreditado · $48.500
+                            </span>
+                          )}
+                        </>
+                      ) : null}
                     </div>
-                    <span>{b.label}</span>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-              <p className={styles.previewHint}>Cobros estimados por semana · datos de ejemplo</p>
+              <p className={styles.previewHint}>Acreditaciones del mes · datos de ejemplo</p>
             </div>
           </div>
         </div>

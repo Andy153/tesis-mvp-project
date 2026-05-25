@@ -125,6 +125,7 @@ export function LandingAppPreview({ className }: { className?: string }) {
             aria-hidden={tab !== 'upload'}
             className={[
               styles.appPreviewPanel,
+              styles.appPreviewPanelCentered,
               tab === 'upload' ? styles.appPreviewPanelActive : '',
             ].join(' ')}
           >
@@ -186,6 +187,7 @@ export function LandingAppPreview({ className }: { className?: string }) {
             aria-hidden={tab !== 'dashboard'}
             className={[
               styles.appPreviewPanel,
+              styles.appPreviewPanelCentered,
               tab === 'dashboard' ? styles.appPreviewPanelActive : '',
             ].join(' ')}
           >

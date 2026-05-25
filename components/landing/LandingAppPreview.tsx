@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AlertCircle,
   CheckCircle2,
@@ -24,6 +24,19 @@ export function LandingAppPreview({ className }: { className?: string }) {
   const [tab, setTab] = useState<TabId>('upload');
   const [uploadProgress, setUploadProgress] = useState(0);
   const [paused, setPaused] = useState(false);
+  const panelsWrapRef = useRef<HTMLDivElement>(null);
+  const [panelMinHeight, setPanelMinHeight] = useState(220);
+
+  const measurePanels = useCallback(() => {
+    const wrap = panelsWrapRef.current;
+    if (!wrap) return;
+    const panels = wrap.querySelectorAll<HTMLElement>('[data-preview-panel]');
+    let max = 0;
+    panels.forEach((el) => {
+      max = Math.max(max, el.offsetHeight);
+    });
+    if (max > 0) setPanelMinHeight(Math.ceil(max));
+  }, []);
 
   useEffect(() => {
     if (tab !== 'upload') return;
@@ -46,6 +59,24 @@ export function LandingAppPreview({ className }: { className?: string }) {
     }, AUTO_MS);
     return () => window.clearInterval(id);
   }, [paused]);
+
+  useEffect(() => {
+    measurePanels();
+  }, [measurePanels, uploadProgress]);
+
+  useEffect(() => {
+    const wrap = panelsWrapRef.current;
+    if (!wrap) return;
+
+    const ro = new ResizeObserver(() => measurePanels());
+    wrap.querySelectorAll('[data-preview-panel]').forEach((el) => ro.observe(el));
+    window.addEventListener('resize', measurePanels);
+
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', measurePanels);
+    };
+  }, [measurePanels]);
 
   return (
     <div
@@ -83,81 +114,111 @@ export function LandingAppPreview({ className }: { className?: string }) {
       </div>
 
       <div className={styles.appPreviewBody}>
-        {tab === 'upload' && (
-          <div className={styles.previewUpload}>
-            <div className={styles.previewDropzone}>
-              <Upload size={28} strokeWidth={1.5} aria-hidden />
-              <p>Parte quirúrgico + autorización</p>
-              <span className={styles.previewFileName}>parte_histeroscopia_mayo.pdf</span>
-            </div>
-            <div className={styles.previewProgressTrack}>
-              <div
-                className={styles.previewProgressFill}
-                style={{ width: `${uploadProgress}%` }}
-              />
-            </div>
-            <p className={styles.previewHint}>
-              {uploadProgress >= 100 ? 'Listo para extraer datos' : 'Subiendo documento…'}
-            </p>
-          </div>
-        )}
-
-        {tab === 'validate' && (
-          <div className={styles.previewValidate}>
-            <div className={styles.previewFieldRow}>
-              <span>Paciente</span>
-              <strong>María G. · DNI 24.***.***</strong>
-              <CheckCircle2 size={16} className={styles.previewOk} aria-hidden />
-            </div>
-            <div className={styles.previewFieldRow}>
-              <span>Código nomenclador</span>
-              <strong>11010202 · Swiss Medical</strong>
-              <CheckCircle2 size={16} className={styles.previewOk} aria-hidden />
-            </div>
-            <div className={styles.previewFieldRow}>
-              <span>Autorización</span>
-              <strong>Vigente · OSDE 310</strong>
-              <CheckCircle2 size={16} className={styles.previewOk} aria-hidden />
-            </div>
-            <div className={[styles.previewFieldRow, styles.previewFieldWarn].join(' ')}>
-              <span>Plazo de presentación</span>
-              <strong>12 días restantes</strong>
-              <AlertCircle size={16} className={styles.previewWarn} aria-hidden />
-            </div>
-            <span className={styles.previewBadgeOk}>3 validaciones OK · 1 alerta</span>
-          </div>
-        )}
-
-        {tab === 'dashboard' && (
-          <div className={styles.previewDashboard}>
-            <div className={styles.previewKpis}>
-              <div className={styles.previewKpi}>
-                <span>Proyección mayo</span>
-                <strong>USD 4.280</strong>
+        <div
+          ref={panelsWrapRef}
+          className={styles.appPreviewPanels}
+          style={{ minHeight: panelMinHeight }}
+        >
+          <div
+            data-preview-panel
+            role="tabpanel"
+            aria-hidden={tab !== 'upload'}
+            className={[
+              styles.appPreviewPanel,
+              tab === 'upload' ? styles.appPreviewPanelActive : '',
+            ].join(' ')}
+          >
+            <div className={styles.previewUpload}>
+              <div className={styles.previewDropzone}>
+                <Upload size={28} strokeWidth={1.5} aria-hidden />
+                <p>Parte quirúrgico + autorización</p>
+                <span className={styles.previewFileName}>parte_histeroscopia_mayo.pdf</span>
               </div>
-              <div className={styles.previewKpi}>
-                <span>Pendiente Swiss</span>
-                <strong>2 partes</strong>
+              <div className={styles.previewProgressTrack}>
+                <div
+                  className={styles.previewProgressFill}
+                  style={{ width: `${uploadProgress}%` }}
+                />
               </div>
+              <p className={styles.previewHint}>
+                {uploadProgress >= 100 ? 'Listo para extraer datos' : 'Subiendo documento…'}
+              </p>
             </div>
-            <div className={styles.previewBars} aria-hidden>
-              {[
-                { label: 'Sem 1', h: 45 },
-                { label: 'Sem 2', h: 62 },
-                { label: 'Sem 3', h: 38 },
-                { label: 'Sem 4', h: 88 },
-              ].map((b) => (
-                <div key={b.label} className={styles.previewBarCol}>
-                  <div className={styles.previewBarTrack}>
-                    <div className={styles.previewBarFill} style={{ height: `${b.h}%` }} />
-                  </div>
-                  <span>{b.label}</span>
+          </div>
+
+          <div
+            data-preview-panel
+            role="tabpanel"
+            aria-hidden={tab !== 'validate'}
+            className={[
+              styles.appPreviewPanel,
+              tab === 'validate' ? styles.appPreviewPanelActive : '',
+            ].join(' ')}
+          >
+            <div className={styles.previewValidate}>
+              <div className={styles.previewFieldRow}>
+                <span>Paciente</span>
+                <strong>María G. · DNI 24.***.***</strong>
+                <CheckCircle2 size={16} className={styles.previewOk} aria-hidden />
+              </div>
+              <div className={styles.previewFieldRow}>
+                <span>Código nomenclador</span>
+                <strong>11010202 · Swiss Medical</strong>
+                <CheckCircle2 size={16} className={styles.previewOk} aria-hidden />
+              </div>
+              <div className={styles.previewFieldRow}>
+                <span>Autorización</span>
+                <strong>Vigente · OSDE 310</strong>
+                <CheckCircle2 size={16} className={styles.previewOk} aria-hidden />
+              </div>
+              <div className={[styles.previewFieldRow, styles.previewFieldWarn].join(' ')}>
+                <span>Plazo de presentación</span>
+                <strong>12 días restantes</strong>
+                <AlertCircle size={16} className={styles.previewWarn} aria-hidden />
+              </div>
+              <span className={styles.previewBadgeOk}>3 validaciones OK · 1 alerta</span>
+            </div>
+          </div>
+
+          <div
+            data-preview-panel
+            role="tabpanel"
+            aria-hidden={tab !== 'dashboard'}
+            className={[
+              styles.appPreviewPanel,
+              tab === 'dashboard' ? styles.appPreviewPanelActive : '',
+            ].join(' ')}
+          >
+            <div className={styles.previewDashboard}>
+              <div className={styles.previewKpis}>
+                <div className={styles.previewKpi}>
+                  <span>Proyección mayo</span>
+                  <strong>USD 4.280</strong>
                 </div>
-              ))}
+                <div className={styles.previewKpi}>
+                  <span>Pendiente Swiss</span>
+                  <strong>2 partes</strong>
+                </div>
+              </div>
+              <div className={styles.previewBars} aria-hidden>
+                {[
+                  { label: 'Sem 1', h: 45 },
+                  { label: 'Sem 2', h: 62 },
+                  { label: 'Sem 3', h: 38 },
+                  { label: 'Sem 4', h: 88 },
+                ].map((b) => (
+                  <div key={b.label} className={styles.previewBarCol}>
+                    <div className={styles.previewBarTrack}>
+                      <div className={styles.previewBarFill} style={{ height: `${b.h}%` }} />
+                    </div>
+                    <span>{b.label}</span>
+                  </div>
+                ))}
+              </div>
+              <p className={styles.previewHint}>Cobros estimados por semana · datos de ejemplo</p>
             </div>
-            <p className={styles.previewHint}>Cobros estimados por semana · datos de ejemplo</p>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

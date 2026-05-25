@@ -21,18 +21,29 @@ type TabId = (typeof TABS)[number]['id'];
 const AUTO_MS = 4500;
 
 const PREVIEW_CALENDAR_WEEKDAYS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'] as const;
-const PREVIEW_CALENDAR_CREDITED = new Set([3, 8, 12, 15, 19, 22, 27]);
-const PREVIEW_CALENDAR_TOOLTIP_DAY = 15;
+
+const PREVIEW_CALENDAR_PAYMENTS: Record<number, string> = {
+  3: '$12.400',
+  8: '$28.200',
+  12: '$31.000',
+  15: '$48.500',
+  19: '$22.800',
+  22: '$15.600',
+  27: '$9.200',
+};
+
+const PREVIEW_CALENDAR_CREDITED = new Set(
+  Object.keys(PREVIEW_CALENDAR_PAYMENTS).map((d) => Number(d)),
+);
 
 /** Mayo 2026 — empieza viernes (4 celdas vacías con semana Lun–Dom). */
-const PREVIEW_CALENDAR_CELLS: { day: number | null; credited?: boolean; tooltip?: boolean }[] = [
+const PREVIEW_CALENDAR_CELLS: { day: number | null; credited?: boolean }[] = [
   ...Array.from({ length: 4 }, () => ({ day: null as number | null })),
   ...Array.from({ length: 31 }, (_, i) => {
     const day = i + 1;
     return {
       day,
       credited: PREVIEW_CALENDAR_CREDITED.has(day),
-      tooltip: day === PREVIEW_CALENDAR_TOOLTIP_DAY,
     };
   }),
   ...Array.from({ length: 35 - 4 - 31 }, () => ({ day: null as number | null })),
@@ -44,6 +55,7 @@ export function LandingAppPreview({ className }: { className?: string }) {
   const [paused, setPaused] = useState(false);
   const panelsWrapRef = useRef<HTMLDivElement>(null);
   const [panelMinHeight, setPanelMinHeight] = useState(220);
+  const [selectedCalendarDay, setSelectedCalendarDay] = useState(15);
 
   const measurePanels = useCallback(() => {
     const wrap = panelsWrapRef.current;
@@ -80,7 +92,7 @@ export function LandingAppPreview({ className }: { className?: string }) {
 
   useEffect(() => {
     measurePanels();
-  }, [measurePanels, uploadProgress]);
+  }, [measurePanels, uploadProgress, selectedCalendarDay]);
 
   useEffect(() => {
     const wrap = panelsWrapRef.current;
@@ -220,12 +232,12 @@ export function LandingAppPreview({ className }: { className?: string }) {
                   <strong>2 partes</strong>
                 </div>
               </div>
-              <div className={styles.previewCalendar} aria-hidden>
+              <div className={styles.previewCalendar}>
                 <div className={styles.previewCalendarHead}>
                   <span className={styles.previewCalendarMonth}>Mayo 2026</span>
                   <span className={styles.previewCalendarLegend}>
                     <span className={styles.previewCalendarLegendDot} />
-                    Acreditado
+                    Tocá un día acreditado
                   </span>
                 </div>
                 <div className={styles.previewCalendarWeekdays}>
@@ -235,34 +247,64 @@ export function LandingAppPreview({ className }: { className?: string }) {
                     </span>
                   ))}
                 </div>
-                <div className={styles.previewCalendarGrid}>
-                  {PREVIEW_CALENDAR_CELLS.map((cell, i) => (
-                    <div
-                      key={i}
-                      className={[
-                        styles.previewCalendarDay,
-                        cell.day == null ? styles.previewCalendarDayEmpty : '',
-                        cell.credited ? styles.previewCalendarDayCredited : '',
-                        cell.tooltip ? styles.previewCalendarDayTooltip : '',
-                      ]
-                        .filter(Boolean)
-                        .join(' ')}
-                    >
-                      {cell.day != null ? (
-                        <>
-                          <span className={styles.previewCalendarDayNum}>{cell.day}</span>
-                          {cell.credited && (
-                            <span className={styles.previewCalendarDot} aria-hidden />
+                <div className={styles.previewCalendarGrid} role="grid" aria-label="Mayo 2026">
+                  {PREVIEW_CALENDAR_CELLS.map((cell, i) => {
+                    if (cell.day == null) {
+                      return (
+                        <div
+                          key={i}
+                          role="presentation"
+                          className={[styles.previewCalendarDay, styles.previewCalendarDayEmpty].join(
+                            ' ',
                           )}
-                          {cell.tooltip && (
-                            <span className={styles.previewCalendarChip}>
-                              Cobro acreditado · $48.500
+                        />
+                      );
+                    }
+
+                    const isSelected = selectedCalendarDay === cell.day;
+                    const amount = PREVIEW_CALENDAR_PAYMENTS[cell.day];
+                    const chipBelow = cell.day <= 14;
+
+                    if (cell.credited) {
+                      return (
+                        <button
+                          key={i}
+                          type="button"
+                          role="gridcell"
+                          aria-label={`Día ${cell.day}, cobro acreditado ${amount}`}
+                          aria-pressed={isSelected}
+                          className={[
+                            styles.previewCalendarDay,
+                            styles.previewCalendarDayCredited,
+                            styles.previewCalendarDayBtn,
+                            isSelected ? styles.previewCalendarDaySelected : '',
+                          ].join(' ')}
+                          onClick={() => setSelectedCalendarDay(cell.day!)}
+                        >
+                          <span className={styles.previewCalendarDayNum}>{cell.day}</span>
+                          <span className={styles.previewCalendarDot} aria-hidden />
+                          {isSelected && amount && (
+                            <span
+                              className={[
+                                styles.previewCalendarChip,
+                                chipBelow ? styles.previewCalendarChipBelow : '',
+                              ]
+                                .filter(Boolean)
+                                .join(' ')}
+                            >
+                              Cobro acreditado · {amount}
                             </span>
                           )}
-                        </>
-                      ) : null}
-                    </div>
-                  ))}
+                        </button>
+                      );
+                    }
+
+                    return (
+                      <div key={i} role="gridcell" className={styles.previewCalendarDay}>
+                        <span className={styles.previewCalendarDayNum}>{cell.day}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
               <p className={styles.previewHint}>Acreditaciones del mes · datos de ejemplo</p>

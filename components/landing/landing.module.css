@@ -262,7 +262,7 @@
 
 .appPreviewPanelCentered {
   bottom: 0;
-  align-items: center;
+  align-items: stretch;
   justify-content: center;
 }
 
@@ -280,6 +280,11 @@
 .previewDashboard {
   width: 100%;
   max-width: 100%;
+}
+
+.appPreviewPanelCentered .previewDashboard {
+  flex: 1;
+  min-height: 0;
 }
 
 .previewUpload {
@@ -383,14 +388,20 @@
 }
 
 .previewDashboard {
-  display: grid;
-  gap: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  align-self: stretch;
 }
 
 .previewKpis {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+  flex-shrink: 0;
 }
 
 .previewKpi {
@@ -415,7 +426,12 @@
 
 /* Mini calendario — panel Cobrar */
 .previewCalendar {
-  padding: 12px;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+  padding: clamp(8px, 2.5vw, 12px);
   border-radius: 12px;
   background: linear-gradient(155deg, var(--landing-ink) 0%, #1a4a38 100%);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -427,11 +443,12 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 10px;
+  margin-bottom: clamp(6px, 1.5vw, 10px);
+  flex-shrink: 0;
 }
 
 .previewCalendarMonth {
-  font-size: 12px;
+  font-size: clamp(10px, 2.8vw, 12px);
   font-weight: 600;
   color: #e8f5ee;
   letter-spacing: 0.02em;
@@ -441,7 +458,7 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 9px;
+  font-size: clamp(8px, 2.2vw, 9px);
   font-weight: 600;
   color: rgba(232, 245, 238, 0.65);
 }
@@ -456,41 +473,73 @@
 
 .previewCalendarWeekdays {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 4px;
-  margin-bottom: 6px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: clamp(2px, 0.8vw, 4px);
+  margin-bottom: clamp(4px, 1vw, 6px);
+  flex-shrink: 0;
 }
 
 .previewCalendarWeekday {
   text-align: center;
-  font-size: 9px;
+  font-size: clamp(8px, 2.2vw, 9px);
   font-weight: 700;
   letter-spacing: 0.04em;
   color: rgba(232, 245, 238, 0.45);
 }
 
 .previewCalendarGrid {
+  flex: 1 1 auto;
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 4px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-rows: repeat(5, minmax(0, 1fr));
+  gap: clamp(2px, 0.8vw, 4px);
+  min-height: 0;
 }
 
 .previewCalendarDay {
   position: relative;
-  aspect-ratio: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 6px;
-  min-height: 28px;
+  min-height: 0;
+  min-width: 0;
 }
 
 .previewCalendarDayEmpty {
   pointer-events: none;
 }
 
+.previewCalendarDayBtn {
+  border: none;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  font-family: inherit;
+  cursor: pointer;
+  background: transparent;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.previewCalendarDayBtn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.previewCalendarDayBtn:focus-visible {
+  outline: 2px solid #7dcea8;
+  outline-offset: 1px;
+  z-index: 3;
+}
+
+.previewCalendarDaySelected {
+  background: rgba(42, 107, 82, 0.55);
+  box-shadow: inset 0 0 0 1px rgba(125, 206, 168, 0.55);
+  z-index: 2;
+}
+
 .previewCalendarDayNum {
-  font-size: 10px;
+  font-size: clamp(9px, 2.5vw, 11px);
   font-weight: 600;
   color: rgba(232, 245, 238, 0.88);
   line-height: 1;
@@ -502,18 +551,14 @@
 
 .previewCalendarDot {
   position: absolute;
-  bottom: 3px;
+  bottom: clamp(2px, 12%, 4px);
   left: 50%;
   transform: translateX(-50%);
-  width: 5px;
-  height: 5px;
+  width: clamp(4px, 1.2vw, 5px);
+  height: clamp(4px, 1.2vw, 5px);
   border-radius: 50%;
   background: var(--accent);
   box-shadow: 0 0 6px rgba(61, 154, 114, 0.65);
-}
-
-.previewCalendarDayTooltip {
-  z-index: 2;
 }
 
 .previewCalendarChip {
@@ -525,12 +570,25 @@
   border-radius: 7px;
   background: #fff;
   color: var(--landing-ink);
-  font-size: 9px;
+  font-size: clamp(8px, 2.2vw, 9px);
   font-weight: 700;
   line-height: 1.25;
   white-space: nowrap;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.28);
   pointer-events: none;
+  z-index: 4;
+  animation: previewCalendarChipIn 0.2s ease;
+}
+
+@keyframes previewCalendarChipIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
 }
 
 .previewCalendarChip::after {
@@ -543,7 +601,20 @@
   border-top-color: #fff;
 }
 
+.previewCalendarChipBelow {
+  bottom: auto;
+  top: calc(100% + 5px);
+}
+
+.previewCalendarChipBelow::after {
+  top: auto;
+  bottom: 100%;
+  border-top-color: transparent;
+  border-bottom-color: #fff;
+}
+
 .previewDashboard .previewHint {
+  flex-shrink: 0;
   color: var(--text-soft);
 }
 

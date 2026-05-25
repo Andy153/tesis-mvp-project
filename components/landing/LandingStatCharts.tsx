@@ -4,191 +4,112 @@ import { useCallback, useEffect, useState } from 'react';
 import { useInView } from './hooks/useInView';
 import styles from './landing.module.css';
 
-type StatId = 'rechazos' | 'satisfaccion' | 'cobros' | 'cuotas';
+type StatId = 'software' | 'satisfaccion' | 'perdidos' | 'visibilidad';
 
-const STATS: {
+type StatConfig = {
   id: StatId;
   label: string;
-  headline: string;
+  value: string;
   detail: string;
-}[] = [
+  bookend?: boolean;
+  fadeIn?: boolean;
+  countUpTo?: number;
+  countUpSuffix?: string;
+};
+
+const STATS: StatConfig[] = [
   {
-    id: 'rechazos',
-    label: 'Rechazos',
-    headline: '8 de cada 10 médicos',
-    detail: 'Reportaron rechazos con cierta regularidad al presentar partes o autorizaciones.',
+    id: 'software',
+    label: 'Software de cobros',
+    value: '0%',
+    detail: 'usa software específico para gestión de cobros',
+    bookend: true,
+    fadeIn: true,
   },
   {
     id: 'satisfaccion',
-    label: 'Satisfacción del proceso sin trazabilidad',
-    headline: '2,17 sobre 5',
-    detail: 'Promedio de satisfacción con el sistema de prepagas y sus procesos administrativos.',
+    label: 'Satisfacción',
+    value: '2,17/5',
+    detail: 'satisfacción promedio con el proceso de cobro actual',
   },
   {
-    id: 'cobros',
-    label: 'Cobros tardíos',
-    headline: 'USD 500 – 1.600',
-    detail: 'Rango mensual en honorarios que no llegaron a tiempo por demoras o rechazos.',
+    id: 'perdidos',
+    label: 'Honorarios perdidos',
+    value: 'USD 500–1.600',
+    detail: 'perdidos por mes en honorarios demorados o rechazados',
   },
   {
-    id: 'cuotas',
-    label: 'Brecha 2024',
-    headline: '+240% vs +18%',
-    detail: 'Suba de cuotas de prepagas frente al aumento de honorarios médicos en el mismo período.',
+    id: 'visibilidad',
+    label: 'Visibilidad',
+    value: '100%',
+    detail: 'acusan que no existe visibilidad del proceso actual',
+    bookend: true,
+    countUpTo: 100,
+    countUpSuffix: '%',
   },
 ];
 
 const AUTO_MS = 4000;
+const COUNT_UP_MS = 1100;
 
-function ChartRechazos({ active }: { active: boolean }) {
-  const r = 34;
-  const stroke = 9;
-  const c = 2 * Math.PI * r;
-  const pct = 0.8;
-  const offset = c * (1 - pct);
+function useCountUp(to: number, active: boolean, duration = COUNT_UP_MS) {
+  const [value, setValue] = useState(0);
+
+  useEffect(() => {
+    if (!active) {
+      setValue(0);
+      return;
+    }
+
+    let start: number | null = null;
+    let raf = 0;
+
+    const step = (ts: number) => {
+      if (start === null) start = ts;
+      const progress = Math.min((ts - start) / duration, 1);
+      const eased = 1 - (1 - progress) ** 3;
+      setValue(Math.round(eased * to));
+      if (progress < 1) raf = requestAnimationFrame(step);
+    };
+
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [active, to, duration]);
+
+  return value;
+}
+
+function StatVisual({ stat, show }: { stat: StatConfig; show: boolean }) {
+  const count = useCountUp(stat.countUpTo ?? 0, show && stat.countUpTo != null);
+
+  const display =
+    stat.countUpTo != null ? `${count}${stat.countUpSuffix ?? ''}` : stat.value;
 
   return (
-    <svg viewBox="0 0 100 100" className={styles.chartSvgDonut} aria-hidden>
-      <circle cx="50" cy="50" r={r} fill="none" stroke="#E2EDE6" strokeWidth={stroke} />
-      <circle
-        cx="50"
-        cy="50"
-        r={r}
-        fill="none"
-        stroke="#2A6B52"
-        strokeWidth={stroke}
-        strokeLinecap="round"
-        strokeDasharray={c}
-        strokeDashoffset={active ? offset : c}
-        transform="rotate(-90 50 50)"
-        className={styles.chartAnimStroke}
-      />
-      <text
-        x="50"
-        y="47"
-        textAnchor="middle"
-        dominantBaseline="middle"
-        className={styles.chartSvgValue}
-        fontSize="14"
-        fontWeight="700"
+    <div className={styles.statHeroPanel}>
+      <p
+        className={[
+          styles.statHeroValue,
+          stat.bookend ? styles.statHeroValueBookend : '',
+          stat.fadeIn ? styles.statHeroValueFadeIn : '',
+          show ? styles.statHeroValueVisible : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
       >
-        80%
-      </text>
-      <text
-        x="50"
-        y="57"
-        textAnchor="middle"
-        dominantBaseline="middle"
-        className={styles.chartSvgSub}
-        fontSize="5.5"
-        fontWeight="600"
-      >
-        con rechazos
-      </text>
-    </svg>
-  );
-}
-
-function ChartSatisfaccion({ active }: { active: boolean }) {
-  const score = 2.17;
-  return (
-    <div className={styles.chartStarsWrap}>
-      <div className={styles.chartStarsRow} aria-hidden>
-        {[1, 2, 3, 4, 5].map((n) => {
-          const fill = Math.min(1, Math.max(0, score - (n - 1)));
-          const filled = active && fill >= 0.99;
-          const partial = active && fill > 0 && fill < 0.99;
-          return (
-            <span
-              key={n}
-              className={[
-                styles.chartStarGlyph,
-                filled ? styles.chartStarFull : '',
-                partial ? styles.chartStarPartial : '',
-              ].join(' ')}
-              style={partial ? { opacity: 0.45 + fill * 0.55 } : undefined}
-            >
-              ★
-            </span>
-          );
-        })}
-      </div>
-      <p className={styles.chartStarsValue}>2,17 / 5</p>
-      <div className={styles.chartScoreBar}>
-        <div
-          className={styles.chartScoreBarFill}
-          style={{ width: active ? `${(score / 5) * 100}%` : '0%' }}
-        />
-      </div>
+        {display}
+      </p>
     </div>
   );
 }
-
-function ChartCobros({ active }: { active: boolean }) {
-  return (
-    <div className={styles.chartMoney}>
-      <div className={styles.chartMoneyBars}>
-        <div className={styles.chartMoneyBar}>
-          <div
-            className={styles.chartMoneyBarFill}
-            style={{ height: active ? '35%' : '0%' }}
-          />
-          <span>500</span>
-        </div>
-        <div className={styles.chartMoneyBar}>
-          <div
-            className={[styles.chartMoneyBarFill, styles.chartMoneyBarFillHigh].join(' ')}
-            style={{ height: active ? '100%' : '0%' }}
-          />
-          <span>1.600</span>
-        </div>
-      </div>
-      <p className={styles.chartMoneyUnit}>USD / mes perdidos</p>
-    </div>
-  );
-}
-
-function ChartCuotas({ active }: { active: boolean }) {
-  return (
-    <div className={styles.chartHCompare}>
-      <div className={styles.chartHRow}>
-        <span>Honorarios</span>
-        <div className={styles.chartHTrack}>
-          <div
-            className={[styles.chartHFill, styles.chartHFillHonor].join(' ')}
-            style={{ width: active ? '18%' : '0%' }}
-          />
-        </div>
-        <strong>+18%</strong>
-      </div>
-      <div className={styles.chartHRow}>
-        <span>Cuotas prepaga</span>
-        <div className={styles.chartHTrack}>
-          <div
-            className={[styles.chartHFill, styles.chartHFillCuotas].join(' ')}
-            style={{ width: active ? '100%' : '0%' }}
-          />
-        </div>
-        <strong className={styles.chartHAccent}>+240%</strong>
-      </div>
-    </div>
-  );
-}
-
-const CHARTS: Record<StatId, (props: { active: boolean }) => JSX.Element> = {
-  rechazos: ChartRechazos,
-  satisfaccion: ChartSatisfaccion,
-  cobros: ChartCobros,
-  cuotas: ChartCuotas,
-};
 
 export function LandingStatCharts() {
   const { ref, inView } = useInView<HTMLDivElement>(0.12);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [paused, setPaused] = useState(false);
 
-  const selected = STATS[selectedIndex].id;
   const current = STATS[selectedIndex];
+  const selected = current.id;
 
   const goToIndex = useCallback((index: number) => {
     const len = STATS.length;
@@ -203,6 +124,11 @@ export function LandingStatCharts() {
     return () => window.clearInterval(id);
   }, [inView, paused]);
 
+  const visibilidadCount = useCountUp(100, inView && selected === 'visibilidad');
+
+  const headlineDisplay =
+    current.countUpTo != null ? `${visibilidadCount}%` : current.value;
+
   return (
     <div
       ref={ref}
@@ -215,21 +141,20 @@ export function LandingStatCharts() {
           className={styles.chartsCarouselTrack}
           style={{ transform: `translateX(-${selectedIndex * 100}%)` }}
         >
-          {STATS.map((s) => {
-            const isActive = selected === s.id;
-            const ChartInner = CHARTS[s.id];
+          {STATS.map((s, i) => {
+            const isActive = selectedIndex === i;
             return (
               <div key={s.id} className={styles.chartsCarouselSlide}>
                 <button
                   type="button"
                   className={[styles.chartCard, isActive ? styles.chartCardActive : ''].join(' ')}
-                  onClick={() => goToIndex(STATS.findIndex((x) => x.id === s.id))}
+                  onClick={() => goToIndex(i)}
                   aria-pressed={isActive}
                   aria-label={`Ver ${s.label}`}
                 >
                   <span className={styles.chartCardLabel}>{s.label}</span>
                   <div className={styles.chartCardVisual}>
-                    <ChartInner active={inView && isActive} />
+                    <StatVisual stat={s} show={inView && isActive} />
                   </div>
                 </button>
               </div>
@@ -246,24 +171,33 @@ export function LandingStatCharts() {
           />
         </div>
         <div className={styles.chartsCarouselDots} role="tablist" aria-label="Estadísticas">
-        {STATS.map((s, i) => (
-          <button
-            key={s.id}
-            type="button"
-            role="tab"
-            aria-selected={i === selectedIndex}
-            aria-label={s.label}
-            className={[styles.chartsDot, i === selectedIndex ? styles.chartsDotActive : ''].join(
-              ' ',
-            )}
-            onClick={() => goToIndex(i)}
-          />
-        ))}
+          {STATS.map((s, i) => (
+            <button
+              key={s.id}
+              type="button"
+              role="tab"
+              aria-selected={i === selectedIndex}
+              aria-label={s.label}
+              className={[styles.chartsDot, i === selectedIndex ? styles.chartsDotActive : ''].join(
+                ' ',
+              )}
+              onClick={() => goToIndex(i)}
+            />
+          ))}
         </div>
       </div>
 
       <div className={styles.chartDetail} key={selected}>
-        <p className={styles.chartDetailHeadline}>{current.headline}</p>
+        <p
+          className={[
+            styles.chartDetailHeadline,
+            current.bookend ? styles.chartDetailHeadlineBookend : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+        >
+          {headlineDisplay}
+        </p>
         <p className={styles.chartDetailText}>{current.detail}</p>
       </div>
     </div>

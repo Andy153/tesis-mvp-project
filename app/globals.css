@@ -60,16 +60,40 @@ html[data-theme='dark'] {
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
 html {
+  background-color: var(--bg);
   transition: background-color 0.35s ease, color 0.35s ease;
+  scrollbar-gutter: stable;
+  scrollbar-color: var(--border-strong) var(--bg);
+  overflow-x: clip;
 }
+
+html::-webkit-scrollbar {
+  width: 10px;
+}
+
+html::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+
+html::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+  border: 2px solid var(--bg);
+}
+
+html::-webkit-scrollbar-corner {
+  background: var(--bg);
+}
+
 body {
   font-family: var(--font-sans);
-  background: var(--bg);
+  background-color: var(--bg);
   color: var(--text);
   font-size: 14px;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
-  overflow-x: hidden;
+  overflow-x: clip;
+  min-height: 100%;
   transition: background-color 0.35s ease, color 0.35s ease;
 }
 

@@ -3,12 +3,12 @@ import styles from './landing.module.css';
 
 export function LandingProblem() {
   return (
-    <section className={styles.section} aria-labelledby="landing-insights-title">
-      <div className={styles.bandDark}>
+    <section className={styles.insightsBand} aria-labelledby="landing-insights-title">
+      <div className={styles.insightsBandInner}>
         <div className={styles.insightsLayout}>
           <div className={styles.insightsHead}>
-            <p className={styles.sectionLabel}>Relevamiento propio</p>
-            <h2 id="landing-insights-title" className={styles.bandDarkTitle}>
+            <p className={styles.insightsLabel}>Relevamiento propio</p>
+            <h2 id="landing-insights-title" className={styles.insightsTitle}>
               Los números que escuchamos en consultorio
             </h2>
           </div>

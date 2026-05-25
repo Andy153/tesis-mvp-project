@@ -6,7 +6,6 @@ import styles from './landing.module.css';
 export function LandingHero() {
   return (
     <div className={styles.heroWrap}>
-      <div className={styles.heroGlow} aria-hidden />
       <header className={styles.hero}>
         <div className={styles.heroCopy}>
           <span className={styles.heroEyebrow}>Del parte al cobro · Swiss Medical y OSDE</span>
@@ -27,15 +26,15 @@ export function LandingHero() {
               <Image
                 src="/logos/swiss-medical.png"
                 alt="Swiss Medical"
-                width={120}
-                height={28}
+                width={136}
+                height={34}
                 className={styles.prepagaLogo}
               />
               <Image
                 src="/logos/osde.png"
                 alt="OSDE"
-                width={72}
-                height={28}
+                width={82}
+                height={34}
                 className={styles.prepagaLogo}
               />
             </div>

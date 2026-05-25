@@ -12,8 +12,14 @@ import styles from './landing.module.css';
 export function LandingPage() {
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', 'light');
+    const prevHtmlOverflow = document.documentElement.style.overflowX;
+    const prevBodyOverflow = document.body.style.overflowX;
+    document.documentElement.style.overflowX = 'clip';
+    document.body.style.overflowX = 'clip';
     return () => {
       document.documentElement.removeAttribute('data-theme');
+      document.documentElement.style.overflowX = prevHtmlOverflow;
+      document.body.style.overflowX = prevBodyOverflow;
     };
   }, []);
 
@@ -22,7 +28,9 @@ export function LandingPage() {
       <LandingNav />
       <div className={styles.inner}>
         <LandingHero />
-        <LandingProblem />
+      </div>
+      <LandingProblem />
+      <div className={styles.inner}>
         <LandingHowItWorks />
         <LandingFeatures />
         <LandingCta />

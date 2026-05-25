@@ -854,15 +854,20 @@
   height: auto;
 }
 
+.chartSvgDonut {
+  display: block;
+  width: min(100%, 128px);
+  height: auto;
+  aspect-ratio: 1;
+  margin: 0 auto;
+}
+
 .chartSvgValue {
-  font-size: 18px;
-  font-weight: 700;
   fill: var(--accent-ink);
   font-family: var(--font-title), system-ui, sans-serif;
 }
 
 .chartSvgSub {
-  font-size: 9px;
   fill: var(--text-muted);
   font-family: var(--font-sans), system-ui, sans-serif;
 }

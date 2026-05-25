@@ -39,31 +39,48 @@ const STATS: {
 ];
 
 function ChartRechazos({ active }: { active: boolean }) {
-  const r = 36;
+  const r = 34;
+  const stroke = 9;
   const c = 2 * Math.PI * r;
   const pct = 0.8;
   const offset = c * (1 - pct);
 
   return (
-    <svg viewBox="0 0 100 100" className={styles.chartSvg} aria-hidden>
-      <circle cx="50" cy="50" r={r} fill="none" stroke="#E2EDE6" strokeWidth="10" />
+    <svg viewBox="0 0 100 100" className={styles.chartSvgDonut} aria-hidden>
+      <circle cx="50" cy="50" r={r} fill="none" stroke="#E2EDE6" strokeWidth={stroke} />
       <circle
         cx="50"
         cy="50"
         r={r}
         fill="none"
         stroke="#2A6B52"
-        strokeWidth="10"
+        strokeWidth={stroke}
         strokeLinecap="round"
         strokeDasharray={c}
         strokeDashoffset={active ? offset : c}
         transform="rotate(-90 50 50)"
         className={styles.chartAnimStroke}
       />
-      <text x="50" y="48" textAnchor="middle" className={styles.chartSvgValue}>
+      <text
+        x="50"
+        y="47"
+        textAnchor="middle"
+        dominantBaseline="middle"
+        className={styles.chartSvgValue}
+        fontSize="14"
+        fontWeight="700"
+      >
         80%
       </text>
-      <text x="50" y="62" textAnchor="middle" className={styles.chartSvgSub}>
+      <text
+        x="50"
+        y="57"
+        textAnchor="middle"
+        dominantBaseline="middle"
+        className={styles.chartSvgSub}
+        fontSize="5.5"
+        fontWeight="600"
+      >
         con rechazos
       </text>
     </svg>

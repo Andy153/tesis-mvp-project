@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useInView } from './hooks/useInView';
 import styles from './landing.module.css';
 
@@ -20,7 +21,7 @@ const STATS: {
   },
   {
     id: 'satisfaccion',
-    label: 'Satisfacción',
+    label: 'Satisfacción del proceso sin trazabilidad',
     headline: '2,17 sobre 5',
     detail: 'Promedio de satisfacción con el sistema de prepagas y sus procesos administrativos.',
   },
@@ -37,6 +38,8 @@ const STATS: {
     detail: 'Suba de cuotas de prepagas frente al aumento de honorarios médicos en el mismo período.',
   },
 ];
+
+const AUTO_MS = 4000;
 
 function ChartRechazos({ active }: { active: boolean }) {
   const r = 34;
@@ -173,10 +176,7 @@ function ChartCuotas({ active }: { active: boolean }) {
   );
 }
 
-const CHARTS: Record<
-  StatId,
-  (props: { active: boolean }) => JSX.Element
-> = {
+const CHARTS: Record<StatId, (props: { active: boolean }) => JSX.Element> = {
   rechazos: ChartRechazos,
   satisfaccion: ChartSatisfaccion,
   cobros: ChartCobros,
@@ -185,22 +185,24 @@ const CHARTS: Record<
 
 export function LandingStatCharts() {
   const { ref, inView } = useInView<HTMLDivElement>(0.12);
-  const [selected, setSelected] = useState<StatId>('rechazos');
+  const [selectedIndex, setSelectedIndex] = useState(0);
   const [paused, setPaused] = useState(false);
+
+  const selected = STATS[selectedIndex].id;
+  const current = STATS[selectedIndex];
+
+  const goToIndex = useCallback((index: number) => {
+    const len = STATS.length;
+    setSelectedIndex(((index % len) + len) % len);
+  }, []);
 
   useEffect(() => {
     if (!inView || paused) return;
-    const ids = STATS.map((s) => s.id);
     const id = window.setInterval(() => {
-      setSelected((prev) => {
-        const i = ids.indexOf(prev);
-        return ids[(i + 1) % ids.length];
-      });
-    }, 4000);
+      setSelectedIndex((i) => (i + 1) % STATS.length);
+    }, AUTO_MS);
     return () => window.clearInterval(id);
   }, [inView, paused]);
-
-  const current = STATS.find((s) => s.id === selected)!;
 
   return (
     <div
@@ -209,25 +211,68 @@ export function LandingStatCharts() {
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
     >
-      <div className={styles.chartsGrid}>
-        {STATS.map((s) => {
-          const isActive = selected === s.id;
-          const ChartInner = CHARTS[s.id];
-          return (
-            <button
-              key={s.id}
-              type="button"
-              className={[styles.chartCard, isActive ? styles.chartCardActive : ''].join(' ')}
-              onClick={() => setSelected(s.id)}
-              aria-pressed={isActive}
-            >
-              <span className={styles.chartCardLabel}>{s.label}</span>
-              <div className={styles.chartCardVisual}>
-                <ChartInner active={inView && isActive} />
-              </div>
-            </button>
-          );
-        })}
+      <div className={styles.chartsCarousel}>
+        <button
+          type="button"
+          className={styles.chartsCarouselBtn}
+          onClick={() => goToIndex(selectedIndex - 1)}
+          aria-label="Estadística anterior"
+        >
+          <ChevronLeft size={20} aria-hidden />
+        </button>
+
+        <div className={styles.chartsCarouselViewport}>
+          <div
+            className={styles.chartsCarouselTrack}
+            style={{ transform: `translateX(-${selectedIndex * 100}%)` }}
+          >
+            {STATS.map((s) => {
+              const isActive = selected === s.id;
+              const ChartInner = CHARTS[s.id];
+              return (
+                <div key={s.id} className={styles.chartsCarouselSlide}>
+                  <button
+                    type="button"
+                    className={[styles.chartCard, isActive ? styles.chartCardActive : ''].join(' ')}
+                    onClick={() => goToIndex(STATS.findIndex((x) => x.id === s.id))}
+                    aria-pressed={isActive}
+                    aria-label={`Ver ${s.label}`}
+                  >
+                    <span className={styles.chartCardLabel}>{s.label}</span>
+                    <div className={styles.chartCardVisual}>
+                      <ChartInner active={inView && isActive} />
+                    </div>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <button
+          type="button"
+          className={styles.chartsCarouselBtn}
+          onClick={() => goToIndex(selectedIndex + 1)}
+          aria-label="Estadística siguiente"
+        >
+          <ChevronRight size={20} aria-hidden />
+        </button>
+      </div>
+
+      <div className={styles.chartsCarouselDots} role="tablist" aria-label="Estadísticas">
+        {STATS.map((s, i) => (
+          <button
+            key={s.id}
+            type="button"
+            role="tab"
+            aria-selected={i === selectedIndex}
+            aria-label={s.label}
+            className={[styles.chartsDot, i === selectedIndex ? styles.chartsDotActive : ''].join(
+              ' ',
+            )}
+            onClick={() => goToIndex(i)}
+          />
+        ))}
       </div>
 
       <div className={styles.chartDetail} key={selected}>

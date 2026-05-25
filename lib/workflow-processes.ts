@@ -182,26 +182,28 @@ export async function getDeletionPolicyForLiquidacion(
   const inActiveSubmission = await isLiquidacionInActiveSubmission(userId, liquidacionId)
 
   if (liq.estado === 'presentado') {
+    if (options?.force) return { allowed: true }
     return {
       allowed: false,
       code: 'SMG_PROCESS_LOCKED',
       message:
-        'Este parte ya fue enviado a Swiss Medical. No podés eliminarlo desde Trazá. Para modificaciones, contactá a Swiss Medical.',
+        'Este parte ya fue enviado a Swiss Medical por mail. Ese envío no se puede deshacer desde Trazá; para cambios en Swiss, contactalos directamente. Si solo querés sacarlo de tu historial en Trazá, podés hacerlo abajo.',
       etapa: 'enviado',
       periodo: liq.periodo,
-      canForceDelete: false,
+      canForceDelete: true,
     }
   }
 
   if (inActiveSubmission) {
+    if (options?.force) return { allowed: true }
     return {
       allowed: false,
       code: 'SMG_PROCESS_LOCKED',
       message:
-        'Este parte forma parte de un envío a Swiss Medical en curso o ya enviado. No podés eliminarlo desde Trazá. Para modificaciones, contactá a Swiss Medical.',
+        'Este parte está incluido en un envío a Swiss Medical en curso o ya enviado. Para modificaciones ante la prepaga, contactá a Swiss Medical. Si querés quitarlo solo de Trazá, podés hacerlo abajo.',
       etapa: 'enviado',
       periodo: liq.periodo,
-      canForceDelete: false,
+      canForceDelete: true,
     }
   }
 

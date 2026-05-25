@@ -7,6 +7,8 @@ import { LandingHero } from './LandingHero';
 import { LandingHowItWorks } from './LandingHowItWorks';
 import { LandingNav } from './LandingNav';
 import { LandingProblem } from './LandingProblem';
+import { LandingReveal } from './LandingReveal';
+import { LandingTicker } from './LandingTicker';
 import styles from './landing.module.css';
 
 export function LandingPage() {
@@ -31,9 +33,16 @@ export function LandingPage() {
       </div>
       <LandingProblem />
       <div className={styles.inner}>
-        <LandingHowItWorks />
+        <LandingReveal delay={0}>
+          <LandingHowItWorks />
+        </LandingReveal>
+      </div>
+      <LandingTicker />
+      <div className={styles.inner}>
         <LandingFeatures />
-        <LandingCta />
+        <LandingReveal delay={120}>
+          <LandingCta />
+        </LandingReveal>
         <footer className={styles.footer}>
           © {new Date().getFullYear()} Trazá · MVP en desarrollo · Acceso limitado
         </footer>

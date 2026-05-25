@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  formatPerdidosAmount,
   formatPerdidosUsd,
   perdidosBarColor,
   perdidosBarGlow,
@@ -34,14 +33,6 @@ export function PerdidosCarouselSlide({ label, detail, isActive, inView }: Props
               }}
             />
           </div>
-          <span
-            className={[
-              styles.chartPerdidosAmount,
-              heat > 0.65 ? styles.chartPerdidosAmountHot : '',
-            ].join(' ')}
-          >
-            {formatPerdidosAmount(amount)}
-          </span>
         </div>
       </div>
       <div className={styles.dataSlideCopy}>
@@ -53,16 +44,18 @@ export function PerdidosCarouselSlide({ label, detail, isActive, inView }: Props
           ].join(' ')}
         >
           <span className={styles.dataSlideHasta}>hasta</span>
-          <p
-            className={[
-              styles.dataSlideValue,
-              styles.dataSlideValueAmount,
-              isActive ? styles.dataSlideValueIn : '',
-            ].join(' ')}
-          >
-            {formatPerdidosUsd(amount)}
-          </p>
-          <span className={styles.dataSlidePerdidosPeriod}>x mes</span>
+          <div className={styles.dataSlideValuePerdidosMain}>
+            <p
+              className={[
+                styles.dataSlideValue,
+                styles.dataSlideValueAmount,
+                isActive ? styles.dataSlideValueIn : '',
+              ].join(' ')}
+            >
+              {formatPerdidosUsd(amount)}
+            </p>
+            <span className={styles.dataSlidePerdidosPeriod}>x mes</span>
+          </div>
         </div>
         <p className={styles.dataSlideDetail}>{detail}</p>
       </div>

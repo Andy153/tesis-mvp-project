@@ -28,6 +28,23 @@ export function SmgDeletionBlockedCard({ message, onClose, onForceDelete, forceD
         </div>
         <div className="modal-body">
           <p style={{ color: 'var(--text-muted)', fontSize: 15, lineHeight: 1.55, margin: 0 }}>{message}</p>
+          {onForceDelete && (
+            <p
+              style={{
+                margin: '12px 0 0',
+                fontSize: 13,
+                lineHeight: 1.45,
+                color: 'var(--text)',
+                padding: '10px 12px',
+                background: 'var(--bg-sunken)',
+                borderRadius: 8,
+                border: '1px solid var(--border)',
+              }}
+            >
+              Sacarlo de Trazá <strong>no cancela</strong> el envío ante Swiss Medical; solo borra el registro,
+              liquidación y archivo en tu cuenta.
+            </p>
+          )}
           <div
             style={{
               marginTop: 18,

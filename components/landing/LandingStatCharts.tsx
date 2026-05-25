@@ -50,7 +50,7 @@ const STATS: StatConfig[] = [
 
 const AUTO_MS = 5000;
 
-function useCountUp(to: number, active: boolean, duration = 1200) {
+function useCountUpLocal(to: number, active: boolean, duration = 1200) {
   const [value, setValue] = useState(0);
 
   useEffect(() => {
@@ -79,7 +79,7 @@ function ChartSoftware({ active }: { active: boolean }) {
 }
 
 function ChartVisibilidad({ active }: { active: boolean }) {
-  const count = useCountUp(100, active);
+  const count = useCountUpLocal(100, active);
   const r = 54;
   const c = 2 * Math.PI * r;
   const offset = c * (1 - (active ? count / 100 : 0));
@@ -107,7 +107,7 @@ function ChartVisibilidad({ active }: { active: boolean }) {
   );
 }
 
-const CHARTS: Record<Exclude<StatId, 'perdidos' | 'satisfaccion'>, (p: { active: boolean }) => JSX.Element> = {
+const CHARTS: Record<'software' | 'visibilidad', (p: { active: boolean }) => JSX.Element> = {
   software: ChartSoftware,
   visibilidad: ChartVisibilidad,
 };
@@ -119,7 +119,7 @@ export function LandingStatCharts() {
   const [progressKey, setProgressKey] = useState(0);
 
   const current = STATS[index];
-  const countDisplay = useCountUp(current.countUpTo ?? 0, inView && !!current.countUpTo);
+  const countDisplay = useCountUpLocal(current.countUpTo ?? 0, inView && !!current.countUpTo);
 
   const goTo = useCallback((i: number) => {
     const len = STATS.length;

@@ -83,6 +83,11 @@
   min-width: 0;
 }
 
+.heroPreview {
+  min-width: 0;
+  width: 100%;
+}
+
 .heroEyebrow {
   display: inline-flex;
   align-items: center;
@@ -150,6 +155,7 @@
 .prepagasLogos {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 20px;
 }
 
@@ -1083,6 +1089,42 @@
     gap: 36px;
   }
 
+  .heroCopy {
+    order: 1;
+  }
+
+  .heroPreview {
+    order: 2;
+    width: 100%;
+    max-width: 420px;
+    margin-inline: auto;
+  }
+
+  .heroPreview .appPreview {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .heroPreview .appPreviewTabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .heroTitle {
+    font-size: clamp(1.5rem, 4.8vw, 2rem);
+  }
+
+  .heroWrap {
+    overflow-x: clip;
+  }
+
+  .heroGlow {
+    width: 280px;
+    height: 280px;
+    right: -160px;
+  }
+
   .insightsLayout {
     grid-template-columns: 1fr;
   }
@@ -1121,6 +1163,15 @@
 
   .navInner {
     padding: 10px 16px;
+  }
+
+  .heroTitle {
+    font-size: clamp(1.35rem, 6.5vw, 1.75rem);
+  }
+
+  .heroCta {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .heroCta .btn,

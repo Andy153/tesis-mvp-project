@@ -42,7 +42,9 @@ export function LandingHero() {
           </div>
         </div>
 
-        <LandingAppPreview />
+        <div className={styles.heroPreview}>
+          <LandingAppPreview />
+        </div>
       </header>
     </div>
   );

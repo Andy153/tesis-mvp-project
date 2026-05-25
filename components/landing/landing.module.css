@@ -199,6 +199,7 @@
 }
 
 .appPreviewTabs {
+  position: relative;
   display: flex;
   gap: 4px;
   padding: 10px 12px 0;
@@ -206,10 +207,14 @@
 }
 
 .appPreviewTab {
+  position: relative;
+  z-index: 1;
+  flex: 1;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  padding: 8px 12px;
+  padding: 8px 10px;
   border: none;
   border-radius: 8px 8px 0 0;
   background: transparent;
@@ -218,7 +223,10 @@
   font-weight: 600;
   cursor: pointer;
   font-family: inherit;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.35s ease,
+    color 0.35s ease,
+    transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .appPreviewTab:not(.appPreviewTabActive) {
@@ -234,6 +242,21 @@
   color: var(--accent-ink);
   background: var(--bg-panel);
   box-shadow: 0 -1px 0 var(--accent) inset;
+  transform: translateY(-1px);
+}
+
+.appPreviewTabIndicator {
+  position: absolute;
+  bottom: 0;
+  left: calc(
+    12px + var(--preview-tab-index, 0) * ((100% - 24px - 8px) / 3 + 4px)
+  );
+  width: calc((100% - 24px - 8px) / 3);
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--accent);
+  transition: left 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
 }
 
 .appPreviewBody {
@@ -256,6 +279,7 @@
   align-items: flex-start;
   justify-content: flex-start;
   width: 100%;
+  opacity: 0;
   visibility: hidden;
   pointer-events: none;
 }
@@ -269,6 +293,60 @@
 .appPreviewPanelActive {
   visibility: visible;
   pointer-events: auto;
+}
+
+.appPreviewPanelInForward {
+  animation: previewPanelInForward 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.appPreviewPanelInBack {
+  animation: previewPanelInBack 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+@keyframes previewPanelInForward {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes previewPanelInBack {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .appPreviewTab {
+    transition: none;
+  }
+
+  .appPreviewTabIndicator {
+    transition: none;
+  }
+
+  .appPreviewTabActive {
+    transform: none;
+  }
+
+  .appPreviewPanelInForward,
+  .appPreviewPanelInBack {
+    animation: none;
+  }
+
+  .appPreviewPanelActive {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .previewValidate {

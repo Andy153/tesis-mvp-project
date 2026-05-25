@@ -51,6 +51,7 @@ const PREVIEW_CALENDAR_CELLS: { day: number | null; credited?: boolean }[] = [
 
 export function LandingAppPreview({ className }: { className?: string }) {
   const [tab, setTab] = useState<TabId>('upload');
+  const [slideDirection, setSlideDirection] = useState(1);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [paused, setPaused] = useState(false);
   const panelsWrapRef = useRef<HTMLDivElement>(null);
@@ -68,6 +69,18 @@ export function LandingAppPreview({ className }: { className?: string }) {
     if (max > 0) setPanelMinHeight(Math.ceil(max));
   }, []);
 
+  const tabIndex = TABS.findIndex((t) => t.id === tab);
+
+  const goToTab = useCallback((next: TabId) => {
+    const prevIdx = TABS.findIndex((t) => t.id === tab);
+    const nextIdx = TABS.findIndex((t) => t.id === next);
+    setSlideDirection(nextIdx >= prevIdx ? 1 : -1);
+    setTab(next);
+  }, [tab]);
+
+  const panelAnimClass =
+    slideDirection > 0 ? styles.appPreviewPanelInForward : styles.appPreviewPanelInBack;
+
   useEffect(() => {
     if (tab !== 'upload') return;
     setUploadProgress(0);
@@ -84,6 +97,7 @@ export function LandingAppPreview({ className }: { className?: string }) {
     const id = window.setInterval(() => {
       setTab((prev) => {
         const i = TABS.findIndex((t) => t.id === prev);
+        setSlideDirection(1);
         return TABS[(i + 1) % TABS.length].id;
       });
     }, AUTO_MS);
@@ -123,7 +137,11 @@ export function LandingAppPreview({ className }: { className?: string }) {
         <span className={styles.appPreviewUrl}>app.traza · liquidaciones</span>
       </div>
 
-      <div className={styles.appPreviewTabs} role="tablist">
+      <div
+        className={styles.appPreviewTabs}
+        role="tablist"
+        style={{ '--preview-tab-index': tabIndex } as React.CSSProperties}
+      >
         {TABS.map((t) => {
           const Icon = t.icon;
           const active = tab === t.id;
@@ -134,13 +152,14 @@ export function LandingAppPreview({ className }: { className?: string }) {
               role="tab"
               aria-selected={active}
               className={[styles.appPreviewTab, active ? styles.appPreviewTabActive : ''].join(' ')}
-              onClick={() => setTab(t.id)}
+              onClick={() => goToTab(t.id)}
             >
               <Icon size={14} aria-hidden />
               {t.label}
             </button>
           );
         })}
+        <span className={styles.appPreviewTabIndicator} aria-hidden />
       </div>
 
       <div className={styles.appPreviewBody}>
@@ -157,6 +176,7 @@ export function LandingAppPreview({ className }: { className?: string }) {
               styles.appPreviewPanel,
               styles.appPreviewPanelCentered,
               tab === 'upload' ? styles.appPreviewPanelActive : '',
+              tab === 'upload' ? panelAnimClass : '',
             ].join(' ')}
           >
             <div className={styles.previewUpload}>
@@ -184,6 +204,7 @@ export function LandingAppPreview({ className }: { className?: string }) {
             className={[
               styles.appPreviewPanel,
               tab === 'validate' ? styles.appPreviewPanelActive : '',
+              tab === 'validate' ? panelAnimClass : '',
             ].join(' ')}
           >
             <div className={styles.previewValidate}>
@@ -219,6 +240,7 @@ export function LandingAppPreview({ className }: { className?: string }) {
               styles.appPreviewPanel,
               styles.appPreviewPanelCentered,
               tab === 'dashboard' ? styles.appPreviewPanelActive : '',
+              tab === 'dashboard' ? panelAnimClass : '',
             ].join(' ')}
           >
             <div className={styles.previewDashboard}>

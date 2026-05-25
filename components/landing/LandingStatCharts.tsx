@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useInView } from './hooks/useInView';
 import styles from './landing.module.css';
 
@@ -211,55 +210,42 @@ export function LandingStatCharts() {
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
     >
-      <div className={styles.chartsCarousel}>
-        <button
-          type="button"
-          className={styles.chartsCarouselBtn}
-          onClick={() => goToIndex(selectedIndex - 1)}
-          aria-label="Estadística anterior"
+      <div className={styles.chartsCarouselViewport}>
+        <div
+          className={styles.chartsCarouselTrack}
+          style={{ transform: `translateX(-${selectedIndex * 100}%)` }}
         >
-          <ChevronLeft size={20} aria-hidden />
-        </button>
-
-        <div className={styles.chartsCarouselViewport}>
-          <div
-            className={styles.chartsCarouselTrack}
-            style={{ transform: `translateX(-${selectedIndex * 100}%)` }}
-          >
-            {STATS.map((s) => {
-              const isActive = selected === s.id;
-              const ChartInner = CHARTS[s.id];
-              return (
-                <div key={s.id} className={styles.chartsCarouselSlide}>
-                  <button
-                    type="button"
-                    className={[styles.chartCard, isActive ? styles.chartCardActive : ''].join(' ')}
-                    onClick={() => goToIndex(STATS.findIndex((x) => x.id === s.id))}
-                    aria-pressed={isActive}
-                    aria-label={`Ver ${s.label}`}
-                  >
-                    <span className={styles.chartCardLabel}>{s.label}</span>
-                    <div className={styles.chartCardVisual}>
-                      <ChartInner active={inView && isActive} />
-                    </div>
-                  </button>
-                </div>
-              );
-            })}
-          </div>
+          {STATS.map((s) => {
+            const isActive = selected === s.id;
+            const ChartInner = CHARTS[s.id];
+            return (
+              <div key={s.id} className={styles.chartsCarouselSlide}>
+                <button
+                  type="button"
+                  className={[styles.chartCard, isActive ? styles.chartCardActive : ''].join(' ')}
+                  onClick={() => goToIndex(STATS.findIndex((x) => x.id === s.id))}
+                  aria-pressed={isActive}
+                  aria-label={`Ver ${s.label}`}
+                >
+                  <span className={styles.chartCardLabel}>{s.label}</span>
+                  <div className={styles.chartCardVisual}>
+                    <ChartInner active={inView && isActive} />
+                  </div>
+                </button>
+              </div>
+            );
+          })}
         </div>
-
-        <button
-          type="button"
-          className={styles.chartsCarouselBtn}
-          onClick={() => goToIndex(selectedIndex + 1)}
-          aria-label="Estadística siguiente"
-        >
-          <ChevronRight size={20} aria-hidden />
-        </button>
       </div>
 
-      <div className={styles.chartsCarouselDots} role="tablist" aria-label="Estadísticas">
+      <div className={styles.chartsCarouselNav}>
+        <div className={styles.chartsProgress} aria-hidden>
+          <div
+            className={styles.chartsProgressFill}
+            style={{ width: `${((selectedIndex + 1) / STATS.length) * 100}%` }}
+          />
+        </div>
+        <div className={styles.chartsCarouselDots} role="tablist" aria-label="Estadísticas">
         {STATS.map((s, i) => (
           <button
             key={s.id}
@@ -273,6 +259,7 @@ export function LandingStatCharts() {
             onClick={() => goToIndex(i)}
           />
         ))}
+        </div>
       </div>
 
       <div className={styles.chartDetail} key={selected}>

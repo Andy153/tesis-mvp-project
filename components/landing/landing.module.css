@@ -348,8 +348,14 @@
     transform: none;
   }
 
-  .chartsCarouselTrack {
+  .chartsCarouselTrack,
+  .chartsProgressFill {
     transition: none;
+  }
+
+  .chartCard:hover,
+  .chartCardActive {
+    transform: none;
   }
 }
 
@@ -771,18 +777,13 @@
   transform: translateY(0);
 }
 
-.chartsCarousel {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-}
-
 .chartsCarouselViewport {
-  flex: 1;
-  min-width: 0;
+  width: 100%;
   overflow: hidden;
-  border-radius: 14px;
+  border-radius: 16px;
+  box-shadow:
+    0 0 0 1px rgba(125, 206, 168, 0.35),
+    0 20px 48px rgba(0, 0, 0, 0.28);
 }
 
 .chartsCarouselTrack {
@@ -796,63 +797,56 @@
   min-width: 0;
 }
 
-.chartsCarouselBtn {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.08);
-  color: #e8f5ee;
-  cursor: pointer;
-  font-family: inherit;
-  transition: background 0.2s, border-color 0.2s, transform 0.15s;
+.chartsCarouselNav {
+  margin-top: 18px;
+  display: grid;
+  gap: 12px;
 }
 
-.chartsCarouselBtn:hover {
-  background: rgba(255, 255, 255, 0.16);
-  border-color: rgba(255, 255, 255, 0.35);
+.chartsProgress {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.15);
+  overflow: hidden;
 }
 
-.chartsCarouselBtn:focus-visible {
-  outline: 2px solid #7dcea8;
-  outline-offset: 2px;
-}
-
-.chartsCarouselBtn:active {
-  transform: scale(0.96);
+.chartsProgressFill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #7dcea8, #3d9a72);
+  transition: width 0.45s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .chartsCarouselDots {
   display: flex;
   justify-content: center;
-  gap: 8px;
-  margin-top: 14px;
+  align-items: center;
+  gap: 10px;
 }
 
 .chartsDot {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   padding: 0;
   border: none;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.3);
   cursor: pointer;
   font-family: inherit;
-  transition: background 0.25s ease, transform 0.2s ease;
+  transition:
+    width 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    background 0.25s ease,
+    box-shadow 0.25s ease;
 }
 
 .chartsDot:hover {
-  background: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.55);
 }
 
 .chartsDotActive {
+  width: 28px;
   background: #7dcea8;
-  transform: scale(1.15);
+  box-shadow: 0 0 12px rgba(125, 206, 168, 0.65);
 }
 
 .chartsDot:focus-visible {
@@ -866,48 +860,56 @@
   align-items: stretch;
   text-align: left;
   width: 100%;
-  padding: 14px;
-  border-radius: 14px;
-  background: #fff;
+  padding: 20px 22px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fff 0%, #f4faf6 100%);
   border: 2px solid transparent;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.14);
   cursor: pointer;
   font-family: inherit;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition:
+    border-color 0.25s ease,
+    box-shadow 0.25s ease,
+    transform 0.25s ease;
 }
 
 .chartCard:hover {
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.16);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.18);
+  transform: translateY(-2px);
 }
 
 .chartCardActive {
   border-color: #7dcea8;
-  box-shadow: 0 0 0 1px #7dcea8, 0 12px 32px rgba(0, 0, 0, 0.18);
+  box-shadow:
+    0 0 0 2px rgba(125, 206, 168, 0.5),
+    0 16px 40px rgba(42, 107, 82, 0.22);
+  transform: translateY(-2px);
 }
 
 .chartCardLabel {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--accent);
-  margin-bottom: 10px;
+  margin-bottom: 14px;
   line-height: 1.35;
 }
 
 .chartCardVisual {
-  min-height: 108px;
+  min-height: 124px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .chartDetail {
-  margin-top: 16px;
-  padding: 18px 20px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  margin-top: 20px;
+  padding: 22px 24px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(125, 206, 168, 0.35);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
   animation: chartDetailIn 0.35s ease;
 }
 
@@ -925,7 +927,7 @@
 .chartDetailHeadline {
   margin: 0;
   font-family: var(--font-title);
-  font-size: 1.15rem;
+  font-size: clamp(1.2rem, 3vw, 1.4rem);
   color: #fff;
 }
 
@@ -1527,15 +1529,6 @@
     margin: 0 -16px;
     padding: 40px 16px;
     border-radius: 16px;
-  }
-
-  .chartsCarousel {
-    gap: 6px;
-  }
-
-  .chartsCarouselBtn {
-    width: 32px;
-    height: 32px;
   }
 
   .navInner {

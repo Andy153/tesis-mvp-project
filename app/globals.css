@@ -556,8 +556,15 @@ html[data-theme='dark'] .brand__wordmark {
   font-family: inherit;
   font-size: 14px;
   font-weight: 600;
+  text-decoration: none;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.1s, box-shadow 0.15s;
+}
+
+a.btn:hover,
+a.btn:focus,
+a.btn:active {
+  text-decoration: none;
 }
 .btn:hover { background: var(--bg-sunken); }
 .btn:active { transform: scale(0.97); }

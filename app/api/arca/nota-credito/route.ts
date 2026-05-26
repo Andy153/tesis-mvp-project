@@ -45,7 +45,6 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
 
-    // Errores de validación (factura no existe, ya tiene NC, etc.) → 400
     if (
       message.includes('No se encontró') ||
       message.includes('ya tiene una Nota de Crédito') ||

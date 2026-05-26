@@ -28,6 +28,13 @@ export async function GET() {
     )
     .eq('clerk_user_id', userId)
     .eq('status', 'enviado')
+    // Sprint 7: solo facturas activas en el wizard, no NCs ni anuladas.
+    // Sin este filtro, una NC tipo=13 aparece como "cobro activo" y el wizard
+    // termina apuntando a ella (bug encontrado en test E2E Sprint 6).
+    // Las anuladas (anulada_at IS NOT NULL) son historial: el wizard ya creó
+    // una submission nueva para re-emisión (ver crearSubmissionParaReemisionPostNC).
+    .eq('tipo_comprobante', 11)
+    .is('anulada_at', null)
     .or('wizard_estado.is.null,wizard_estado.not.in.(aprobado,excepcion_enviada,descartado)')
     .order('enviado_en', { ascending: false });
 

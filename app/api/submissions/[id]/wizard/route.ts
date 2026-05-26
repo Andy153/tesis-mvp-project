@@ -45,7 +45,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       comprobante_smg_path, factura_path,
       cae_numero, cae_vencimiento, numero_comprobante,
       factura_adjuntada_en, wizard_completado_en,
-      partes_incluidos
+      partes_incluidos, anulada_at
     `,
     )
     .eq('id', params.id)
@@ -55,10 +55,19 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  // Solo si emitió factura pero el wizard quedó en paso 4 con estado de comprobante (sin avanzar).
+  // Self-healing: si emitió factura pero el wizard quedó en paso 4 con estado de comprobante
+  // (sin avanzar), lo curamos avanzándolo al paso 5.
+  //
+  // Excluimos facturas anuladas (anulada_at != null): post-NC el wizard vuelve a paso 4
+  // intencionalmente para re-emitir, y el cae_numero/numero_comprobante quedan limpios
+  // por revertirWizardAPasoFacturaTrasNotaCredito. Si por alguna razón quedaron poblados
+  // (estado heredado pre-Sprint 6), tampoco queremos curarlo: la factura está anulada,
+  // el usuario tiene que emitir una nueva.
+  //
   // No aplicar si el usuario volvió atrás desde el paso 5 (paso 4 + factura_instrucciones).
   if (
     data.cae_numero &&
+    !data.anulada_at &&
     (data.wizard_paso ?? 0) === 4 &&
     data.wizard_estado === 'comprobante_subido'
   ) {

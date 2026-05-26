@@ -73,6 +73,39 @@ export async function persistFacturaEmitidaToSubmission(params: {
   numeroComprobante: number
   receptor: ReceptorPersistible
 }): Promise<void> {
+  // Defensa: chequear que el target sea una factura activa (tipo=11, no anulada).
+  // Sin esto, una llamada con submissionId apuntando a una NC o a una factura
+  // anulada sobrescribe la fila, generando estado inconsistente. Pasó en test
+  // E2E Sprint 6.
+  const { data: target, error: readErr } = await supabaseAdmin
+    .from('monthly_submissions')
+    .select('id, tipo_comprobante, anulada_at, cae_numero')
+    .eq('id', params.submissionId)
+    .eq('clerk_user_id', params.clerkUserId)
+    .maybeSingle()
+
+  if (readErr) {
+    throw new Error(`No se pudo verificar la submission: ${readErr.message}`)
+  }
+  if (!target) {
+    throw new Error('Submission no encontrada para persistir factura')
+  }
+  if (target.tipo_comprobante !== 11) {
+    throw new Error(
+      `No se puede persistir factura sobre una submission tipo ${target.tipo_comprobante}. Solo se permite sobre Facturas C (tipo=11).`,
+    )
+  }
+  if (target.anulada_at != null) {
+    throw new Error(
+      'No se puede persistir factura sobre una submission anulada. Debe crearse una nueva submission para re-emitir.',
+    )
+  }
+  if (target.cae_numero != null) {
+    throw new Error(
+      `La submission ya tiene factura emitida (CAE ${target.cae_numero}). Para emitir otra factura, crear una nueva submission.`,
+    )
+  }
+
   const { error } = await supabaseAdmin
     .from('monthly_submissions')
     .update({
@@ -96,47 +129,78 @@ export async function persistFacturaEmitidaToSubmission(params: {
 }
 
 /**
- * Tras anular la factura con NC durante el wizard de cobros SMG, vuelve al paso 4
- * y limpia datos fiscales para poder emitir una factura nueva.
+ * Tras anular la factura con NC, crea una NUEVA submission factura (tipo=11)
+ * lista para re-emisión, en lugar de "renacer" la factura original.
+ *
+ * Diseño (decisión Sprint 7, opción 2a):
+ *   - La factura original queda intacta: con su CAE, número, factura_path,
+ *     anulada_at populado. Es histórico inmutable.
+ *   - Se crea una fila nueva, mismo período/obra_social/comprobante_smg_path,
+ *     en paso 4 con estado 'comprobante_subido', sin datos fiscales.
+ *   - El wizard del médico apunta a la submission nueva via leerSubmissionActiva.
+ *
+ * Razones:
+ *   - Antes (Sprint 6), la fila de factura se "renombraba" reusándola: limpiaba
+ *     cae/numero/path. Eso creaba estado contradictorio (anulada_at populado pero
+ *     cae_numero también, post re-emisión). Y abría la puerta al bug del test E2E
+ *     donde un submissionId del wizard apuntando mal sobrescribía la fila NC.
+ *   - Submissions separadas → historial limpio, cada CAE en una fila distinta,
+ *     auditable.
+ *
+ * Retorna el ID de la submission nueva (la que el wizard debería usar de ahora
+ * en más), o null si algo falla en la lectura.
  */
-export async function revertirWizardAPasoFacturaTrasNotaCredito(params: {
-  submissionId: string
+export async function crearSubmissionParaReemisionPostNC(params: {
+  submissionAnuladaId: string
   clerkUserId: string
-}): Promise<boolean> {
-  const { data: sub, error: readErr } = await supabaseAdmin
+}): Promise<string | null> {
+  // Leer la factura anulada para heredar campos
+  const { data: facturaAnulada, error: readErr } = await supabaseAdmin
     .from('monthly_submissions')
-    .select('wizard_estado, wizard_paso')
-    .eq('id', params.submissionId)
+    .select(
+      `obra_social, periodo, mail_destinatario,
+       comprobante_smg_path, cantidad_partes, partes_incluidos,
+       monto_total, enviado_en, wizard_estado, wizard_paso`,
+    )
+    .eq('id', params.submissionAnuladaId)
     .eq('clerk_user_id', params.clerkUserId)
     .maybeSingle()
 
-  if (readErr || !sub) return false
+  if (readErr || !facturaAnulada) return null
 
-  const estado = sub.wizard_estado as string | null
-  const paso = Number(sub.wizard_paso ?? 0)
-  if (!estado || estado === 'descartado' || estado === 'aprobado') return false
-  if (paso < 4) return false
+  // No crear submission nueva si la factura está descartada o aprobada
+  const estado = facturaAnulada.wizard_estado as string | null
+  if (!estado || estado === 'descartado' || estado === 'aprobado') return null
 
-  const { error: updErr } = await supabaseAdmin
+  // Crear nueva submission tipo=11 en paso 4
+  // - Hereda obra_social, periodo, comprobante_smg_path, monto_total, etc.
+  // - status='enviando' (igual que las submissions de wizard de cobros)
+  // - wizard_paso=4, wizard_estado='comprobante_subido': lista para emitir factura
+  // - Sin datos fiscales: cae_numero, factura_path, numero_comprobante = NULL
+  const { data: nueva, error: insErr } = await supabaseAdmin
     .from('monthly_submissions')
-    .update({
+    .insert({
+      clerk_user_id: params.clerkUserId,
+      tipo_comprobante: 11,
+      obra_social: facturaAnulada.obra_social,
+      periodo: facturaAnulada.periodo,
+      mail_destinatario: facturaAnulada.mail_destinatario,
+      comprobante_smg_path: facturaAnulada.comprobante_smg_path,
+      cantidad_partes: facturaAnulada.cantidad_partes ?? 0,
+      partes_incluidos: facturaAnulada.partes_incluidos ?? [],
+      monto_total: facturaAnulada.monto_total,
+      enviado_en: facturaAnulada.enviado_en ?? new Date().toISOString(),
+      status: 'enviando',
       wizard_paso: 4,
       wizard_estado: 'comprobante_subido',
-      wizard_completado_en: null,
-      cae_numero: null,
-      cae_vencimiento: null,
-      factura_path: null,
-      numero_comprobante: null,
-      factura_adjuntada_en: null,
-      updated_at: new Date().toISOString(),
     })
-    .eq('id', params.submissionId)
-    .eq('clerk_user_id', params.clerkUserId)
+    .select('id')
+    .single()
 
-  if (updErr) {
-    throw new Error(`No se pudo actualizar el wizard tras la NC: ${updErr.message}`)
+  if (insErr) {
+    throw new Error(`No se pudo crear submission para re-emisión: ${insErr.message}`)
   }
-  return true
+  return (nueva?.id as string) ?? null
 }
 
 /**
@@ -195,4 +259,44 @@ export async function insertNotaCreditoSubmission(params: {
     throw new Error('No se pudo crear la nota de crédito: respuesta vacía')
   }
   return { id: data.id as string }
+}
+
+/**
+ * Marca una factura como anulada seteando `anulada_at = NOW()`.
+ *
+ * Se llama desde `emitirNotaCreditoC` después de persistir la NC exitosamente.
+ * Es metadato de auditoría: la factura sigue existiendo con su CAE original,
+ * este flag solo señala "esta factura tiene una NC asociada".
+ *
+ * Ortogonal a `revertirWizardAPasoFacturaTrasNotaCredito`:
+ *   - `anulada_at`: señal permanente para listados/reportes/auditoría.
+ *   - `revertirWizard...`: rollback operativo del wizard de cobros.
+ *
+ * Best-effort: si el UPDATE falla, loggea y devuelve false. La NC ya está
+ * autorizada en ARCA y persistida, no hay rollback posible — perder el flag
+ * no debe romper el flujo.
+ */
+export async function marcarFacturaComoAnulada(params: {
+  submissionId: string
+  clerkUserId: string
+}): Promise<boolean> {
+  const { error } = await supabaseAdmin
+    .from('monthly_submissions')
+    .update({
+      anulada_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', params.submissionId)
+    .eq('clerk_user_id', params.clerkUserId)
+
+  if (error) {
+    console.error(
+      '[marcarFacturaComoAnulada] No se pudo setear anulada_at en factura',
+      params.submissionId,
+      ':',
+      error.message,
+    )
+    return false
+  }
+  return true
 }

@@ -3,10 +3,11 @@ import { supabaseAdmin } from '@/lib/supabase-admin'
 import { consultarPadron } from './padron'
 import {
   createFacturaSignedUrl,
+  crearSubmissionParaReemisionPostNC,
   formatCaeVencimientoForDb,
   insertNotaCreditoSubmission,
+  marcarFacturaComoAnulada,
   notaCreditoStoragePath,
-  revertirWizardAPasoFacturaTrasNotaCredito,
   uploadFacturaPdf,
   type ReceptorPersistible,
 } from './factura-storage'
@@ -350,12 +351,26 @@ export async function emitirNotaCreditoC(params: EmitirNotaCreditoCParams): Prom
     receptor,
   })
 
-  const wizardRevertido = await revertirWizardAPasoFacturaTrasNotaCredito({
+  // --- 12.5) Marcar la factura original como anulada (Sprint 6) ---
+  // Best-effort: si falla, la NC ya está OK, solo perdemos el flag de auditoría.
+  // Importante: se hace ANTES de crear la nueva submission para que el unique
+  // index parcial (Sprint 7 mig 011: WHERE anulada_at IS NULL) ya no cuente a
+  // esta fila como activa.
+  await marcarFacturaComoAnulada({
     submissionId: facturaOriginal.id,
     clerkUserId: params.clerkUserId,
   })
-  if (wizardRevertido) {
-    await syncWorkflowFromSubmission(facturaOriginal.id, params.clerkUserId)
+
+  // --- 12.6) Crear submission nueva para re-emisión (Sprint 7) ---
+  // Antes (Sprint 6) reusábamos la misma fila, limpiándole los datos fiscales.
+  // Eso generaba estado contradictorio y abría la puerta a bugs cuando el
+  // wizard apuntaba mal. Ahora creamos una fila nueva tipo=11 limpia.
+  const submissionReemision = await crearSubmissionParaReemisionPostNC({
+    submissionAnuladaId: facturaOriginal.id,
+    clerkUserId: params.clerkUserId,
+  })
+  if (submissionReemision) {
+    await syncWorkflowFromSubmission(submissionReemision, params.clerkUserId)
   }
 
   // --- 13) URL firmada para descarga inmediata ---

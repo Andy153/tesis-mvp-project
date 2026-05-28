@@ -13,7 +13,7 @@ export function ConfusedDoctorIllustration({ active = false }: Props) {
     >
       <div style={{ position: 'relative', width: 260, height: 220 }}>
         <Image
-          src="/images/docmarta2.png"
+          src="/images/docmarta2-removebg-preview.png"
           alt="Médica"
           fill
           className={styles.chartDoctorSvg}

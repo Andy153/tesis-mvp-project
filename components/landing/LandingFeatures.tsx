@@ -1,111 +1,144 @@
 'use client';
 
-import { useCallback, useState } from 'react';
-import { CheckCircle, Cpu, FileText, Send, TrendingUp } from 'lucide-react';
+import { useState } from 'react';
+import { CheckCircle2, CircleDollarSign, FileText, Send, Sparkles } from 'lucide-react';
 import { useInView } from './hooks/useInView';
 import styles from './landing.module.css';
 
-const FEATURES = [
+const TIMELINE_STEPS = [
   {
     title: 'Parte quirúrgico',
+    description: 'El médico sube el parte desde el celular o desktop.',
     extra:
       'Subí una foto o PDF del parte desde el celular. Sin escaners, sin formularios manuales.',
     icon: FileText,
   },
   {
     title: 'Extracción con IA',
+    description:
+      'Trazá lee el documento y extrae paciente, práctica y códigos automáticamente.',
     extra:
       'Detectamos automáticamente el código de prestación, datos del paciente, fecha e institución. Sin tipeo.',
-    icon: Cpu,
+    icon: Sparkles,
   },
   {
     title: 'Validación instantánea',
+    description:
+      'Se verifican códigos y requisitos según Swiss Medical u OSDE antes de enviar.',
     extra:
       'Antes de enviar, Trazá verifica que el código sea válido para Swiss Medical u OSDE y te avisa si hay algo para corregir.',
-    icon: CheckCircle,
+    icon: CheckCircle2,
   },
   {
     title: 'Envío a la prepaga',
+    description:
+      'La liquidación se presenta en tiempo y forma, sin archivos sueltos ni mails.',
     extra: 'Generamos y presentamos la liquidación en tiempo y forma.',
     icon: Send,
   },
   {
     title: 'Cobro trazado',
+    description:
+      'Sabés qué entró, qué fue rechazado y qué falta corregir. Todo en un lugar.',
     extra:
       'Sabés exactamente qué se acreditó, qué fue rechazado y qué necesita corrección. Todo en un lugar.',
-    icon: TrendingUp,
+    icon: CircleDollarSign,
   },
 ] as const;
 
-function SpotlightFeature({
-  step,
-  index,
-}: {
-  step: (typeof FEATURES)[number];
-  index: number;
-}) {
+function TimelineLine() {
   const { ref, inView } = useInView<HTMLDivElement>(0.15);
-  const [active, setActive] = useState(false);
-  const [spotlight, setSpotlight] = useState({ x: 0, y: 0, visible: false });
-
-  const handleMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    const el = ref.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    setSpotlight({
-      x: event.clientX - rect.left,
-      y: event.clientY - rect.top,
-      visible: true,
-    });
-  }, [ref]);
-
-  const handleMouseLeave = useCallback(() => {
-    setSpotlight((prev) => ({ ...prev, visible: false }));
-  }, []);
-
-  const handleTap = useCallback(() => {
-    if (window.matchMedia('(hover: none)').matches) {
-      setActive((prev) => !prev);
-    }
-  }, []);
-
-  const Icon = step.icon;
 
   return (
     <div
       ref={ref}
-      role="button"
-      tabIndex={0}
+      className={[styles.solveTimelineLine, inView ? styles.solveTimelineLineVisible : ''].join(
+        ' ',
+      )}
+      aria-hidden
+    />
+  );
+}
+
+function TimelineItem({
+  step,
+  index,
+}: {
+  step: (typeof TIMELINE_STEPS)[number];
+  index: number;
+}) {
+  const { ref, inView } = useInView<HTMLDivElement>(0.2);
+  const [activated, setActivated] = useState(false);
+  const Icon = step.icon;
+  const isLeft = index % 2 === 0;
+
+  const activate = () => setActivated(true);
+
+  const stepCard = (
+    <div
       className={[
-        styles.solveFeature,
-        inView ? styles.solveFeatureVisible : '',
-        active ? styles.solveFeatureActive : '',
+        styles.solveTimelineStep,
+        activated ? styles.solveTimelineStepActive : '',
       ].join(' ')}
-      style={{ transitionDelay: inView ? `${index * 0.1}s` : '0s' }}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
-      onClick={handleTap}
+      tabIndex={0}
+      onMouseEnter={activate}
+      onFocus={activate}
+      onClick={activate}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
-          handleTap();
+          activate();
         }
       }}
     >
-      <div
-        className={styles.solveFeatureSpotlight}
-        style={{
-          opacity: spotlight.visible ? 1 : 0,
-          background: `radial-gradient(300px circle at ${spotlight.x}px ${spotlight.y}px, rgba(42, 107, 82, 0.25), transparent 70%)`,
-        }}
-        aria-hidden
-      />
-      <div className={styles.solveFeatureBody}>
-        <Icon className={styles.solveFeatureIcon} size={28} strokeWidth={1.75} aria-hidden />
-        <h3 className={styles.solveFeatureTitle}>{step.title}</h3>
-        <div className={styles.solveFeatureDivider} aria-hidden />
-        <p className={styles.solveFeatureExtra}>{step.extra}</p>
-      </div>
+      <h3 className={styles.solveTimelineStepTitle}>{step.title}</h3>
+      <p className={styles.solveTimelineStepDesc}>{step.description}</p>
+    </div>
+  );
+
+  const extraPanel = (
+    <aside
+      className={[
+        styles.solveTimelineExtra,
+        activated ? styles.solveTimelineExtraVisible : '',
+      ].join(' ')}
+      aria-hidden={!activated}
+    >
+      <p>{step.extra}</p>
+    </aside>
+  );
+
+  const node = (
+    <div className={styles.solveTimelineNode} aria-hidden>
+      <Icon size={22} strokeWidth={1.75} />
+    </div>
+  );
+
+  return (
+    <div
+      ref={ref}
+      role="listitem"
+      className={[
+        styles.solveTimelineItem,
+        isLeft ? styles.solveTimelineItemLeft : styles.solveTimelineItemRight,
+        inView ? styles.solveTimelineItemVisible : '',
+        activated ? styles.solveTimelineItemActivated : '',
+      ].join(' ')}
+      style={{ transitionDelay: inView ? `${index * 0.12}s` : '0s' }}
+    >
+      {isLeft ? (
+        <>
+          {stepCard}
+          {node}
+          {extraPanel}
+        </>
+      ) : (
+        <>
+          {extraPanel}
+          {node}
+          {stepCard}
+        </>
+      )}
     </div>
   );
 }
@@ -118,9 +151,7 @@ export function LandingFeatures() {
           <div className={styles.solveHeaderCopy}>
             <p className={styles.sectionLabel}>Qué resuelve</p>
             <h2 id="landing-features-title" className={styles.solveHeadline}>
-              Del parte al cobro,
-              <br className={styles.solveHeadlineBreak} aria-hidden />
-              sin perder el control
+              El control que te faltaba sobre tus cobros
             </h2>
           </div>
           <p className={styles.solveHeaderDesc}>
@@ -129,9 +160,10 @@ export function LandingFeatures() {
           </p>
         </header>
 
-        <div className={styles.solveGrid} role="list" aria-label="Qué resuelve Trazá">
-          {FEATURES.map((step, index) => (
-            <SpotlightFeature key={step.title} step={step} index={index} />
+        <div className={styles.solveTimeline} role="list" aria-label="Flujo de Trazá">
+          <TimelineLine />
+          {TIMELINE_STEPS.map((step, index) => (
+            <TimelineItem key={step.title} step={step} index={index} />
           ))}
         </div>
       </div>

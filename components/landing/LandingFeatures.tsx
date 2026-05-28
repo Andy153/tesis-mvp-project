@@ -75,9 +75,9 @@ function TimelineItem({
       <div className={styles.solveTimelineNode} aria-hidden>
         <Icon size={22} strokeWidth={1.75} />
       </div>
-      <div className={styles.solveTimelineCard}>
-        <h3 className={styles.solveTimelineCardTitle}>{step.title}</h3>
-        <p className={styles.solveTimelineCardDesc}>{step.description}</p>
+      <div className={styles.solveTimelineStep}>
+        <h3 className={styles.solveTimelineStepTitle}>{step.title}</h3>
+        <p className={styles.solveTimelineStepDesc}>{step.description}</p>
       </div>
     </div>
   );

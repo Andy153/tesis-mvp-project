@@ -1813,12 +1813,13 @@
 
 .solveTimeline {
   position: relative;
-  max-width: 760px;
+  width: min(100%, 920px);
+  max-width: 920px;
   margin: 52px auto 0;
   padding: 8px 0;
   display: flex;
   flex-direction: column;
-  gap: 56px;
+  gap: 48px;
 }
 
 .solveTimelineLine {
@@ -1828,7 +1829,8 @@
   bottom: 26px;
   width: 2px;
   margin-left: -1px;
-  background: color-mix(in srgb, var(--accent) 40%, transparent);
+  background: color-mix(in srgb, var(--accent) 50%, transparent);
+  border-radius: 999px;
   transform: scaleY(0);
   transform-origin: top center;
   transition: transform 1.4s cubic-bezier(0.22, 1, 0.36, 1);
@@ -1859,7 +1861,7 @@
   transform: translateY(0);
 }
 
-.solveTimelineItemLeft .solveTimelineCard {
+.solveTimelineItemLeft .solveTimelineStep {
   grid-column: 1;
   grid-row: 1;
   justify-self: end;
@@ -1876,7 +1878,7 @@
   grid-row: 1;
 }
 
-.solveTimelineItemRight .solveTimelineCard {
+.solveTimelineItemRight .solveTimelineStep {
   grid-column: 3;
   grid-row: 1;
   justify-self: start;
@@ -1890,34 +1892,39 @@
   display: grid;
   place-items: center;
   background: var(--accent);
-  color: #fff;
+  color: #ffffff;
   border: 2px solid #6ee7a8;
   box-shadow: 0 0 0 4px rgba(110, 231, 168, 0.18);
   flex-shrink: 0;
   z-index: 2;
 }
 
-.solveTimelineCard {
-  max-width: 320px;
+.solveTimelineStep {
+  width: min(100%, 340px);
+  max-width: 340px;
   padding: 20px 24px;
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #1a2e24;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  box-shadow: 0 2px 16px rgba(42, 107, 82, 0.15);
 }
 
-.solveTimelineCardTitle {
-  margin: 0 0 8px;
-  font-size: 1rem;
+.solveTimelineStepTitle {
+  margin: 0 0 10px;
+  font-family: var(--font-sans);
+  font-size: 1.05rem;
   font-weight: 700;
-  line-height: 1.25;
-  color: #fff;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  color: #ffffff;
 }
 
-.solveTimelineCardDesc {
+.solveTimelineStepDesc {
   margin: 0;
-  font-size: 0.92rem;
-  line-height: 1.55;
-  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 0.94rem;
+  line-height: 1.6;
+  color: #a8c5b5;
 }
 
 /* CTA */
@@ -2247,11 +2254,12 @@
     grid-row: 1;
   }
 
-  .solveTimelineItem .solveTimelineCard {
+  .solveTimelineItem .solveTimelineStep {
     grid-column: 2;
     grid-row: 1;
     justify-self: stretch;
     text-align: left;
+    width: 100%;
     max-width: none;
   }
 
@@ -2347,7 +2355,7 @@
     gap: 32px;
   }
 
-  .solveTimelineCard {
+  .solveTimelineStep {
     padding: 16px 18px;
   }
 }

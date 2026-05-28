@@ -1765,12 +1765,11 @@
   color: #2c7a5b;
 }
 
-/* Qué resuelve — timeline vertical */
+/* Qué resuelve — timeline vertical (paleta relevamiento / insights) */
 .solveSection {
   padding: 56px 40px 56px;
   border-radius: 32px;
-  background: #0e1411;
-  --text-muted: rgba(232, 245, 238, 0.62);
+  background: linear-gradient(145deg, var(--landing-ink) 0%, var(--landing-ink-soft) 100%);
   color: #e8f5ee;
 }
 
@@ -1808,7 +1807,7 @@
   max-width: 28rem;
   font-size: 1rem;
   line-height: 1.65;
-  color: var(--text-muted);
+  color: rgba(232, 245, 238, 0.78);
 }
 
 .solveTimeline {
@@ -1829,7 +1828,7 @@
   bottom: 26px;
   width: 2px;
   margin-left: -1px;
-  background: color-mix(in srgb, var(--accent) 50%, transparent);
+  background: linear-gradient(180deg, rgba(125, 206, 168, 0.85), rgba(61, 154, 114, 0.55));
   border-radius: 999px;
   transform: scaleY(0);
   transform-origin: top center;
@@ -1891,10 +1890,10 @@
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: var(--accent);
-  color: #ffffff;
-  border: 2px solid #6ee7a8;
-  box-shadow: 0 0 0 4px rgba(110, 231, 168, 0.18);
+  background: #7dcea8;
+  color: #143d2e;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 0 14px rgba(125, 206, 168, 0.45);
   flex-shrink: 0;
   z-index: 2;
 }
@@ -1904,9 +1903,27 @@
   max-width: 340px;
   padding: 20px 24px;
   border-radius: 16px;
-  background: #1a2e24;
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
-  box-shadow: 0 2px 16px rgba(42, 107, 82, 0.15);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+  outline: none;
+  transition:
+    transform 220ms ease,
+    box-shadow 220ms ease,
+    border-color 220ms ease;
+}
+
+.solveTimelineStep:hover,
+.solveTimelineStep:focus-within {
+  transform: translateY(-4px);
+  border-color: color-mix(in srgb, var(--accent) 70%, transparent);
+  box-shadow: 0 8px 24px rgba(42, 107, 82, 0.35);
+}
+
+.solveTimelineStep:focus-visible {
+  outline: 2px solid #7dcea8;
+  outline-offset: 3px;
 }
 
 .solveTimelineStepTitle {
@@ -1916,15 +1933,39 @@
   font-weight: 700;
   line-height: 1.3;
   letter-spacing: -0.01em;
-  color: #ffffff;
+  color: #fff;
 }
 
 .solveTimelineStepDesc {
   margin: 0;
   font-family: var(--font-sans);
   font-size: 0.94rem;
-  line-height: 1.6;
-  color: #a8c5b5;
+  line-height: 1.55;
+  color: rgba(232, 245, 238, 0.78);
+}
+
+.solveTimelineStepExtra {
+  margin: 0;
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(6px);
+  font-family: var(--font-sans);
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: rgba(232, 245, 238, 0.88);
+  transition:
+    opacity 200ms ease-out,
+    transform 200ms ease-out,
+    max-height 220ms ease;
+}
+
+.solveTimelineStep:hover .solveTimelineStepExtra,
+.solveTimelineStep:focus-within .solveTimelineStepExtra {
+  max-height: 200px;
+  margin-top: 12px;
+  opacity: 1;
+  transform: translateY(0);
 }
 
 /* CTA */
@@ -2099,6 +2140,24 @@
 
   .solveTimelineItemVisible {
     transform: none;
+  }
+
+  .solveTimelineStep,
+  .solveTimelineStepExtra {
+    transition: none;
+  }
+
+  .solveTimelineStep:hover,
+  .solveTimelineStep:focus-within {
+    transform: none;
+  }
+
+  .solveTimelineStep:hover .solveTimelineStepExtra,
+  .solveTimelineStep:focus-within .solveTimelineStepExtra {
+    max-height: none;
+    opacity: 1;
+    transform: none;
+    margin-top: 12px;
   }
 
   .howTimelineFill,

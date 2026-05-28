@@ -8,30 +8,39 @@ const TIMELINE_STEPS = [
   {
     title: 'Parte quirúrgico',
     description: 'El médico sube el parte desde el celular o desktop.',
+    extra:
+      'Subí una foto o PDF del parte desde el celular. Sin escaners, sin formularios manuales.',
     icon: FileText,
   },
   {
     title: 'Extracción con IA',
     description:
       'Trazá lee el documento y extrae paciente, práctica y códigos automáticamente.',
+    extra:
+      'Detectamos automáticamente el código de prestación, datos del paciente, fecha e institución. Sin tipeo.',
     icon: Sparkles,
   },
   {
     title: 'Validación instantánea',
     description:
       'Se verifican códigos y requisitos según Swiss Medical u OSDE antes de enviar.',
+    extra:
+      'Antes de enviar, Trazá verifica que el código sea válido para Swiss Medical u OSDE y te avisa si hay algo para corregir.',
     icon: CheckCircle2,
   },
   {
     title: 'Envío a la prepaga',
     description:
       'La liquidación se presenta en tiempo y forma, sin archivos sueltos ni mails.',
+    extra: 'Generamos y presentamos la liquidación en tiempo y forma.',
     icon: Send,
   },
   {
     title: 'Cobro trazado',
     description:
       'Sabés qué entró, qué fue rechazado y qué falta corregir. Todo en un lugar.',
+    extra:
+      'Sabés exactamente qué se acreditó, qué fue rechazado y qué necesita corrección. Todo en un lugar.',
     icon: CircleDollarSign,
   },
 ] as const;
@@ -75,9 +84,10 @@ function TimelineItem({
       <div className={styles.solveTimelineNode} aria-hidden>
         <Icon size={22} strokeWidth={1.75} />
       </div>
-      <div className={styles.solveTimelineStep}>
+      <div className={styles.solveTimelineStep} tabIndex={0}>
         <h3 className={styles.solveTimelineStepTitle}>{step.title}</h3>
         <p className={styles.solveTimelineStepDesc}>{step.description}</p>
+        <p className={styles.solveTimelineStepExtra}>{step.extra}</p>
       </div>
     </div>
   );

@@ -38,8 +38,10 @@ export function LandingPage() {
         </LandingReveal>
       </div>
       <LandingTicker />
-      <div className={styles.inner}>
+      <div className={styles.innerSolve}>
         <LandingFeatures />
+      </div>
+      <div className={styles.inner}>
         <LandingReveal delay={120}>
           <LandingCta />
         </LandingReveal>

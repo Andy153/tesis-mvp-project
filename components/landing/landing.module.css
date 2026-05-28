@@ -1765,12 +1765,17 @@
   color: #2c7a5b;
 }
 
-/* Qué resuelve — lista + panel */
+/* Qué resuelve — timeline vertical */
 .solveSection {
-  padding: 56px 40px 44px;
+  padding: 56px 40px 56px;
   border-radius: 32px;
-  background: #f6faf7;
-  border: 1px solid rgba(42, 107, 82, 0.08);
+  background: #0e1411;
+  --text-muted: rgba(232, 245, 238, 0.62);
+  color: #e8f5ee;
+}
+
+.solveSection .sectionLabel {
+  color: #7dcea8;
 }
 
 .solveHeader {
@@ -1791,7 +1796,7 @@
   font-size: clamp(2.4rem, 4vw, 3.25rem);
   line-height: 0.98;
   letter-spacing: -0.04em;
-  color: var(--accent-ink);
+  color: #fff;
 }
 
 .solveHeadlineBreak {
@@ -1803,419 +1808,116 @@
   max-width: 28rem;
   font-size: 1rem;
   line-height: 1.65;
-  color: rgba(15, 45, 36, 0.78);
+  color: var(--text-muted);
 }
 
-.solveBody {
-  display: grid;
-  grid-template-columns: minmax(340px, 0.9fr) minmax(0, 1.7fr);
-  gap: 24px;
-  align-items: start;
-}
-
-.solveNav {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-width: 0;
-  width: 100%;
-}
-
-.solveNavItem {
-  display: grid;
-  grid-template-columns: 36px 44px 1fr 24px;
-  align-items: center;
-  gap: 14px;
-  width: 100%;
-  min-height: 104px;
-  padding: 18px 20px;
-  border: 1px solid rgba(42, 107, 82, 0.08);
-  border-radius: 22px;
-  background: #fff;
-  box-shadow: 0 2px 10px rgba(15, 61, 46, 0.04);
-  cursor: pointer;
-  font-family: inherit;
-  text-align: left;
-  transition:
-    border-color 0.25s ease,
-    box-shadow 0.25s ease,
-    background 0.25s ease,
-    transform 0.25s ease;
-}
-
-.solveNavItem:hover {
-  border-color: rgba(42, 107, 82, 0.22);
-  transform: translateX(2px);
-}
-
-.solveNavItemActive {
-  background: rgba(42, 107, 82, 0.08);
-  border-color: rgba(42, 107, 82, 0.35);
-  box-shadow: 0 8px 24px rgba(15, 61, 46, 0.08);
-}
-
-.solveNavNum {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  font-size: 12px;
-  font-weight: 700;
-  background: rgba(42, 107, 82, 0.1);
-  color: var(--accent);
-  flex-shrink: 0;
-  transition: background 0.25s ease, color 0.25s ease;
-}
-
-.solveNavItemActive .solveNavNum {
-  background: var(--accent);
-  color: #fff;
-}
-
-.solveNavIcon {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: rgba(42, 107, 82, 0.08);
-  color: var(--accent);
-  flex-shrink: 0;
-}
-
-.solveNavCopy {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-  align-self: center;
-}
-
-.solveNavTitle {
-  font-size: 0.95rem;
-  font-weight: 700;
-  line-height: 1.2;
-  color: var(--accent-ink);
-}
-
-.solveNavLead {
-  font-size: 0.82rem;
-  line-height: 1.4;
-  color: rgba(15, 45, 36, 0.72);
-}
-
-.solveNavChevron {
-  width: 24px;
-  height: 24px;
-  justify-self: end;
-  color: rgba(42, 107, 82, 0.45);
-  flex-shrink: 0;
-  transition: transform 0.25s ease, color 0.25s ease;
-}
-
-.solveNavItemActive .solveNavChevron {
-  color: var(--accent);
-  transform: translateX(2px);
-}
-
-.solvePanel {
-  min-width: 0;
-}
-
-.solvePanelInner {
-  width: 100%;
-}
-
-.solvePanelContent {
-  display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(220px, 0.85fr);
-  gap: 28px;
-  padding: 32px 32px 28px;
-  border-radius: 28px;
-  background: #fff;
-  border: 1px solid rgba(42, 107, 82, 0.1);
-  box-shadow: 0 16px 40px rgba(15, 61, 46, 0.07);
-  animation: solvePanelIn 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-@keyframes solvePanelIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.solvePanelCopy {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  min-width: 0;
-}
-
-.solveProblemBadge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  width: fit-content;
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: #fdecec;
-  color: #b42318;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-
-.solveProblemTitle {
-  margin: 14px 0 0;
-  font-family: var(--font-title);
-  font-size: clamp(1.35rem, 2.2vw, 1.75rem);
-  line-height: 1.15;
-  letter-spacing: -0.02em;
-  color: var(--accent-ink);
-  max-width: 34rem;
-}
-
-.solvePanelDivider {
-  height: 1px;
-  margin: 20px 0 18px;
-  background: rgba(42, 107, 82, 0.12);
-}
-
-.solveSolutionLabel {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0 0 14px;
-  font-size: 0.92rem;
-  font-weight: 700;
-  color: var(--accent);
-}
-
-.solveSolutionList {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  gap: 14px;
-}
-
-.solveSolutionList li {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-}
-
-.solveSolutionIcon {
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
-  display: grid;
-  place-items: center;
-  background: rgba(42, 107, 82, 0.1);
-  color: var(--accent);
-  flex-shrink: 0;
-}
-
-.solveSolutionCopy {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.solveSolutionCopy strong {
-  font-size: 0.92rem;
-  line-height: 1.25;
-  color: var(--accent-ink);
-}
-
-.solveSolutionCopy span {
-  font-size: 0.86rem;
-  line-height: 1.45;
-  color: rgba(15, 45, 36, 0.74);
-}
-
-.solveOutcome {
-  margin-top: 22px;
-  padding: 16px 18px;
-  border-radius: 16px;
-  background: #e8f3ed;
-  border: 1px solid rgba(42, 107, 82, 0.12);
-}
-
-.solveOutcomeBadge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  color: var(--accent);
-}
-
-.solveOutcomeText {
-  margin: 8px 0 0;
-  font-size: 0.95rem;
-  line-height: 1.45;
-  font-weight: 600;
-  color: var(--accent-ink);
-}
-
-.solveDiagram {
+.solveTimeline {
   position: relative;
-  min-height: 320px;
-  border-radius: 24px;
-  background: radial-gradient(circle at 50% 45%, rgba(42, 107, 82, 0.12) 0%, rgba(232, 243, 237, 0.5) 55%, transparent 100%);
-  overflow: hidden;
+  max-width: 760px;
+  margin: 52px auto 0;
+  padding: 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 56px;
 }
 
-.solveDiagramOrb {
+.solveTimelineLine {
   position: absolute;
-  inset: 18% 12% 18% 12%;
-  border-radius: 50%;
-  background: rgba(42, 107, 82, 0.08);
-  border: 1px dashed rgba(42, 107, 82, 0.18);
-}
-
-.solveDiagramLineTop,
-.solveDiagramLineBottom {
-  position: absolute;
-  border: 1.5px dashed rgba(42, 107, 82, 0.22);
-  border-radius: 999px;
+  left: 50%;
+  top: 26px;
+  bottom: 26px;
+  width: 2px;
+  margin-left: -1px;
+  background: color-mix(in srgb, var(--accent) 40%, transparent);
+  transform: scaleY(0);
+  transform-origin: top center;
+  transition: transform 1.4s cubic-bezier(0.22, 1, 0.36, 1);
+  z-index: 0;
   pointer-events: none;
 }
 
-.solveDiagramLineTop {
-  top: 28%;
-  left: 22%;
-  width: 56%;
-  height: 38%;
-  transform: rotate(-8deg);
+.solveTimelineLineVisible {
+  transform: scaleY(1);
 }
 
-.solveDiagramLineBottom {
-  bottom: 22%;
-  left: 24%;
-  width: 52%;
-  height: 34%;
-  transform: rotate(10deg);
-}
-
-.solveDiagramNode {
-  position: absolute;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 12px;
-  border-radius: 14px;
-  background: #fff;
-  border: 1px solid rgba(42, 107, 82, 0.12);
-  box-shadow: 0 8px 20px rgba(15, 61, 46, 0.08);
-  color: var(--accent);
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1.2;
-  text-align: center;
-}
-
-.solveDiagramNodeDoc {
-  top: 8%;
-  left: 50%;
-  transform: translateX(-50%);
-}
-
-.solveDiagramNodeCore {
-  top: 38%;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 72px;
-  height: 72px;
-  padding: 0;
-  border-radius: 18px;
-  justify-content: center;
-  background: var(--accent);
-  color: #fff;
-  border-color: transparent;
-}
-
-.solveDiagramNodeSwiss {
-  bottom: 14%;
-  left: 8%;
-}
-
-.solveDiagramNodeOsde {
-  bottom: 14%;
-  right: 8%;
-}
-
-.solveDiagramPartnerCard {
-  min-width: 112px;
-  min-height: 56px;
-  padding: 10px 14px;
-  border-radius: 16px;
-  background: #fff;
-  border: 1px solid rgba(42, 107, 82, 0.12);
-  box-shadow: 0 14px 30px rgba(15, 61, 46, 0.1);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-direction: row;
-  gap: 0;
-}
-
-.solveDiagramLogo {
-  display: block;
-  max-width: 100%;
-  width: auto;
-  height: auto;
-  object-fit: contain;
-}
-
-.solveBenefits {
+.solveTimelineItem {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0;
-  margin-top: 32px;
-  padding: 20px 28px;
-  border-radius: 24px;
-  background: #fff;
-  border: 1px solid rgba(42, 107, 82, 0.1);
-  box-shadow: 0 10px 28px rgba(15, 61, 46, 0.05);
-}
-
-.solveBenefitItem {
-  display: flex;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 28px 36px;
   align-items: center;
-  gap: 12px;
-  min-width: 0;
-  padding: 4px 18px;
-  font-size: 0.88rem;
-  font-weight: 600;
-  line-height: 1.3;
-  color: var(--accent-ink);
+  position: relative;
+  z-index: 1;
+  opacity: 0;
+  transform: translateY(20px);
+  transition:
+    opacity 0.55s ease,
+    transform 0.55s ease;
 }
 
-.solveBenefitIcon {
-  width: 38px;
-  height: 38px;
+.solveTimelineItemVisible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.solveTimelineItemLeft .solveTimelineCard {
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: end;
+  text-align: right;
+}
+
+.solveTimelineItemLeft .solveTimelineNode {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.solveTimelineItemRight .solveTimelineNode {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.solveTimelineItemRight .solveTimelineCard {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: start;
+  text-align: left;
+}
+
+.solveTimelineNode {
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: rgba(42, 107, 82, 0.1);
-  color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+  border: 2px solid #6ee7a8;
+  box-shadow: 0 0 0 4px rgba(110, 231, 168, 0.18);
   flex-shrink: 0;
+  z-index: 2;
 }
 
-.solveBenefitItemDivider {
-  border-left: 1px solid rgba(42, 107, 82, 0.12);
+.solveTimelineCard {
+  max-width: 320px;
+  padding: 20px 24px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.solveTimelineCardTitle {
+  margin: 0 0 8px;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: #fff;
+}
+
+.solveTimelineCardDesc {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: var(--text-muted);
 }
 
 /* CTA */
@@ -2377,14 +2079,18 @@
     transition: none;
   }
 
-  .solveNavItem,
-  .solveNavChevron,
-  .solvePanelContent {
+  .solveTimelineLine,
+  .solveTimelineItem {
     transition: none;
-    animation: none;
+    transform: none;
+    opacity: 1;
   }
 
-  .solveNavItem:hover {
+  .solveTimelineLineVisible {
+    transform: scaleY(1);
+  }
+
+  .solveTimelineItemVisible {
     transform: none;
   }
 
@@ -2511,32 +2217,42 @@
     max-width: none;
   }
 
-  .solveBody {
-    grid-template-columns: 1fr;
+  .solveTimeline {
+    max-width: none;
+    margin-top: 40px;
+    padding-left: 4px;
+    gap: 40px;
+  }
+
+  .solveTimelineLine {
+    left: 26px;
+    margin-left: 0;
+    transform: scaleY(0);
+    transform-origin: top;
+  }
+
+  .solveTimelineLineVisible {
+    transform: scaleY(1);
+  }
+
+  .solveTimelineItem,
+  .solveTimelineItemLeft,
+  .solveTimelineItemRight {
+    grid-template-columns: auto 1fr;
     gap: 20px;
   }
 
-  .solvePanelContent {
-    grid-template-columns: 1fr;
-    padding: 24px;
+  .solveTimelineItem .solveTimelineNode {
+    grid-column: 1;
+    grid-row: 1;
   }
 
-  .solveDiagram {
-    min-height: 260px;
-  }
-
-  .solveBenefits {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px 0;
-    padding: 18px 20px;
-  }
-
-  .solveBenefitItem {
-    padding: 4px 8px;
-  }
-
-  .solveBenefitItemDivider {
-    border-left: none;
+  .solveTimelineItem .solveTimelineCard {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: stretch;
+    text-align: left;
+    max-width: none;
   }
 
   .dataCarousel {
@@ -2627,12 +2343,11 @@
     border-radius: 24px;
   }
 
-  .solveDiagram {
-    display: none;
+  .solveTimeline {
+    gap: 32px;
   }
 
-  .solveBenefits {
-    grid-template-columns: 1fr;
-    gap: 14px;
+  .solveTimelineCard {
+    padding: 16px 18px;
   }
 }

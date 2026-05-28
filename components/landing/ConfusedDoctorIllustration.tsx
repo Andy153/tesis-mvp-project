@@ -11,7 +11,7 @@ export function ConfusedDoctorIllustration({ active = false }: Props) {
       className={[styles.chartDoctor, active ? styles.chartDoctorActive : ''].join(' ')}
       aria-hidden
     >
-      <div style={{ position: 'relative', width: 260, height: 220 }}>
+      <div className={styles.chartDoctorFrame}>
         <Image
           src="/images/docmarta2-removebg-preview.png"
           alt="Médica"
@@ -19,6 +19,15 @@ export function ConfusedDoctorIllustration({ active = false }: Props) {
           className={styles.chartDoctorSvg}
           style={{ objectFit: 'contain' }}
         />
+        <span className={[styles.doctorQuestion, styles.doctorQuestion1].join(' ')} aria-hidden>
+          ?
+        </span>
+        <span className={[styles.doctorQuestion, styles.doctorQuestion2].join(' ')} aria-hidden>
+          ?
+        </span>
+        <span className={[styles.doctorQuestion, styles.doctorQuestion3].join(' ')} aria-hidden>
+          ?
+        </span>
       </div>
       <span className={styles.chartDoctorZero}>0%</span>
     </div>

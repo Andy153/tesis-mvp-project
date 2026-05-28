@@ -452,8 +452,14 @@
     transform: none;
   }
 
-  .dataChartPulseOn {
+  .dataChartPulseOn,
+  .chartDoctorActive .doctorQuestion {
     animation: none;
+  }
+
+  .chartDoctorActive .doctorQuestion {
+    opacity: 1;
+    transform: none;
   }
 
   .chartStarFilled {
@@ -1121,6 +1127,13 @@
   min-height: 220px;
 }
 
+.chartDoctorFrame {
+  position: relative;
+  width: 260px;
+  height: 220px;
+  max-width: 100%;
+}
+
 .chartDoctorSvg {
   width: 260px;
   height: 220px;
@@ -1129,6 +1142,60 @@
   z-index: 1;
   object-fit: contain;
   filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.25));
+}
+
+.doctorQuestion {
+  position: absolute;
+  z-index: 2;
+  font-family: var(--font-title);
+  font-weight: 700;
+  line-height: 1;
+  color: rgba(233, 184, 114, 0.92);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.doctorQuestion1 {
+  top: 6%;
+  right: 4%;
+  font-size: 1.6rem;
+}
+
+.doctorQuestion2 {
+  top: 20%;
+  left: 2%;
+  font-size: 1.15rem;
+}
+
+.doctorQuestion3 {
+  top: 48%;
+  right: 0;
+  font-size: 1.3rem;
+}
+
+.chartDoctorActive .doctorQuestion {
+  animation: doctorQuestionPop 2s ease-in-out infinite;
+}
+
+.chartDoctorActive .doctorQuestion2 {
+  animation-delay: 0.45s;
+}
+
+.chartDoctorActive .doctorQuestion3 {
+  animation-delay: 0.9s;
+}
+
+@keyframes doctorQuestionPop {
+  0%,
+  100% {
+    opacity: 0;
+    transform: translateY(4px) scale(0.9);
+  }
+  30%,
+  70% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .chartDoctorZero {

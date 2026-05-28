@@ -148,16 +148,16 @@ export function LandingFeatures() {
     <section className={styles.section} aria-labelledby="landing-features-title">
       <div className={styles.solveSection}>
         <header className={styles.solveHeader}>
-          <div className={styles.solveHeaderCopy}>
-            <p className={styles.sectionLabel}>Qué resuelve</p>
+          <p className={styles.sectionLabel}>Qué resuelve</p>
+          <div className={styles.solveHeaderRow}>
             <h2 id="landing-features-title" className={styles.solveHeadline}>
               El control que te faltaba sobre tus cobros
             </h2>
+            <p className={styles.solveHeaderDesc}>
+              Trazá resuelve los dos dolores que más impactan en el consultorio: la carga
+              administrativa y la falta de visibilidad sobre el cobro.
+            </p>
           </div>
-          <p className={styles.solveHeaderDesc}>
-            Trazá resuelve los dos dolores que más impactan en el consultorio: la carga
-            administrativa y la falta de visibilidad sobre el cobro.
-          </p>
         </header>
 
         <div className={styles.solveTimeline} role="list" aria-label="Flujo de Trazá">

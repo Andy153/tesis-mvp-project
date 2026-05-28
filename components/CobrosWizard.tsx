@@ -1,6 +1,6 @@
 'use client';
 
-import type { CSSProperties, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { FacturaARCA } from '@/components/arca/FacturaARCA';
@@ -58,7 +58,7 @@ function Countdown({ desde, horas, onReady }: { desde: string; horas: number; on
   const h = Math.floor(restantes);
   const m = Math.floor((restantes - h) * 60);
   return (
-    <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
+    <span className="cobros-wizard__countdown">
       {h > 0 ? `${h}h ` : ''}
       {m}min restantes
     </span>
@@ -74,49 +74,21 @@ type StepProps = {
 };
 
 function Step({ numero, titulo, activo, completado, children }: StepProps) {
-  const bgColor = completado ? '#1f5d3a' : activo ? '#e8f5ee' : '#f5f5f5';
-  const borderColor = completado ? '#1f5d3a' : activo ? '#7bc398' : '#d0d7d2';
+  const stepClass = [
+    'cobros-wizard__step',
+    activo ? 'cobros-wizard__step--active' : '',
+    completado ? 'cobros-wizard__step--completed' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return (
-    <div
-      className="cobros-wizard__step"
-      style={{
-        border: `1.5px solid ${borderColor}`,
-        borderRadius: 10,
-        marginBottom: 10,
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          padding: '12px 16px',
-          background: bgColor,
-        }}
-      >
-        <div
-          style={{
-            width: 28,
-            height: 28,
-            borderRadius: '50%',
-            background: completado ? 'rgba(255,255,255,0.25)' : activo ? '#1f5d3a' : '#ccc',
-            color: 'white',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 13,
-            fontWeight: 700,
-            flexShrink: 0,
-          }}
-        >
-          {completado ? '✓' : numero}
-        </div>
-        <span style={{ fontWeight: 600, fontSize: 14, color: completado ? 'white' : activo ? '#1f5d3a' : '#888' }}>
-          {titulo}
-        </span>
+    <div className={stepClass}>
+      <div className="cobros-wizard__step-head">
+        <div className="cobros-wizard__step-badge">{completado ? '✓' : numero}</div>
+        <span className="cobros-wizard__step-title">{titulo}</span>
       </div>
-      {activo && children && <div className="cobros-wizard__step-body" style={{ padding: '16px 20px' }}>{children}</div>}
+      {activo && children ? <div className="cobros-wizard__step-body">{children}</div> : null}
     </div>
   );
 }
@@ -320,8 +292,8 @@ export function CobrosWizard({
     }
   };
 
-  if (loading) return <p style={{ color: '#666', fontSize: 14 }}>Cargando...</p>;
-  if (!sub) return <p style={{ color: '#e00', fontSize: 14 }}>{error || 'No encontrado'}</p>;
+  if (loading) return <p className="cobros-wizard__loading">Cargando...</p>;
+  if (!sub) return <p className="cobros-wizard__fatal">{error || 'No encontrado'}</p>;
 
   const estado = sub.wizard_estado ?? '';
   const paso = sub.wizard_paso ?? 1;
@@ -353,30 +325,12 @@ export function CobrosWizard({
   const isExcepcion = estado === 'excepcion_enviada';
   const isDescartado = estado === 'descartado';
 
-  const labelStyle: CSSProperties = {
-    fontSize: 13,
-    fontWeight: 600,
-    marginBottom: 4,
-    display: 'block',
-    color: '#1f5d3a',
-  };
-  const inputStyle: CSSProperties = {
-    width: '100%',
-    height: 36,
-    padding: '0 12px',
-    borderRadius: 8,
-    border: '1px solid #d0d7d2',
-    fontSize: 14,
-    boxSizing: 'border-box',
-  };
-  const linkStyle: CSSProperties = { color: '#1f5d3a', fontWeight: 600, textDecoration: 'underline' };
-
   if (isAprobado) {
     return (
-      <div style={{ textAlign: 'center', padding: 32 }}>
-        <div style={{ fontSize: 48 }}>🎉</div>
-        <h3 style={{ color: '#1f5d3a', margin: '12px 0 4px' }}>¡Liquidación aprobada!</h3>
-        <p style={{ color: '#555', fontSize: 14 }}>
+      <div className="cobros-wizard__state-aprobado">
+        <div className="cobros-wizard__state-aprobado-icon">🎉</div>
+        <h3 className="cobros-wizard__state-aprobado-title">¡Liquidación aprobada!</h3>
+        <p className="cobros-wizard__text cobros-wizard__text--none">
           {periodoLabel(sub.periodo)} — el pago debería acreditarse en los próximos días.
         </p>
       </div>
@@ -385,9 +339,9 @@ export function CobrosWizard({
 
   if (isExcepcion) {
     return (
-      <div style={{ padding: 20, background: '#fff4d6', border: '1px solid #e0b94a', borderRadius: 10 }}>
-        <strong style={{ color: '#7a5a00' }}>Solicitud de excepción enviada</strong>
-        <p style={{ color: '#7a5a00', fontSize: 14, margin: '8px 0 0' }}>
+      <div className="cobros-wizard__panel cobros-wizard__panel--warn">
+        <strong>Solicitud de excepción enviada</strong>
+        <p className="cobros-wizard__text cobros-wizard__text--tight" style={{ marginTop: 8 }}>
           Se envió un mail a Swiss Medical con la factura y los datos del CAE. Esperá su respuesta.
         </p>
       </div>
@@ -396,9 +350,9 @@ export function CobrosWizard({
 
   if (isDescartado) {
     return (
-      <div style={{ padding: 20, background: '#f5f5f5', border: '1px solid #d0d7d2', borderRadius: 10 }}>
-        <strong style={{ color: '#555' }}>Seguimiento descartado</strong>
-        <p style={{ color: '#666', fontSize: 14, margin: '8px 0 0' }}>
+      <div className="cobros-wizard__panel cobros-wizard__panel--neutral">
+        <strong>Seguimiento descartado</strong>
+        <p className="cobros-wizard__text cobros-wizard__text--tight" style={{ marginTop: 8 }}>
           Este paso a paso ya no aparecerá como acción pendiente.
         </p>
       </div>
@@ -412,36 +366,14 @@ export function CobrosWizard({
 
   return (
     <div className="cobros-wizard">
-      <p style={{ fontSize: 13, color: '#555', marginBottom: 16 }}>
+      <p className="cobros-wizard__intro">
         Liquidación <strong>{periodoLabel(sub.periodo)}</strong> · {sub.cantidad_partes ?? 0} parte(s) enviados el{' '}
         {new Date(sub.enviado_en).toLocaleDateString('es-AR')}
       </p>
 
-      {error && (
-        <div
-          style={{
-            padding: '8px 12px',
-            background: '#fde2e2',
-            color: '#842029',
-            borderRadius: 6,
-            marginBottom: 12,
-            fontSize: 13,
-          }}
-        >
-          {error}
-        </div>
-      )}
+      {error ? <div className="cobros-wizard__error-inline">{error}</div> : null}
 
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'flex-end',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: 8,
-          marginBottom: 12,
-        }}
-      >
+      <div className="cobros-wizard__toolbar">
         {paso > 1 && (
           <button
             type="button"
@@ -466,7 +398,7 @@ export function CobrosWizard({
         <button
           type="button"
           className="btn cobros-wizard__btn-muted"
-          style={{ fontSize: 12, color: '#666' }}
+          style={{ fontSize: 12 }}
           disabled={saving}
           onClick={() => {
             if (
@@ -482,36 +414,25 @@ export function CobrosWizard({
         </button>
       </div>
 
-      {paso > 1 && (
-        <div
-          style={{
-            marginBottom: 14,
-            padding: '12px 14px',
-            borderRadius: 8,
-            background: '#fff7ed',
-            border: '1px solid #fdba74',
-            fontSize: 13,
-            lineHeight: 1.45,
-            color: '#9a3412',
-          }}
-        >
+      {paso > 1 ? (
+        <div className="cobros-wizard__notice">
           Si cargaste un <strong>parte nuevo</strong> en el mismo período que otro envío, usá{' '}
           <strong>Reiniciar cobro desde paso 1</strong> para no quedar en el paso de un parte anterior.
         </div>
-      )}
+      ) : null}
 
       {/* Paso 1 */}
       <Step numero={1} titulo="Esperá 48 horas para que Swiss Medical procese la liquidación" activo={paso === 1} completado={paso > 1}>
         {!ready48h ? (
           <div>
-            <p style={{ fontSize: 14, color: '#555', margin: '0 0 8px' }}>
+            <p className="cobros-wizard__text cobros-wizard__text--tight">
               Enviamos la planilla el {new Date(sub.enviado_en).toLocaleDateString('es-AR')}. Swiss Medical necesita tiempo para
               procesarla.
             </p>
-            <p style={{ fontSize: 14, color: '#1f5d3a', margin: 0 }}>
+            <p className="cobros-wizard__text-accent cobros-wizard__text--none">
               ⏳ <Countdown desde={sub.enviado_en} horas={48} onReady={() => setReady48h(true)} />
             </p>
-            <p style={{ fontSize: 13, color: '#666', margin: '10px 0 12px' }}>
+            <p className="cobros-wizard__text-muted">
               El contador es una recomendación, no bloquea el proceso.
             </p>
             <button type="button" className="btn btn-primary" onClick={() => patch('comprobante_disponible')} disabled={saving}>
@@ -520,7 +441,7 @@ export function CobrosWizard({
           </div>
         ) : (
           <div>
-            <p style={{ fontSize: 14, color: '#1f5d3a', marginBottom: 12 }}>✅ Ya pasaron 48 horas. Podés revisar el portal de Swiss Medical.</p>
+            <p className="cobros-wizard__text-accent">✅ Ya pasaron 48 horas. Podés revisar el portal de Swiss Medical.</p>
             <button type="button" className="btn btn-primary" onClick={() => patch('comprobante_disponible')} disabled={saving}>
               Entendido, voy a revisar →
             </button>
@@ -530,23 +451,23 @@ export function CobrosWizard({
 
       {/* Paso 2 */}
       <Step numero={2} titulo="Revisá el comprobante en el portal de Swiss Medical" activo={paso === 2} completado={paso > 2}>
-        <p style={{ fontSize: 14, color: '#555', margin: '0 0 12px' }}>
+        <p className="cobros-wizard__text">
           Ingresá al portal de prestadores, andá a <strong>Trámites online → Consulta de liquidación</strong>, seleccioná{' '}
           <strong>{periodoLabel(sub.periodo)}</strong> y verificá que aparezca el comprobante.
         </p>
-        <img src="/wizard/paso2_menu.png" alt="Menú Trámites online" style={{ width: '100%', borderRadius: 8, margin: '12px 0', border: '1px solid #e0e0e0' }} />
-        <img src="/wizard/paso2_mes.png" alt="Selector de mes" style={{ width: '100%', borderRadius: 8, margin: '0 0 12px', border: '1px solid #e0e0e0' }} />
+        <img src="/wizard/paso2_menu.png" alt="Menú Trámites online" className="cobros-wizard__img" />
+        <img src="/wizard/paso2_mes.png" alt="Selector de mes" className="cobros-wizard__img cobros-wizard__img--tight" />
         <a
           href="https://www.swissmedical.com.ar/prestadores"
           target="_blank"
           rel="noopener noreferrer"
-          style={{ ...linkStyle, display: 'inline-block', marginBottom: 16 }}
+          className="cobros-wizard__link"
         >
           🔗 Abrir portal Swiss Medical
         </a>
         <br />
-        <p style={{ fontSize: 13, color: '#888', margin: '0 0 12px' }}>¿Aparece el comprobante?</p>
-        <div className="cobros-wizard__step-actions" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <p className="cobros-wizard__text-soft">¿Aparece el comprobante?</p>
+        <div className="cobros-wizard__step-actions">
           <button type="button" className="btn btn-primary" disabled={saving} onClick={() => patch('comprobante_disponible')}>
             Sí, aparece el comprobante
           </button>
@@ -554,36 +475,28 @@ export function CobrosWizard({
             Todavía no — vuelvo después
           </button>
         </div>
-        <button type="button" className="btn cobros-wizard__btn-muted" style={{ marginTop: 12, fontSize: 13, color: '#666' }} onClick={goBack} disabled={saving}>
+        <button type="button" className="btn cobros-wizard__btn-muted" style={{ marginTop: 12, fontSize: 13 }} onClick={goBack} disabled={saving}>
           ← Volver al paso anterior
         </button>
       </Step>
 
       {/* Paso 3 */}
       <Step numero={3} titulo="Descargá y subí el comprobante de Swiss Medical" activo={paso === 3} completado={paso > 3}>
-        <p style={{ fontSize: 14, color: '#555', margin: '0 0 12px' }}>
+        <p className="cobros-wizard__text">
           {tieneComprobanteCargado
             ? 'Ya tenés un comprobante registrado en Trazá. Podés revisarlo y continuar.'
             : 'Descargá el comprobante desde el portal y subilo acá para tener el registro en Trazá.'}
         </p>
-        <img src="/wizard/paso3_comprobante.png" alt="Descargar comprobante y verificar Aprobado" style={{ width: '100%', borderRadius: 8, margin: '12px 0', border: '1px solid #e0e0e0' }} />
+        <img src="/wizard/paso3_comprobante.png" alt="Descargar comprobante y verificar Aprobado" className="cobros-wizard__img" />
         {tieneComprobanteCargado && (
-          <div
-            style={{
-              padding: '12px 14px',
-              marginBottom: 14,
-              borderRadius: 8,
-              background: '#e8f5ee',
-              border: '1px solid #7bc398',
-            }}
-          >
-            <p style={{ fontSize: 14, color: '#1f5d3a', margin: '0 0 10px' }}>
+          <div className="cobros-wizard__panel cobros-wizard__panel--ok">
+            <p className="cobros-wizard__text cobros-wizard__text--tight" style={{ marginBottom: 10 }}>
               ✓ Comprobante SMG disponible {demoUser ? '— DEMO' : ''}
               {sub.monto_total != null && sub.monto_total > 0
                 ? ` · monto $${sub.monto_total.toLocaleString('es-AR', { minimumFractionDigits: 2 })}`
                 : ''}
             </p>
-            <div className="cobros-wizard__step-actions" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <div className="cobros-wizard__step-actions">
               <button
                 type="button"
                 className="btn"
@@ -606,7 +519,7 @@ export function CobrosWizard({
         {!demoUser && (
           <>
             <div className="cobros-wizard__file-input-wrap">
-              <label style={labelStyle}>Comprobante SMG (PDF)</label>
+              <label className="cobros-wizard__label">Comprobante SMG (PDF)</label>
               <input
                 type="file"
                 className="cobros-wizard__file-input"
@@ -618,11 +531,6 @@ export function CobrosWizard({
               type="button"
               className="btn btn-primary"
               disabled={!comprobanteFile || saving}
-              style={
-                !comprobanteFile
-                  ? { background: '#cdd5d0', color: '#7a8580', cursor: 'not-allowed', borderColor: '#cdd5d0' }
-                  : undefined
-              }
               onClick={async () => {
                 if (!comprobanteFile) return;
                 const fd = new FormData();
@@ -634,7 +542,7 @@ export function CobrosWizard({
             </button>
           </>
         )}
-        <button type="button" className="btn cobros-wizard__btn-muted" style={{ marginTop: 12, marginLeft: 12, marginRight: 12, fontSize: 13, color: '#666' }} onClick={goBack} disabled={saving}>
+        <button type="button" className="btn cobros-wizard__btn-muted" style={{ marginTop: 12, fontSize: 13 }} onClick={goBack} disabled={saving}>
           ← Volver al paso anterior
         </button>
       </Step>
@@ -669,7 +577,7 @@ export function CobrosWizard({
         <button
           type="button"
           className="btn cobros-wizard__btn-muted"
-          style={{ marginTop: 12, marginLeft: 0, marginRight: 0, fontSize: 13, color: '#666' }}
+          style={{ marginTop: 12, fontSize: 13 }}
           onClick={goBack}
           disabled={saving}
         >
@@ -679,38 +587,33 @@ export function CobrosWizard({
 
       {/* Paso 5 */}
       <Step numero={5} titulo="Adjuntá la factura en el portal de Swiss Medical" activo={paso === 5} completado={paso > 5}>
-        <p style={{ fontSize: 14, color: '#555', margin: '0 0 12px' }}>
+        <p className="cobros-wizard__text">
           Descargá la factura del paso anterior y subila manualmente en el portal de prestadores de Swiss Medical. En la
           Consulta de liquidación, hacé click en el <strong>clip 📎</strong> de la fila correspondiente.
         </p>
-        <img src="/wizard/paso5_adjuntar.png" alt="Adjuntar factura con el clip" style={{ width: '100%', borderRadius: 8, margin: '12px 0', border: '1px solid #e0e0e0' }} />
-        <p style={{ fontSize: 14, color: '#555', margin: '0 0 12px' }}>
+        <img src="/wizard/paso5_adjuntar.png" alt="Adjuntar factura con el clip" className="cobros-wizard__img" />
+        <p className="cobros-wizard__text">
           Una vez adjuntada en el portal, confirmá acá los datos del CAE que ingresaste.
         </p>
-        <div style={{ display: 'grid', gap: 10, marginBottom: 12 }}>
+        <div className="cobros-wizard__cae-grid">
           <div>
-            <label style={labelStyle}>Número de CAE</label>
-            <input style={inputStyle} value={caeNumero} onChange={(e) => setCaeNumero(e.target.value)} placeholder="Ej: 12345678901234" />
+            <label className="cobros-wizard__label">Número de CAE</label>
+            <input className="cobros-wizard__input" value={caeNumero} onChange={(e) => setCaeNumero(e.target.value)} placeholder="Ej: 12345678901234" />
           </div>
           <div>
-            <label style={labelStyle}>Fecha de vencimiento del CAE</label>
-            <input type="date" style={inputStyle} value={caeVencimiento} onChange={(e) => setCaeVencimiento(e.target.value)} />
+            <label className="cobros-wizard__label">Fecha de vencimiento del CAE</label>
+            <input type="date" className="cobros-wizard__input" value={caeVencimiento} onChange={(e) => setCaeVencimiento(e.target.value)} />
           </div>
         </div>
         <button
           type="button"
           className="btn btn-primary"
           disabled={!caeNumero.trim() || !caeVencimiento || saving}
-          style={
-            !caeNumero.trim() || !caeVencimiento
-              ? { background: '#cdd5d0', color: '#7a8580', cursor: 'not-allowed', borderColor: '#cdd5d0' }
-              : undefined
-          }
           onClick={() => patch('adjuntar_factura', { cae_numero: caeNumero, cae_vencimiento: caeVencimiento })}
         >
           {saving ? 'Guardando...' : 'Confirmar adjunto en el portal'}
         </button>
-        <button type="button" className="btn cobros-wizard__btn-muted" style={{ marginTop: 12, marginBottom: 12, marginLeft: 12, marginRight: 12, fontSize: 13, color: '#666' }} onClick={goBack} disabled={saving}>
+        <button type="button" className="btn cobros-wizard__btn-muted" style={{ marginTop: 12, fontSize: 13 }} onClick={goBack} disabled={saving}>
           ← Volver al paso anterior
         </button>
       </Step>
@@ -718,23 +621,23 @@ export function CobrosWizard({
       {/* Paso 6 */}
       <Step numero={6} titulo="Verificá la aprobación (48 horas)" activo={paso === 6} completado={isAprobado}>
         {!sub.factura_adjuntada_en ? (
-          <p style={{ fontSize: 14, color: '#888' }}>Completá el paso anterior para iniciar esta espera.</p>
+          <p className="cobros-wizard__text-soft cobros-wizard__text--none">Completá el paso anterior para iniciar esta espera.</p>
         ) : (
           <div>
             {!readyFactura ? (
               <>
-                <p style={{ fontSize: 14, color: '#555', margin: '0 0 8px' }}>
+                <p className="cobros-wizard__text cobros-wizard__text--tight">
                   Swiss Medical tiene 48 horas para procesar la factura adjuntada.
                 </p>
-                <p style={{ fontSize: 14, color: '#1f5d3a', margin: '0 0 8px' }}>
+                <p className="cobros-wizard__text-accent cobros-wizard__text--tight">
                   ⏳ <Countdown desde={sub.factura_adjuntada_en} horas={48} onReady={() => setReadyFactura(true)} />
                 </p>
-                <p style={{ fontSize: 13, color: '#666', margin: '0 0 12px' }}>
+                <p className="cobros-wizard__text-muted">
                   El contador es una recomendación, no bloquea la verificación.
                 </p>
               </>
             ) : (
-              <p style={{ fontSize: 14, color: '#1f5d3a', marginBottom: 12 }}>
+              <p className="cobros-wizard__text-accent">
                 ✅ Ya pasaron 48 horas. Revisá si figura <strong>Aprobado</strong> en el portal.
               </p>
             )}
@@ -742,18 +645,17 @@ export function CobrosWizard({
               href="https://www.swissmedical.com.ar/prestadores"
               target="_blank"
               rel="noopener noreferrer"
-              style={{ ...linkStyle, display: 'inline-block', marginBottom: 12 }}
+              className="cobros-wizard__link cobros-wizard__link--inline"
             >
               🔗 Abrir portal Swiss Medical
             </a>
-            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+            <div className="cobros-wizard__step-actions" style={{ marginTop: 8 }}>
               <button type="button" className="btn btn-primary" onClick={() => patch('marcar_aprobado')} disabled={saving}>
                 ✓ Figura aprobado
               </button>
               <button
                 type="button"
-                className="btn"
-                style={{ borderColor: '#e07b7b', color: '#842029' }}
+                className="btn cobros-wizard__btn-danger-outline"
                 disabled={saving || exceptionSent}
                 onClick={() => {
                   if (
@@ -770,7 +672,7 @@ export function CobrosWizard({
             </div>
           </div>
         )}
-        <button type="button" className="btn cobros-wizard__btn-muted" style={{ marginTop: 12, fontSize: 13, color: '#666' }} onClick={goBack} disabled={saving}>
+        <button type="button" className="btn cobros-wizard__btn-muted" style={{ marginTop: 12, fontSize: 13 }} onClick={goBack} disabled={saving}>
           ← Volver al paso anterior
         </button>
       </Step>

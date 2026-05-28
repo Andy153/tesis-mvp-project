@@ -61,7 +61,6 @@ export function useCobrosPendientes() {
           setLoading(false);
           return;
         }
-        // En demo, mostramos solo la submission de esta sesión.
         const r = await fetch(`/api/submissions/${encodeURIComponent(id)}/wizard`);
         const j = await r.json();
         if (!r.ok || !j.submission) {
@@ -107,7 +106,6 @@ export function useCobrosPendientes() {
   return { submissions, loading, reload: load };
 }
 
-// Badge para el sidebar — un punto rojo con contador
 export function CobrosSidebarBadge({ count }: { count: number }) {
   if (count === 0) return null;
   return (
@@ -131,7 +129,6 @@ export function CobrosSidebarBadge({ count }: { count: number }) {
   );
 }
 
-// Banner para el dashboard/documentos — aparece cuando hay pasos pendientes
 export function CobrosBanner() {
   const { submissions, reload } = useCobrosPendientes();
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -141,68 +138,51 @@ export function CobrosBanner() {
   return (
     <div style={{ marginBottom: 16 }}>
       {submissions.map((sub) => (
-        <div
-          key={sub.id}
-          style={{
-            border: '1.5px solid #7bc398',
-            borderRadius: 10,
-            overflow: 'hidden',
-            marginBottom: 8,
-          }}
-        >
+        <div key={sub.id} className="cobros-banner">
           <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '12px 16px',
-              background: '#e8f5ee',
-              cursor: 'pointer',
-              userSelect: 'none',
-            }}
+            className="cobros-banner__head"
             onClick={() => setExpanded(expanded === sub.id ? null : sub.id)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                setExpanded(expanded === sub.id ? null : sub.id);
+              }
+            }}
+            role="button"
+            tabIndex={0}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div className="cobros-banner__head-inner">
               <img
                 src="/swiss-medical-logo.png"
                 alt="Swiss Medical"
-                style={{ width: 28, height: 28, objectFit: 'contain' }}
+                className="cobros-banner__logo"
               />
               <div>
-                <div style={{ fontWeight: 700, fontSize: 14, color: '#1f5d3a' }}>
+                <div className="cobros-banner__title">
                   Cobro Swiss Medical — {periodoLabel(sub.periodo)}
                 </div>
-                <div style={{ fontSize: 12, color: '#555', marginTop: 2 }}>
+                <div className="cobros-banner__meta">
                   Paso {sub.wizard_paso ?? 1}/6 · {pasoLabel(sub.wizard_estado)}
                 </div>
               </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span
-                style={{
-                  padding: '3px 10px',
-                  borderRadius: 20,
-                  background: '#1f5d3a',
-                  color: 'white',
-                  fontSize: 11,
-                  fontWeight: 600,
-                }}
-              >
-                Acción requerida
+            <div className="cobros-banner__actions">
+              <span className="cobros-banner__badge">Acción requerida</span>
+              <span className="cobros-banner__chevron" aria-hidden>
+                {expanded === sub.id ? '▲' : '▼'}
               </span>
-              <span style={{ color: '#1f5d3a', fontSize: 16 }}>{expanded === sub.id ? '▲' : '▼'}</span>
             </div>
           </div>
 
-          {expanded === sub.id && (
-            <div style={{ padding: '16px 20px', background: 'white' }}>
+          {expanded === sub.id ? (
+            <div className="cobros-banner__body">
               <CobrosWizard
                 submissionId={sub.id}
                 onUpdate={reload}
                 onCollapse={() => setExpanded(null)}
               />
             </div>
-          )}
+          ) : null}
         </div>
       ))}
     </div>

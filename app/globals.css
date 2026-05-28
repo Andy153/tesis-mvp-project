@@ -640,12 +640,235 @@ html[data-theme='dark'] .btn-danger {
   color: var(--error);
 }
 
-/* Cobros wizard — Swiss Medical post-envío */
+/* ─── Cobros wizard — Swiss Medical post-envío ─── */
+.cobros-wizard__intro {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0 0 16px;
+  line-height: 1.45;
+}
+.cobros-wizard__loading {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin: 0;
+}
+.cobros-wizard__fatal {
+  font-size: 14px;
+  color: var(--error);
+  margin: 0;
+}
+.cobros-wizard__toolbar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.cobros-wizard__notice {
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--warn-soft);
+  border: 1px solid rgba(154, 106, 22, 0.35);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--warn);
+}
+.cobros-wizard__error-inline {
+  padding: 8px 12px;
+  background: var(--error-soft);
+  color: var(--error);
+  border: 1px solid rgba(155, 46, 46, 0.25);
+  border-radius: var(--radius-sm);
+  margin-bottom: 12px;
+  font-size: 13px;
+  line-height: 1.45;
+}
 .cobros-wizard__step {
   overflow: hidden;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 10px;
+}
+.cobros-wizard__step--active {
+  border-color: var(--accent);
+}
+.cobros-wizard__step--completed {
+  border-color: var(--accent);
+}
+.cobros-wizard__step-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--bg-sunken);
+}
+.cobros-wizard__step--active .cobros-wizard__step-head {
+  background: var(--accent-soft);
+}
+.cobros-wizard__step--completed .cobros-wizard__step-head {
+  background: var(--accent);
+  color: #fff;
+}
+.cobros-wizard__step-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--border-strong);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.cobros-wizard__step--active .cobros-wizard__step-badge {
+  background: var(--accent);
+  color: #fff;
+}
+.cobros-wizard__step--completed .cobros-wizard__step-badge {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+.cobros-wizard__step-title {
+  font-weight: 600;
+  font-size: 14;
+  color: var(--text-muted);
+}
+.cobros-wizard__step--active .cobros-wizard__step-title {
+  color: var(--accent-ink);
+}
+.cobros-wizard__step--completed .cobros-wizard__step-title {
+  color: #fff;
 }
 .cobros-wizard__step-body {
+  padding: 16px 20px;
   background: var(--bg-panel);
+  color: var(--text);
+}
+.cobros-wizard__step-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.cobros-wizard__text {
+  font-size: 14px;
+  color: var(--text);
+  margin: 0 0 12px;
+  line-height: 1.45;
+}
+.cobros-wizard__text--tight {
+  margin-bottom: 8px;
+}
+.cobros-wizard__text--none {
+  margin: 0;
+}
+.cobros-wizard__text-muted {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 10px 0 12px;
+  line-height: 1.45;
+}
+.cobros-wizard__text-accent {
+  font-size: 14px;
+  color: var(--accent-ink);
+  margin: 0 0 8px;
+  line-height: 1.45;
+}
+.cobros-wizard__text-soft {
+  font-size: 13px;
+  color: var(--text-soft);
+  margin: 0 0 12px;
+  line-height: 1.45;
+}
+.cobros-wizard__label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: var(--accent-ink);
+}
+.cobros-wizard__input {
+  width: 100%;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  font-size: 14;
+  font-family: inherit;
+  box-sizing: border-box;
+  background: var(--bg-panel);
+  color: var(--text);
+}
+.cobros-wizard__link {
+  display: inline-block;
+  margin-bottom: 16px;
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: underline;
+}
+.cobros-wizard__link--inline {
+  margin-bottom: 12px;
+}
+.cobros-wizard__img {
+  width: 100%;
+  border-radius: var(--radius-sm);
+  margin: 12px 0;
+  border: 1px solid var(--border);
+}
+.cobros-wizard__img--tight {
+  margin: 0 0 12px;
+}
+.cobros-wizard__countdown {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.cobros-wizard__panel {
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.cobros-wizard__panel--ok {
+  background: var(--ok-soft);
+  border: 1px solid rgba(42, 107, 82, 0.35);
+  color: var(--accent-ink);
+}
+.cobros-wizard__panel--warn {
+  padding: 20px;
+  background: var(--warn-soft);
+  border: 1px solid rgba(154, 106, 22, 0.35);
+  color: var(--warn);
+}
+.cobros-wizard__panel--neutral {
+  padding: 20px;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+.cobros-wizard__state-aprobado {
+  text-align: center;
+  padding: 32px;
+}
+.cobros-wizard__state-aprobado-icon {
+  font-size: 48px;
+  line-height: 1;
+}
+.cobros-wizard__state-aprobado-title {
+  color: var(--accent-ink);
+  margin: 12px 0 4px;
+  font-size: 1.1rem;
+}
+.cobros-wizard__btn-muted {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.cobros-wizard__btn-danger-outline.btn {
+  border-color: var(--error);
+  color: var(--error);
 }
 .cobros-wizard__file-input-wrap {
   margin-bottom: 12px;
@@ -661,15 +884,278 @@ html[data-theme='dark'] .btn-danger {
   font-family: inherit;
   color: var(--text);
 }
-html[data-theme='dark'] .cobros-wizard .cobros-wizard__step-body .btn:not(.btn-primary):not(.btn-danger) {
+.cobros-wizard__cae-grid {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+/* Cobros banner — Mis documentos / dashboard */
+.cobros-banner {
+  border: 1.5px solid var(--accent);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+.cobros-banner__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--accent-soft);
+  cursor: pointer;
+  user-select: none;
+  gap: 10px;
+}
+.cobros-banner__head-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.cobros-banner__logo {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.cobros-banner__title {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--accent-ink);
+  line-height: 1.3;
+}
+.cobros-banner__meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  line-height: 1.35;
+}
+.cobros-banner__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.cobros-banner__badge {
+  padding: 3px 10px;
+  border-radius: 20px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.cobros-banner__chevron {
+  color: var(--accent-ink);
+  font-size: 16px;
+  line-height: 1;
+}
+.cobros-banner__body {
+  padding: 16px 20px;
+  background: var(--bg-panel);
   color: var(--text);
 }
-html[data-theme='dark'] .cobros-wizard .cobros-wizard__step-actions .btn:not(.btn-primary) {
-  color: var(--text) !important;
+
+/* Factura ARCA — paso 4 del wizard */
+@keyframes factura-arca-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
-html[data-theme='dark'] .cobros-wizard .cobros-wizard__step-body .btn-primary,
-html[data-theme='dark'] .cobros-wizard .cobros-wizard__step-actions .btn-primary {
+.factura-arca {
+  color: var(--text);
+}
+.factura-arca__panel {
+  padding: 16px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 12px;
+  line-height: 1.45;
+}
+.factura-arca__panel--ok {
+  background: var(--ok-soft);
+  border: 1px solid rgba(42, 107, 82, 0.35);
+  color: var(--accent-ink);
+}
+.factura-arca__panel--error {
+  background: var(--error-soft);
+  border: 1px solid rgba(155, 46, 46, 0.25);
+  color: var(--error);
+}
+.factura-arca__panel--warn {
+  background: var(--warn-soft);
+  border: 1px solid rgba(154, 106, 22, 0.35);
+  color: var(--warn);
+  font-size: 13px;
+}
+.factura-arca__panel--emision {
+  padding: 14px;
+  margin-bottom: 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(42, 107, 82, 0.35);
+  background: var(--ok-soft);
+  color: var(--accent-ink);
+}
+.factura-arca__panel--emision-prod {
+  border: 2px solid var(--warn);
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.factura-arca__title {
+  font-weight: 700;
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+.factura-arca__meta {
+  font-size: 12px;
+  margin: 0 0 8px;
+  color: var(--text-muted);
+}
+.factura-arca__row {
+  font-size: 14px;
+  margin: 4px 0;
+  color: inherit;
+}
+.factura-arca__link-pdf {
+  display: inline-block;
+  margin-top: 12px;
+  color: var(--accent);
+  font-weight: 600;
+}
+.factura-arca__hint {
+  font-size: 12px;
+  color: var(--text-soft);
+  margin: 12px 0 0;
+}
+.factura-arca__muted {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin: 0 0 8px;
+}
+.factura-arca__muted--period {
+  margin: 0 0 12px;
+}
+.factura-arca__muted--footer {
+  font-size: 12px;
+  margin: 12px 0 0;
+}
+.factura-arca__accent-strong {
+  color: var(--accent-ink);
+}
+.factura-arca__nc {
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--warn-soft);
+  border: 1px solid rgba(154, 106, 22, 0.35);
+  border-radius: var(--radius-sm);
+  color: var(--warn);
+  font-size: 13px;
+}
+.factura-arca__nc-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.factura-arca__nc-meta {
+  font-size: 12px;
+}
+.factura-arca__nc-link {
+  color: var(--warn);
+  text-decoration: underline;
+  font-weight: 600;
+}
+.factura-arca__nc-divider {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.factura-arca__nc-action {
+  background: transparent;
+  border: none;
+  color: var(--error);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+.factura-arca__nc-action:hover {
+  color: var(--error);
+}
+.factura-arca__label-block {
+  display: block;
+  margin-top: 8px;
+  font-weight: 600;
+  color: var(--warn);
+}
+.factura-arca__input {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  font-size: 14;
+  font-family: inherit;
+  box-sizing: border-box;
+  background: var(--bg-panel);
+  color: var(--text);
+}
+.factura-arca__spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: factura-arca-spin 0.7s linear infinite;
+}
+.factura-arca__emit-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.factura-arca__continue {
+  margin-top: 12px;
+}
+
+/* Dark theme — wizard, banner y factura ARCA */
+html[data-theme='dark'] .cobros-wizard__step--completed .cobros-wizard__step-title,
+html[data-theme='dark'] .cobros-banner__badge {
   color: #fff;
+}
+html[data-theme='dark'] .cobros-wizard__step--active .cobros-wizard__step-title,
+html[data-theme='dark'] .cobros-wizard__text-accent,
+html[data-theme='dark'] .cobros-wizard__label,
+html[data-theme='dark'] .cobros-wizard__panel--ok,
+html[data-theme='dark'] .cobros-wizard__state-aprobado-title,
+html[data-theme='dark'] .cobros-banner__title {
+  color: var(--text);
+}
+html[data-theme='dark'] .factura-arca__panel--ok,
+html[data-theme='dark'] .factura-arca__panel--emision {
+  color: var(--text);
+  border-color: rgba(125, 206, 168, 0.35);
+}
+html[data-theme='dark'] .factura-arca__accent-strong {
+  color: var(--text);
+}
+html[data-theme='dark'] .factura-arca__meta {
+  color: var(--text-muted);
+}
+html[data-theme='dark'] .factura-arca__link-pdf {
+  color: var(--accent);
+}
+html[data-theme='dark'] .factura-arca__panel--warn,
+html[data-theme='dark'] .factura-arca__panel--emision-prod,
+html[data-theme='dark'] .factura-arca__nc {
+  color: var(--text);
+}
+html[data-theme='dark'] .factura-arca__nc-link {
+  color: var(--accent);
+}
+html[data-theme='dark'] .cobros-wizard__panel--warn,
+html[data-theme='dark'] .cobros-wizard__notice {
+  color: var(--text);
 }
 html[data-theme='dark'] .cobros-wizard .cobros-wizard__step-body .btn-primary:hover,
 html[data-theme='dark'] .cobros-wizard .cobros-wizard__step-actions .btn-primary:hover {
@@ -677,26 +1163,13 @@ html[data-theme='dark'] .cobros-wizard .cobros-wizard__step-actions .btn-primary
   border-color: var(--accent);
   color: #0f1115;
 }
-html[data-theme='dark'] .cobros-wizard .cobros-wizard__btn-muted {
-  color: var(--text) !important;
+html[data-theme='dark'] .factura-arca .btn-primary:hover {
+  color: #0f1115;
 }
-/* Inline color en <p>/<span> del TSX — !important solo en dark para legibilidad */
-html[data-theme='dark'] .cobros-wizard__step-body p,
-html[data-theme='dark'] .cobros-wizard__step-body span,
-html[data-theme='dark'] .cobros-wizard__step-body strong {
-  color: var(--text) !important;
-}
-html[data-theme='dark'] .cobros-wizard__step-body a {
-  color: var(--accent) !important;
-}
-html[data-theme='dark'] .cobros-wizard__step-body label {
-  color: var(--text-soft) !important;
-}
-html[data-theme='dark'] .cobros-wizard a {
-  color: var(--accent);
-}
-html[data-theme='dark'] .cobros-wizard > p {
-  color: var(--text-muted) !important;
+.cobros-wizard .btn:disabled,
+.factura-arca .btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 /* Planilla generada — detalle de la carga */

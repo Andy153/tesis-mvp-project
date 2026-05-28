@@ -76,20 +76,7 @@ function formatNumeroComprobanteDisplay(ptoVta: number, nro: number): string {
 }
 
 function Spinner() {
-  return (
-    <span
-      style={{
-        display: 'inline-block',
-        width: 14,
-        height: 14,
-        border: '2px solid rgba(255,255,255,0.35)',
-        borderTopColor: '#fff',
-        borderRadius: '50%',
-        animation: 'factura-arca-spin 0.7s linear infinite',
-      }}
-      aria-hidden
-    />
-  );
+  return <span className="factura-arca__spinner" aria-hidden />;
 }
 
 export function FacturaARCA({
@@ -127,7 +114,6 @@ export function FacturaARCA({
   const [mensajeError, setMensajeError] = useState<string | null>(null);
   const [continuando, setContinuando] = useState(false);
   const [montoManual, setMontoManual] = useState('');
-  // --- NC ---
   const [ncModalAbierto, setNcModalAbierto] = useState(false);
   const [ncEmitida, setNcEmitida] = useState<{ cae: string; numero: number; pdfUrl?: string } | null>(null);
   const [emisionConfig, setEmisionConfig] = useState<EmisionConfig | null>(null);
@@ -300,12 +286,9 @@ export function FacturaARCA({
   };
 
   if (estado === 'exito') {
-    // Datos para el modal de NC (solo si hay factura emitida con número)
     const facturaParaNC =
       nroComprobanteEmitido != null && caeEmitido
         ? {
-            // El PV se infiere del perfil del usuario en el server.
-            // Acá mostramos solo el número para el resumen.
             numero: formatNumeroComprobanteDisplay(0, nroComprobanteEmitido).replace(/^0{4}-/, ''),
             fecha: new Date().toLocaleDateString('es-AR'),
             receptorRazonSocial: SWISS_MEDICAL_RAZON_SOCIAL,
@@ -315,32 +298,24 @@ export function FacturaARCA({
         : null;
 
     return (
-      <div>
-        <div
-          style={{
-            padding: 16,
-            background: '#e8f5ee',
-            border: '1px solid #7bc398',
-            borderRadius: 8,
-            color: '#1f5d3a',
-          }}
-        >
-          <div style={{ fontWeight: 700, marginBottom: 8 }}>✓ Factura emitida correctamente</div>
-          <p style={{ fontSize: 12, margin: '0 0 8px', color: '#3d6b55' }}>
+      <div className="factura-arca">
+        <div className="factura-arca__panel factura-arca__panel--ok">
+          <div className="factura-arca__title">✓ Factura emitida correctamente</div>
+          <p className="factura-arca__meta">
             Ambiente ARCA: <strong>{ambienteLabel}</strong>
           </p>
           {caeEmitido && (
-            <p style={{ fontSize: 14, margin: '4px 0' }}>
+            <p className="factura-arca__row">
               <strong>CAE:</strong> {caeEmitido}
             </p>
           )}
           {nroComprobanteEmitido != null && (
-            <p style={{ fontSize: 14, margin: '4px 0' }}>
+            <p className="factura-arca__row">
               <strong>Comprobante N°:</strong> {nroComprobanteEmitido}
             </p>
           )}
           {caeFechaVtoEmitido && (
-            <p style={{ fontSize: 14, margin: '4px 0' }}>
+            <p className="factura-arca__row">
               <strong>Vencimiento CAE:</strong> {formatCaeDate(caeFechaVtoEmitido)}
             </p>
           )}
@@ -350,7 +325,7 @@ export function FacturaARCA({
                 href={pdfUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                style={{ display: 'inline-block', color: '#16a34a', fontWeight: 600 }}
+                className="factura-arca__link-pdf"
               >
                 📄 Descargar factura PDF
               </a>
@@ -367,29 +342,16 @@ export function FacturaARCA({
               )}
             </div>
           ) : (
-            <p style={{ fontSize: 12, color: '#888', margin: '12px 0 0' }}>
-              Cargando PDF
-            </p>
+            <p className="factura-arca__hint">Cargando PDF</p>
           )}
         </div>
 
-        {/* Banner de NC ya emitida sobre esta factura */}
         {ncEmitida ? (
-          <div
-            style={{
-              marginTop: 12,
-              padding: 12,
-              background: '#fff4d6',
-              border: '1px solid #e0b94a',
-              borderRadius: 8,
-              color: '#7a5a00',
-              fontSize: 13,
-            }}
-          >
-            <div style={{ fontWeight: 600, marginBottom: 4 }}>
+          <div className="factura-arca__nc">
+            <div className="factura-arca__nc-title">
               ⚠ Esta factura fue anulada con Nota de Crédito N° {String(ncEmitida.numero).padStart(8, '0')}
             </div>
-            <div style={{ fontSize: 12 }}>
+            <div className="factura-arca__nc-meta">
               CAE NC: {ncEmitida.cae}
               {ncEmitida.pdfUrl ? (
                 <>
@@ -398,7 +360,7 @@ export function FacturaARCA({
                     href={ncEmitida.pdfUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    style={{ color: '#7a5a00', textDecoration: 'underline', fontWeight: 600 }}
+                    className="factura-arca__nc-link"
                   >
                     Descargar PDF de la NC
                   </a>
@@ -410,30 +372,16 @@ export function FacturaARCA({
 
         <button
           type="button"
-          className="btn btn-primary"
-          style={{ marginTop: 12 }}
+          className="btn btn-primary factura-arca__continue"
           disabled={continuando}
           onClick={continuar}
         >
           {continuando ? 'Guardando…' : 'Continuar al paso 5 →'}
         </button>
 
-        {/* Botón discreto para emitir NC. Se oculta si ya hay una NC emitida. */}
         {!demoUser && facturaParaNC && !ncEmitida ? (
-          <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid #e5e7eb' }}>
-            <button
-              type="button"
-              onClick={() => setNcModalAbierto(true)}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: '#B91C1C',
-                fontSize: 13,
-                cursor: 'pointer',
-                padding: 0,
-                textDecoration: 'underline',
-              }}
-            >
+          <div className="factura-arca__nc-divider">
+            <button type="button" className="factura-arca__nc-action" onClick={() => setNcModalAbierto(true)}>
               ¿Algo salió mal? Emitir Nota de Crédito
             </button>
           </div>
@@ -467,19 +415,12 @@ export function FacturaARCA({
 
   if (estado === 'error') {
     return (
-      <div>
-        <div
-          style={{
-            padding: 16,
-            background: '#fef2f2',
-            border: '1px solid #fca5a5',
-            borderRadius: 8,
-            color: '#991b1b',
-            marginBottom: 12,
-          }}
-        >
+      <div className="factura-arca">
+        <div className="factura-arca__panel factura-arca__panel--error">
           <strong>Error al emitir la factura</strong>
-          <p style={{ fontSize: 14, margin: '8px 0 0' }}>{mensajeError ?? 'Error desconocido'}</p>
+          <p className="factura-arca__row" style={{ marginTop: 8 }}>
+            {mensajeError ?? 'Error desconocido'}
+          </p>
         </div>
         <button type="button" className="btn btn-primary" onClick={() => setEstado('idle')}>
           Reintentar
@@ -490,9 +431,7 @@ export function FacturaARCA({
 
   if (!demoUser && (fiscalLoading || configLoading)) {
     return (
-      <p style={{ fontSize: 14, color: 'var(--text-muted)', margin: 0 }}>
-        Verificando configuración para facturar…
-      </p>
+      <p className="cobros-wizard__loading">Verificando configuración para facturar…</p>
     );
   }
 
@@ -518,100 +457,64 @@ export function FacturaARCA({
     (necesitaMontoManual && montoFacturar <= 0);
 
   return (
-    <div>
-      <style>{`@keyframes factura-arca-spin { to { transform: rotate(360deg); } }`}</style>
+    <div className="factura-arca">
       {necesitaMontoManual ? (
-        <div
-          style={{
-            padding: 12,
-            marginBottom: 12,
-            background: '#fff4d6',
-            border: '1px solid #e0b94a',
-            borderRadius: 8,
-            color: '#7a5a00',
-            fontSize: 13,
-          }}
-        >
+        <div className="factura-arca__panel factura-arca__panel--warn">
           No se pudo leer el monto del comprobante. Completá el monto manualmente.
-          <label style={{ display: 'block', marginTop: 8, fontWeight: 600 }}>
+          <label className="factura-arca__label-block">
             Monto a facturar
             <input
               type="number"
               min={0}
               step={0.01}
+              className="factura-arca__input"
               value={montoManual}
               onChange={(e) => setMontoManual(e.target.value)}
               placeholder="Ej: 435112.91"
-              style={{
-                display: 'block',
-                width: '100%',
-                marginTop: 4,
-                height: 36,
-                padding: '0 12px',
-                borderRadius: 8,
-                border: '1px solid #e0b94a',
-                fontSize: 14,
-                boxSizing: 'border-box',
-              }}
             />
           </label>
         </div>
       ) : (
-        <p style={{ fontSize: 14, color: '#555', margin: '0 0 8px' }}>
-          Monto a facturar: <strong style={{ color: '#1f5d3a' }}>{formatPesos(monto)}</strong>
+        <p className="factura-arca__muted">
+          Monto a facturar: <strong className="factura-arca__accent-strong">{formatPesos(monto)}</strong>
         </p>
       )}
-      <p style={{ fontSize: 14, color: '#555', margin: '0 0 12px' }}>
+      <p className="factura-arca__muted factura-arca__muted--period">
         Período: <strong>{periodoLabel(periodo)}</strong>
       </p>
 
       {emisionConfig && (
         <div
-          style={{
-            padding: 14,
-            marginBottom: 16,
-            borderRadius: 10,
-            border: emisionConfig.esProduccion ? '2px solid #b45309' : '1px solid #7bc398',
-            background: emisionConfig.esProduccion ? '#fff7ed' : '#e8f5ee',
-            color: emisionConfig.esProduccion ? '#9a3412' : '#1f5d3a',
-          }}
+          className={
+            emisionConfig.esProduccion
+              ? 'factura-arca__panel factura-arca__panel--emision-prod'
+              : 'factura-arca__panel factura-arca__panel--emision'
+          }
           role="alert"
         >
-          <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: 14 }}>
+          <p className="factura-arca__title" style={{ fontSize: 14, marginBottom: 8 }}>
             {emisionConfig.esProduccion
               ? 'Vas a emitir una factura REAL en AFIP (producción)'
               : 'Emisión en homologación'}
           </p>
-          <p style={{ margin: '0 0 6px', fontSize: 13 }}>
+          <p className="factura-arca__row" style={{ fontSize: 13, marginBottom: 6 }}>
             <strong>Ambiente:</strong> {ambienteLabel}
           </p>
-          <p style={{ margin: '0 0 6px', fontSize: 13 }}>
+          <p className="factura-arca__row" style={{ fontSize: 13, marginBottom: 6 }}>
             <strong>Receptor:</strong> Doctor Trazá
           </p>
           {emisionConfig.esProduccion ? (
-            <p style={{ margin: 0, fontSize: 12, lineHeight: 1.45 }}>
+            <p className="factura-arca__row" style={{ fontSize: 12, margin: 0 }}>
               El CAE quedará registrado en AFIP. Verificá monto y período antes de confirmar. Necesitás
               certificado de <strong>producción</strong> cargado en Tu perfil.
             </p>
-          ) : (
-            <p style={{ margin: 0, fontSize: 12, lineHeight: 1.45 }} />
-          )}
+          ) : null}
         </div>
       )}
 
-      <button
-        type="button"
-        className="btn btn-primary"
-        disabled={disabled}
-        onClick={emitir}
-        style={
-          disabled
-            ? { background: '#cdd5d0', color: '#7a8580', cursor: 'not-allowed', borderColor: '#cdd5d0' }
-            : undefined
-        }
-      >
+      <button type="button" className="btn btn-primary" disabled={disabled} onClick={emitir}>
         {estado === 'loading' ? (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <span className="factura-arca__emit-row">
             <Spinner />
             Emitiendo…
           </span>
@@ -619,11 +522,9 @@ export function FacturaARCA({
           'Emitir Factura C en ARCA'
         )}
       </button>
-      <p style={{ fontSize: 12, color: '#888', margin: '12px 0 0' }}>
+      <p className="factura-arca__muted factura-arca__muted--footer">
         Factura C · {ambienteLabel}
-        {emisionConfig
-          ? ` · ${emisionConfig.receptor.razonSocial}`
-          : ''}
+        {emisionConfig ? ` · ${emisionConfig.receptor.razonSocial}` : ''}
         {facturaYaEmitida?.cae ? ' · Ya tenés una factura emitida para este período' : ''}
       </p>
     </div>

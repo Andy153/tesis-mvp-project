@@ -1,93 +1,110 @@
 'use client';
 
-import { CheckCircle2, CircleDollarSign, FileText, Send, Sparkles } from 'lucide-react';
+import { useCallback, useState } from 'react';
+import { CheckCircle, Cpu, FileText, Send, TrendingUp } from 'lucide-react';
 import { useInView } from './hooks/useInView';
 import styles from './landing.module.css';
 
-const TIMELINE_STEPS = [
+const FEATURES = [
   {
     title: 'Parte quirúrgico',
-    description: 'El médico sube el parte desde el celular o desktop.',
     extra:
       'Subí una foto o PDF del parte desde el celular. Sin escaners, sin formularios manuales.',
     icon: FileText,
   },
   {
     title: 'Extracción con IA',
-    description:
-      'Trazá lee el documento y extrae paciente, práctica y códigos automáticamente.',
     extra:
       'Detectamos automáticamente el código de prestación, datos del paciente, fecha e institución. Sin tipeo.',
-    icon: Sparkles,
+    icon: Cpu,
   },
   {
     title: 'Validación instantánea',
-    description:
-      'Se verifican códigos y requisitos según Swiss Medical u OSDE antes de enviar.',
     extra:
       'Antes de enviar, Trazá verifica que el código sea válido para Swiss Medical u OSDE y te avisa si hay algo para corregir.',
-    icon: CheckCircle2,
+    icon: CheckCircle,
   },
   {
     title: 'Envío a la prepaga',
-    description:
-      'La liquidación se presenta en tiempo y forma, sin archivos sueltos ni mails.',
     extra: 'Generamos y presentamos la liquidación en tiempo y forma.',
     icon: Send,
   },
   {
     title: 'Cobro trazado',
-    description:
-      'Sabés qué entró, qué fue rechazado y qué falta corregir. Todo en un lugar.',
     extra:
       'Sabés exactamente qué se acreditó, qué fue rechazado y qué necesita corrección. Todo en un lugar.',
-    icon: CircleDollarSign,
+    icon: TrendingUp,
   },
 ] as const;
 
-function TimelineLine() {
-  const { ref, inView } = useInView<HTMLDivElement>(0.15);
-
-  return (
-    <div
-      ref={ref}
-      className={[styles.solveTimelineLine, inView ? styles.solveTimelineLineVisible : ''].join(
-        ' ',
-      )}
-      aria-hidden
-    />
-  );
-}
-
-function TimelineItem({
+function SpotlightFeature({
   step,
   index,
 }: {
-  step: (typeof TIMELINE_STEPS)[number];
+  step: (typeof FEATURES)[number];
   index: number;
 }) {
-  const { ref, inView } = useInView<HTMLDivElement>(0.2);
+  const { ref, inView } = useInView<HTMLDivElement>(0.15);
+  const [active, setActive] = useState(false);
+  const [spotlight, setSpotlight] = useState({ x: 0, y: 0, visible: false });
+
+  const handleMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    const el = ref.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    setSpotlight({
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+      visible: true,
+    });
+  }, [ref]);
+
+  const handleMouseLeave = useCallback(() => {
+    setSpotlight((prev) => ({ ...prev, visible: false }));
+  }, []);
+
+  const handleTap = useCallback(() => {
+    if (window.matchMedia('(hover: none)').matches) {
+      setActive((prev) => !prev);
+    }
+  }, []);
+
   const Icon = step.icon;
-  const isLeft = index % 2 === 0;
 
   return (
     <div
       ref={ref}
-      role="listitem"
+      role="button"
+      tabIndex={0}
       className={[
-        styles.solveTimelineItem,
-        isLeft ? styles.solveTimelineItemLeft : styles.solveTimelineItemRight,
-        inView ? styles.solveTimelineItemVisible : '',
+        styles.solveFeature,
+        inView ? styles.solveFeatureVisible : '',
+        active ? styles.solveFeatureActive : '',
       ].join(' ')}
-      style={{ transitionDelay: inView ? `${index * 0.12}s` : '0s' }}
+      style={{ transitionDelay: inView ? `${index * 0.1}s` : '0s' }}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+      onClick={handleTap}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          handleTap();
+        }
+      }}
     >
-      <div className={styles.solveTimelineNode} aria-hidden>
-        <Icon size={22} strokeWidth={1.75} />
-      </div>
-      <div className={styles.solveTimelineStep} tabIndex={0}>
-        <h3 className={styles.solveTimelineStepTitle}>{step.title}</h3>
-        <p className={styles.solveTimelineStepDesc}>{step.description}</p>
-        <p className={styles.solveTimelineStepExtra}>{step.extra}</p>
+      <div
+        className={styles.solveFeatureSpotlight}
+        style={{
+          opacity: spotlight.visible ? 1 : 0,
+          background: `radial-gradient(300px circle at ${spotlight.x}px ${spotlight.y}px, rgba(42, 107, 82, 0.25), transparent 70%)`,
+        }}
+        aria-hidden
+      />
+      <div className={styles.solveFeatureBody}>
+        <Icon className={styles.solveFeatureIcon} size={28} strokeWidth={1.75} aria-hidden />
+        <h3 className={styles.solveFeatureTitle}>{step.title}</h3>
+        <div className={styles.solveFeatureDivider} aria-hidden />
+        <p className={styles.solveFeatureExtra}>{step.extra}</p>
       </div>
     </div>
   );
@@ -112,10 +129,9 @@ export function LandingFeatures() {
           </p>
         </header>
 
-        <div className={styles.solveTimeline} role="list" aria-label="Flujo de Trazá">
-          <TimelineLine />
-          {TIMELINE_STEPS.map((step, index) => (
-            <TimelineItem key={step.title} step={step} index={index} />
+        <div className={styles.solveGrid} role="list" aria-label="Qué resuelve Trazá">
+          {FEATURES.map((step, index) => (
+            <SpotlightFeature key={step.title} step={step} index={index} />
           ))}
         </div>
       </div>

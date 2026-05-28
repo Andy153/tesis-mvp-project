@@ -7,6 +7,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import { getDeletionPolicyForLiquidacion } from '@/lib/workflow-processes'
+import { isDemoUser } from '@/lib/demo-user'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { runChecks, type CheckInputs } from '@/lib/checks'
 
@@ -87,6 +88,17 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   if (body.action !== 'confirm' && body.action !== 'save_draft' && body.action !== 'mark_presented') {
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
+  }
+
+  if (isDemoUser(userId) && body.action === 'confirm') {
+    return NextResponse.json({
+      ok: true,
+      estado_revision: 'confirmado',
+      blockers: [],
+      warnings: [],
+      autoFilledCode: null,
+      demo: true,
+    })
   }
 
   // 1. Traer la liquidación + extraction actuales
@@ -266,6 +278,10 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 export async function DELETE(req: Request, { params }: { params: { id: string } }) {
   const { userId } = await auth()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  if (isDemoUser(userId)) {
+    return NextResponse.json({ ok: true, demo: true }, { status: 200 })
+  }
 
   const force = new URL(req.url).searchParams.get('force') === '1'
 

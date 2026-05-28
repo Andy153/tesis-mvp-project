@@ -1,5 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
+import { isDemoUser } from '@/lib/demo-user'
+import { upsertDemoMonthlySubmission } from '@/lib/demo-swiss-cobros'
 import { sendSwissMonthlyForUser } from '@/lib/swissCxSend'
 
 export const runtime = 'nodejs'
@@ -24,6 +26,21 @@ export async function POST(req: Request) {
       { error: 'Falta periodo o formato inválido. Esperado YYYY-MM.' },
       { status: 400 },
     )
+  }
+
+  if (isDemoUser(userId)) {
+    try {
+      const { submission_id, cantidad_partes } = await upsertDemoMonthlySubmission(userId, periodo)
+      return NextResponse.json({
+        ok: true,
+        cantidad_partes,
+        submission_id,
+        partes_sin_pdf: [],
+      })
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Error al registrar envío demo'
+      return NextResponse.json({ error: message }, { status: 500 })
+    }
   }
 
   const result = await sendSwissMonthlyForUser(userId, periodo)

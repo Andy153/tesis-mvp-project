@@ -8,6 +8,7 @@ import { InvitacionSecretariaCard } from './profile/InvitacionSecretariaCard';
 import { CuentaFiscalCard } from './profile/CuentaFiscalCard';
 import { CertificadoArcaCard } from './profile/CertificadoArcaCard';
 import { InstalarAppCard } from './profile/InstalarAppCard';
+import { isDemoUser } from '@/lib/demo-user';
 import type { ProfileDB } from '@/lib/profile-db';
 import type { ThemeMode, UserProfile } from '@/lib/profile';
 import {
@@ -45,6 +46,7 @@ function sanitizeObra(v: string) {
 export function ProfileView() {
   const { signOut } = useClerk();
   const { user: clerkUser, isLoaded: clerkLoaded } = useUser();
+  const demoUser = isDemoUser(clerkUser?.id);
   const { rol } = useUserRole();
   const [profile, setProfile] = useState<UserProfile>(DEFAULT_PROFILE);
   const [hydrated, setHydrated] = useState(false);
@@ -188,6 +190,11 @@ export function ProfileView() {
     return 'Otros';
   }, [profile.profesion, medicoOtrosAbierto]);
 
+  const locked = demoUser;
+  const lockedBlockStyle: React.CSSProperties | undefined = locked
+    ? { opacity: 0.55, filter: 'grayscale(0.1)', pointerEvents: 'none', userSelect: 'none' }
+    : undefined;
+
   return (
     <div className="page">
       <div className="page-head">
@@ -199,8 +206,37 @@ export function ProfileView() {
         </div>
       </div>
 
+      {locked && (
+        <div
+          className="panel"
+          style={{
+            padding: 14,
+            border: '1px solid rgba(184, 116, 10, 0.25)',
+            background: 'var(--warn-soft)',
+            color: 'var(--warn)',
+            fontSize: 13,
+            lineHeight: 1.45,
+            marginBottom: 14,
+            fontWeight: 650,
+          }}
+          role="status"
+        >
+          Estás usando un <b>perfil demo</b>. Para evitar cambios accidentales, el perfil está en modo solo lectura.
+        </div>
+      )}
+
       <div className="panel" style={{ padding: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, justifyContent: 'space-between', flexWrap: 'wrap' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 14,
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            ...(lockedBlockStyle ?? {}),
+          }}
+          aria-disabled={locked || undefined}
+        >
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
             <div className="avatar avatar--lg avatar--profile-header" style={{ overflow: 'hidden' }}>
               {profile.avatarDataUrl ? (
@@ -277,95 +313,97 @@ export function ProfileView() {
 
       <div className="grid-2" style={{ marginTop: 14 }}>
         <div className="panel" style={{ padding: 16 }}>
-          <div style={{ fontWeight: 800, marginBottom: 10, fontSize: '1.05rem' }}>Datos profesionales</div>
-          <div className="form-grid">
-            <label className="field">
-              <div className="field-label">Nombre que querés que aparezca</div>
-              <input
-                className="docs-search"
-                value={profile.displayName}
-                onChange={(e) => setProfile((p) => ({ ...p, displayName: e.target.value, updatedAt: new Date().toISOString() }))}
-                placeholder="Ej: Dra. María Ferreira"
-              />
-            </label>
-            <label className="field">
-              <div className="field-label">Profesión / especialidad</div>
-              {rol === 'secretaria' ? (
-                <>
-                  <input
-                    className="docs-search"
-                    value={LABELS_ROL.secretaria}
-                    readOnly
-                    disabled
-                    style={{ opacity: 0.85, cursor: 'not-allowed' }}
-                  />
-                  <div className="field-hint">Tu cuenta está registrada como secretaría; este dato no se puede cambiar acá.</div>
-                </>
-              ) : rol === 'medico' ? (
-                <>
-                  <select
-                    className="docs-search select-theme"
-                    value={especialidadSelectValue}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      if (v === 'Otros') {
-                        setMedicoOtrosAbierto(true);
-                        setProfile((p) => ({
-                          ...p,
-                          profesion: '',
-                          updatedAt: new Date().toISOString(),
-                        }));
-                        return;
-                      }
-                      setMedicoOtrosAbierto(false);
-                      setProfile((p) => ({
-                        ...p,
-                        profesion: v,
-                        updatedAt: new Date().toISOString(),
-                      }));
-                    }}
-                  >
-                    <option value="">Elegí una especialidad…</option>
-                    {ESPECIALIDADES_MEDICO.map((e) => (
-                      <option key={e} value={e}>
-                        {e}
-                      </option>
-                    ))}
-                  </select>
-                  {especialidadSelectValue === 'Otros' && (
+          <div style={{ ...(lockedBlockStyle ?? {}) }} aria-disabled={locked || undefined}>
+            <div style={{ fontWeight: 800, marginBottom: 10, fontSize: '1.05rem' }}>Datos profesionales</div>
+            <div className="form-grid">
+              <label className="field">
+                <div className="field-label">Nombre que querés que aparezca</div>
+                <input
+                  className="docs-search"
+                  value={profile.displayName}
+                  onChange={(e) => setProfile((p) => ({ ...p, displayName: e.target.value, updatedAt: new Date().toISOString() }))}
+                  placeholder="Ej: Dra. María Ferreira"
+                />
+              </label>
+              <label className="field">
+                <div className="field-label">Profesión / especialidad</div>
+                {rol === 'secretaria' ? (
+                  <>
                     <input
                       className="docs-search"
-                      style={{ marginTop: 8 }}
-                      value={profile.profesion}
-                      onChange={(e) =>
+                      value={LABELS_ROL.secretaria}
+                      readOnly
+                      disabled
+                      style={{ opacity: 0.85, cursor: 'not-allowed' }}
+                    />
+                    <div className="field-hint">Tu cuenta está registrada como secretaría; este dato no se puede cambiar acá.</div>
+                  </>
+                ) : rol === 'medico' ? (
+                  <>
+                    <select
+                      className="docs-search select-theme"
+                      value={especialidadSelectValue}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v === 'Otros') {
+                          setMedicoOtrosAbierto(true);
+                          setProfile((p) => ({
+                            ...p,
+                            profesion: '',
+                            updatedAt: new Date().toISOString(),
+                          }));
+                          return;
+                        }
+                        setMedicoOtrosAbierto(false);
                         setProfile((p) => ({
                           ...p,
-                          profesion: e.target.value,
+                          profesion: v,
                           updatedAt: new Date().toISOString(),
-                        }))
+                        }));
+                      }}
+                    >
+                      <option value="">Elegí una especialidad…</option>
+                      {ESPECIALIDADES_MEDICO.map((e) => (
+                        <option key={e} value={e}>
+                          {e}
+                        </option>
+                      ))}
+                    </select>
+                    {especialidadSelectValue === 'Otros' && (
+                      <input
+                        className="docs-search"
+                        style={{ marginTop: 8 }}
+                        value={profile.profesion}
+                        onChange={(e) =>
+                          setProfile((p) => ({
+                            ...p,
+                            profesion: e.target.value,
+                            updatedAt: new Date().toISOString(),
+                          }))
+                        }
+                        placeholder="Escribí tu especialidad"
+                      />
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <input
+                      className="docs-search"
+                      value={profile.profesion}
+                      onChange={(e) =>
+                        setProfile((p) => ({ ...p, profesion: e.target.value, updatedAt: new Date().toISOString() }))
                       }
-                      placeholder="Escribí tu especialidad"
+                      placeholder="Ej: Tocoginecología"
                     />
-                  )}
-                </>
-              ) : (
-                <>
-                  <input
-                    className="docs-search"
-                    value={profile.profesion}
-                    onChange={(e) =>
-                      setProfile((p) => ({ ...p, profesion: e.target.value, updatedAt: new Date().toISOString() }))
-                    }
-                    placeholder="Ej: Tocoginecología"
-                  />
-                  <div className="field-hint">Cuando se asigne tu rol en la cuenta, vas a ver opciones acordes.</div>
-                </>
-              )}
-            </label>
+                    <div className="field-hint">Cuando se asigne tu rol en la cuenta, vas a ver opciones acordes.</div>
+                  </>
+                )}
+              </label>
+            </div>
+            {saveError && (
+              <div style={{ color: 'var(--error)', fontSize: 12, marginTop: 8 }}>{saveError}</div>
+            )}
           </div>
-          {saveError && (
-            <div style={{ color: 'var(--error)', fontSize: 12, marginTop: 8 }}>{saveError}</div>
-          )}
         </div>
 
         <div className="panel" style={{ padding: 16 }}>
@@ -398,6 +436,8 @@ export function ProfileView() {
               <button
                 type="button"
                 className="btn btn-secondary"
+                disabled={locked}
+                style={locked ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
                 onClick={() => {
                   const blob = new Blob([JSON.stringify(profile, null, 2)], { type: 'application/json' });
                   const url = URL.createObjectURL(blob);
@@ -415,6 +455,8 @@ export function ProfileView() {
               <button
                 type="button"
                 className="btn btn-secondary"
+                disabled={locked}
+                style={locked ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
                 onClick={() => {
                   navigator.clipboard?.writeText(JSON.stringify(profile));
                 }}
@@ -434,102 +476,104 @@ export function ProfileView() {
       </div>
 
       <div className="panel" style={{ padding: 16, marginTop: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
-          <div>
-            <div style={{ fontWeight: 800 }}>Obras sociales y códigos</div>
-            <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>
-              Guardá tu código por obra social para que la app lo sugiera o lo use al exportar.
+        <div style={{ ...(lockedBlockStyle ?? {}) }} aria-disabled={locked || undefined}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
+            <div>
+              <div style={{ fontWeight: 800 }}>Obras sociales y códigos</div>
+              <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+                Guardá tu código por obra social para que la app lo sugiera o lo use al exportar.
+              </div>
             </div>
+            <button
+              type="button"
+              className="btn"
+              onClick={() =>
+                setProfile((p) => ({
+                  ...p,
+                  obras: [...p.obras, { obraSocial: '', codigo: '' }],
+                  updatedAt: new Date().toISOString(),
+                }))
+              }
+            >
+              + Agregar
+            </button>
           </div>
-          <button
-            type="button"
-            className="btn"
-            onClick={() =>
-              setProfile((p) => ({
-                ...p,
-                obras: [...p.obras, { obraSocial: '', codigo: '' }],
-                updatedAt: new Date().toISOString(),
-              }))
-            }
-          >
-            + Agregar
-          </button>
-        </div>
 
-        {obraErrors.length > 0 && (
-          <div style={{ marginBottom: 10, padding: '10px 12px', background: 'var(--warn-soft)', border: '1px solid rgba(184, 116, 10, 0.25)', borderRadius: 8, color: 'var(--warn)', fontSize: 12 }}>
-            {obraErrors[0]}
-          </div>
-        )}
-
-        <div className="profile-prepaga-grid">
-          <div style={{ color: 'var(--text-soft)', fontWeight: 700, fontSize: 12 }}>Obra social</div>
-          <div style={{ color: 'var(--text-soft)', fontWeight: 700, fontSize: 12 }}>Código</div>
-          <div />
-
-          {profile.obras.map((o, idx) => (
-            <div key={idx} style={{ display: 'contents' }}>
-              <input
-                className="docs-search"
-                value={o.obraSocial}
-                placeholder="Ej: Swiss Medical"
-                onChange={(e) => {
-                  // No sanitizar en cada tecla: permite espacios (incl. al final) mientras escribe.
-                  const v = e.target.value;
-                  setProfile((p) => ({
-                    ...p,
-                    obras: p.obras.map((x, i) => (i === idx ? { ...x, obraSocial: v } : x)),
-                    updatedAt: new Date().toISOString(),
-                  }));
-                }}
-                onBlur={() => {
-                  const v = sanitizeObra(o.obraSocial);
-                  if (v === o.obraSocial) return;
-                  setProfile((p) => ({
-                    ...p,
-                    obras: p.obras.map((x, i) => (i === idx ? { ...x, obraSocial: v } : x)),
-                    updatedAt: new Date().toISOString(),
-                  }));
-                }}
-              />
-              <input
-                className="docs-search"
-                value={o.codigo}
-                placeholder="Ej: 08.01.02"
-                onChange={(e) => {
-                  const v = e.target.value.trim();
-                  setProfile((p) => ({
-                    ...p,
-                    obras: p.obras.map((x, i) => (i === idx ? { ...x, codigo: v } : x)),
-                    updatedAt: new Date().toISOString(),
-                  }));
-                }}
-              />
-              <button
-                type="button"
-                className="btn btn-sm btn-danger"
-                onClick={() =>
-                  setProfile((p) => ({
-                    ...p,
-                    obras: p.obras.filter((_, i) => i !== idx),
-                    updatedAt: new Date().toISOString(),
-                  }))
-                }
-                aria-label="Eliminar"
-              >
-                <Icon name="trash" size={12} />
-              </button>
+          {obraErrors.length > 0 && (
+            <div style={{ marginBottom: 10, padding: '10px 12px', background: 'var(--warn-soft)', border: '1px solid rgba(184, 116, 10, 0.25)', borderRadius: 8, color: 'var(--warn)', fontSize: 12 }}>
+              {obraErrors[0]}
             </div>
-          ))}
-        </div>
+          )}
 
-        {profile.obras.length === 0 && (
-          <div style={{ padding: 14, color: 'var(--text-soft)', fontSize: 12 }}>Todavía no agregaste obras sociales.</div>
-        )}
+          <div className="profile-prepaga-grid">
+            <div style={{ color: 'var(--text-soft)', fontWeight: 700, fontSize: 12 }}>Obra social</div>
+            <div style={{ color: 'var(--text-soft)', fontWeight: 700, fontSize: 12 }}>Código</div>
+            <div />
+
+            {profile.obras.map((o, idx) => (
+              <div key={idx} style={{ display: 'contents' }}>
+                <input
+                  className="docs-search"
+                  value={o.obraSocial}
+                  placeholder="Ej: Swiss Medical"
+                  onChange={(e) => {
+                    // No sanitizar en cada tecla: permite espacios (incl. al final) mientras escribe.
+                    const v = e.target.value;
+                    setProfile((p) => ({
+                      ...p,
+                      obras: p.obras.map((x, i) => (i === idx ? { ...x, obraSocial: v } : x)),
+                      updatedAt: new Date().toISOString(),
+                    }));
+                  }}
+                  onBlur={() => {
+                    const v = sanitizeObra(o.obraSocial);
+                    if (v === o.obraSocial) return;
+                    setProfile((p) => ({
+                      ...p,
+                      obras: p.obras.map((x, i) => (i === idx ? { ...x, obraSocial: v } : x)),
+                      updatedAt: new Date().toISOString(),
+                    }));
+                  }}
+                />
+                <input
+                  className="docs-search"
+                  value={o.codigo}
+                  placeholder="Ej: 08.01.02"
+                  onChange={(e) => {
+                    const v = e.target.value.trim();
+                    setProfile((p) => ({
+                      ...p,
+                      obras: p.obras.map((x, i) => (i === idx ? { ...x, codigo: v } : x)),
+                      updatedAt: new Date().toISOString(),
+                    }));
+                  }}
+                />
+                <button
+                  type="button"
+                  className="btn btn-sm btn-danger"
+                  onClick={() =>
+                    setProfile((p) => ({
+                      ...p,
+                      obras: p.obras.filter((_, i) => i !== idx),
+                      updatedAt: new Date().toISOString(),
+                    }))
+                  }
+                  aria-label="Eliminar"
+                >
+                  <Icon name="trash" size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {profile.obras.length === 0 && (
+            <div style={{ padding: 14, color: 'var(--text-soft)', fontSize: 12 }}>Todavía no agregaste obras sociales.</div>
+          )}
+        </div>
       </div>
 
       {rol === 'medico' && (
-        <>
+        <div style={{ ...(lockedBlockStyle ?? {}) }} aria-disabled={locked || undefined}>
           <CuentaFiscalCard
             dbProfile={dbProfile}
             loading={loading}
@@ -538,13 +582,15 @@ export function ProfileView() {
             }}
           />
           <CertificadoArcaCard dbProfile={dbProfile} profileLoading={loading} />
-        </>
+        </div>
       )}
 
       <InstalarAppCard />
 
-      <PinManagementCard />
-      <InvitacionSecretariaCard />
+      <div style={{ ...(lockedBlockStyle ?? {}) }} aria-disabled={locked || undefined}>
+        <PinManagementCard />
+        <InvitacionSecretariaCard />
+      </div>
     </div>
   );
 }

@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useUser } from '@clerk/nextjs'
+import { isDemoUser } from '@/lib/demo-user'
 
 type PeriodInfo = {
   periodo: string
@@ -26,7 +28,9 @@ function periodoLabel(p: string): string {
   return `${meses[m - 1]} ${y}`
 }
 
-export function SwissMedicalCloseButton({ onSent }: { onSent?: () => void }) {
+export function SwissMedicalCloseButton({ onSent, disabled }: { onSent?: () => void; disabled?: boolean }) {
+  const { user } = useUser()
+  const demoUser = isDemoUser(user?.id)
   const [periods, setPeriods] = useState<PeriodInfo[]>([])
   const [loadingPeriods, setLoadingPeriods] = useState(true)
   const [selected, setSelected] = useState<string>('')
@@ -69,7 +73,8 @@ export function SwissMedicalCloseButton({ onSent }: { onSent?: () => void }) {
     !!selectedInfo &&
     !selectedInfo.ya_enviado &&
     selectedInfo.cantidad_pendientes > 0 &&
-    !sending
+    !sending &&
+    !disabled
 
   const handleSend = async () => {
     if (!selected) return
@@ -98,6 +103,15 @@ export function SwissMedicalCloseButton({ onSent }: { onSent?: () => void }) {
             ? `Liquidación enviada (${j.cantidad_partes} partes). ⚠️ ${sinPdf} parte(s) sin PDF adjunto.`
             : `Liquidación enviada exitosamente: ${j.cantidad_partes} parte(s) y planilla adjunta.`
         setFeedback({ kind: 'success', message: msg, submissionId: j.submission_id })
+        if (demoUser && j.submission_id) {
+          try {
+            window.sessionStorage.setItem('traza.demo.session.swiss_sent', String(j.submission_id))
+            // Resetear progreso efímero del wizard demo para este envío.
+            window.sessionStorage.removeItem(`traza.demo.swiss_wizard_state.${String(j.submission_id)}`)
+          } catch {
+            /* ignore */
+          }
+        }
         await loadPeriods()
         onSent?.()
       } else if (r.status === 409) {
@@ -143,7 +157,7 @@ export function SwissMedicalCloseButton({ onSent }: { onSent?: () => void }) {
         <select
           value={selected}
           onChange={(e) => setSelected(e.target.value)}
-          disabled={loadingPeriods || sending || periods.length === 0}
+          disabled={disabled || loadingPeriods || sending || periods.length === 0}
           style={{
             height: 36,
             padding: '0 12px',
@@ -198,6 +212,11 @@ export function SwissMedicalCloseButton({ onSent }: { onSent?: () => void }) {
           <span style={{ fontSize: 12, color: 'var(--text-soft, #6b7280)', maxWidth: 320, lineHeight: 1.35 }}>
             No hay partes Swiss Medical válidos para enviar en los períodos mostrados (falta documento vinculado o ya fueron
             enviados).
+          </span>
+        )}
+        {disabled && (
+          <span style={{ fontSize: 12, color: 'var(--text-soft, #6b7280)', maxWidth: 360, lineHeight: 1.35 }}>
+            En demo, primero analizá el documento en “Agregar documentos” para habilitar el envío.
           </span>
         )}
         {selectedInfo && !selectedInfo.ya_enviado && selectedInfo.cantidad_pendientes === 0 && hasAnySendable && (

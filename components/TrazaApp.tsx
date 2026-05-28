@@ -1,6 +1,8 @@
 'use client';
 
+import { useUser } from '@clerk/nextjs';
 import { useEffect, useState } from 'react';
+import { isDemoUser } from '@/lib/demo-user';
 import { Logo } from './Logo';
 import { Icon } from './Icon';
 import { Sidebar } from './Sidebar';
@@ -19,6 +21,8 @@ import { buildSwissCxRow } from '@/lib/swissCxExport';
 import { applyThemeMode, DEFAULT_PROFILE, loadProfile } from '@/lib/profile';
 
 export default function TrazaApp() {
+  const { user } = useUser();
+  const demoUser = isDemoUser(user?.id);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [active, setActive] = useState<string>('dashboard');
   const [files, setFiles] = useState<FileEntry[]>([]);
@@ -38,6 +42,50 @@ export default function TrazaApp() {
   }, []);
 
   useEffect(() => {
+    // Limpieza defensiva: si quedó un "cobro demo" persistido en localStorage,
+    // no debe filtrarse a perfiles reales (localStorage se comparte entre usuarios del mismo navegador).
+    if (!user?.id) return;
+    if (demoUser) return;
+    try {
+      const STORAGE_KEY = 'traza.history.v1';
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as any;
+      const files = Array.isArray(parsed?.files) ? parsed.files : [];
+      const nextFiles = files.filter((f: any) => !String(f?.id ?? '').startsWith('demo_cobro_'));
+      if (nextFiles.length === files.length) return;
+      const next = { ...parsed, files: nextFiles, savedAt: new Date().toISOString() };
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      /* ignore */
+    }
+  }, [user?.id, demoUser]);
+
+  useEffect(() => {
+    // En demo, la experiencia es por sesión: entre F5 y F5.
+    // Si no hubo análisis en esta sesión, no rehidratamos desde localStorage.
+    if (demoUser) {
+      try {
+        // En demo queremos que un refresh (F5) arranque de cero.
+        // `sessionStorage` sobrevive entre reloads, así que limpiamos los flags efímeros al montar.
+        window.sessionStorage.removeItem('traza.demo.session.analyzed');
+        window.sessionStorage.removeItem('traza.demo.session.swiss_sent');
+
+        const analyzedThisSession =
+          typeof window !== 'undefined' &&
+          window.sessionStorage.getItem('traza.demo.session.analyzed') === '1';
+        if (!analyzedThisSession) {
+          setFiles([]);
+          setAuthStates({});
+          return;
+        }
+      } catch {
+        setFiles([]);
+        setAuthStates({});
+        return;
+      }
+    }
+
     const loaded = loadHistory();
     if (loaded.files.length > 0) {
       setFiles(loaded.files);
@@ -45,7 +93,7 @@ export default function TrazaApp() {
     if (loaded.authStates && Object.keys(loaded.authStates).length > 0) {
       setAuthStates(loaded.authStates as Record<string, AuthState | undefined>);
     }
-  }, []);
+  }, [demoUser]);
 
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
@@ -68,8 +116,19 @@ export default function TrazaApp() {
   }, []);
 
   useEffect(() => {
+    // En demo, si todavía no hubo "análisis real" en esta sesión,
+    // NO persistimos el estado vacío a localStorage porque pisaría
+    // datos demo persistidos (p.ej. cobros aprobados).
+    if (demoUser) {
+      try {
+        const analyzedThisSession = window.sessionStorage.getItem('traza.demo.session.analyzed') === '1';
+        if (!analyzedThisSession) return;
+      } catch {
+        return;
+      }
+    }
     saveHistory(files, authStates);
-  }, [files, authStates]);
+  }, [files, authStates, demoUser]);
 
   useEffect(() => {
     const onNavigate = (e: Event) => {
@@ -90,15 +149,22 @@ export default function TrazaApp() {
   }, [mobileNavOpen]);
 
   useEffect(() => {
-    if (mobileNavOpen) {
+    const lockScroll = mobileNavOpen || (demoUser && active === 'cobros');
+    const prevBody = document.body.style.overflow;
+    const prevHtml = document.documentElement.style.overflow;
+
+    if (lockScroll) {
       document.body.style.overflow = 'hidden';
+      document.documentElement.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
     }
     return () => {
-      document.body.style.overflow = '';
+      document.body.style.overflow = prevBody;
+      document.documentElement.style.overflow = prevHtml;
     };
-  }, [mobileNavOpen]);
+  }, [mobileNavOpen, demoUser, active]);
 
   function upsertFile(entry: FileEntry) {
     setUploadVirgin(false);
@@ -111,6 +177,22 @@ export default function TrazaApp() {
     });
     if (entry.status === 'analyzed') {
       setSelectedFileId(entry.id);
+      if (demoUser) {
+        try {
+          // En demo: solo marcamos "analizado en esta sesión" cuando hay análisis real
+          // (thumbnails/analysis/text). El placeholder demo (con documentId pero sin análisis)
+          // debe persistir en "Agregar documentos" sin habilitar el resto del flujo.
+          const hasRealAnalysis =
+            Boolean(entry.analysis) ||
+            Boolean(entry.text) ||
+            Boolean((entry.thumbnails?.length ?? 0) > 0);
+          if (hasRealAnalysis) {
+            window.sessionStorage.setItem('traza.demo.session.analyzed', '1');
+          }
+        } catch {
+          /* ignore */
+        }
+      }
     }
   }
 
@@ -131,6 +213,9 @@ export default function TrazaApp() {
   }
 
   async function deleteLiquidacionForced(liquidacionId: string): Promise<RemoveFileResult> {
+    if (isDemoUser(user?.id)) {
+      return { ok: true };
+    }
     try {
       const policyRes = await fetch(
         `/api/liquidaciones/deletion-policy?liquidacion_id=${encodeURIComponent(liquidacionId)}&force=1`,
@@ -163,6 +248,9 @@ export default function TrazaApp() {
   }
 
   async function removeFile(id: string, options?: { force?: boolean }): Promise<RemoveFileResult> {
+    if (isDemoUser(user?.id)) {
+      return { ok: true };
+    }
     const victim = files.find((f) => f.id === id);
     const docId = victim?.documentId;
     const forceQ = options?.force ? '&force=1' : '';
@@ -236,6 +324,15 @@ export default function TrazaApp() {
     if (!f.analysis) return acc;
     return acc + f.analysis.summary.error;
   }, 0);
+
+  const demoAnalyzedThisSession = (() => {
+    if (!demoUser) return true;
+    try {
+      return window.sessionStorage.getItem('traza.demo.session.analyzed') === '1';
+    } catch {
+      return false;
+    }
+  })();
 
   async function handleFinalizeUpload(args: { parteFileId: string | null; batchId: string | null }) {
     const parte =
@@ -332,6 +429,7 @@ export default function TrazaApp() {
           message={smgDeleteBlock.message}
           onClose={() => setSmgDeleteBlock(null)}
           forceDeleting={smgForceDeleting}
+          forceDeleteDisabled={demoUser}
           onForceDelete={
             smgDeleteBlock.canForceDelete
               ? () => {
@@ -404,9 +502,63 @@ export default function TrazaApp() {
       <main className="main">
         {active === 'dashboard' && <DashboardView onNavigate={(view) => setActive(view)} onOpenFile={openFile} />}
         {active === 'cobros' && (
-          <CobrosGuard>
-            <CobrosView files={files} onUpdateTracking={updateFileTracking} />
-          </CobrosGuard>
+          demoUser ? (
+            <div
+              style={{
+                position: 'relative',
+                // Ocupa el viewport visible del contenido, evita "pantalla corrida" y scroll residual.
+                minHeight: 'calc(100dvh - 32px)',
+                height: 'calc(100dvh - 32px)',
+                overflow: 'hidden',
+              }}
+            >
+              <div
+                style={{
+                  filter: 'blur(5px)',
+                  opacity: 0.55,
+                  pointerEvents: 'none',
+                  userSelect: 'none',
+                  height: '100%',
+                  overflow: 'hidden',
+                }}
+                aria-hidden
+              >
+                <CobrosGuard>
+                  <CobrosView files={files} onUpdateTracking={updateFileTracking} />
+                </CobrosGuard>
+              </div>
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  display: 'grid',
+                  placeItems: 'center',
+                  padding: 16,
+                }}
+              >
+                <div className="panel" style={{ padding: 18, maxWidth: 560, width: '100%' }}>
+                  <div style={{ fontWeight: 900, fontSize: 16, marginBottom: 6 }}>
+                    Centro de cobros — disponible en la versión full
+                  </div>
+                  <div style={{ color: 'var(--text-muted)', fontSize: 14, lineHeight: 1.45 }}>
+                    Estás usando un <b>perfil demo</b>. Este módulo está reservado para la versión completa.
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
+                    <button type="button" className="btn" onClick={() => setActive('dashboard')}>
+                      Volver al resumen
+                    </button>
+                    <button type="button" className="btn btn-primary" onClick={() => setActive('settings')}>
+                      Ir a Tu perfil
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <CobrosGuard>
+              <CobrosView files={files} onUpdateTracking={updateFileTracking} />
+            </CobrosGuard>
+          )
         )}
         {active === 'upload' && (
           <UploadView
@@ -455,7 +607,7 @@ export default function TrazaApp() {
         )}
         {active === 'documents' && (
           <DocumentsView
-            files={files}
+            files={demoUser && !demoAnalyzedThisSession ? [] : files}
             onOpenFile={openFile}
             onUpdateTracking={updateFileTracking}
             onRemoveFile={async (fileId) => {

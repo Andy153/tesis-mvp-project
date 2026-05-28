@@ -1,6 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useUser } from '@clerk/nextjs';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { isDemoUser } from '@/lib/demo-user';
 import { Icon } from './Icon';
 import type { FileEntry, RemoveFileResult, SmgDeleteBlockPayload } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
@@ -14,8 +16,12 @@ type FilterKey = 'all' | 'error' | 'warn' | 'ok';
 
 async function deleteLiquidacionById(
   liquidacionId: string,
+  userId: string | null | undefined,
   options?: { force?: boolean },
 ): Promise<RemoveFileResult> {
+  if (isDemoUser(userId)) {
+    return { ok: true };
+  }
   const forceQ = options?.force ? '&force=1' : '';
   try {
     const policyRes = await fetch(
@@ -59,14 +65,21 @@ async function deleteLiquidacionById(
 // Panel de documentos pendientes de revisión
 // ---------------------------------------------------------------------------
 
+const demoDeleteDisabledStyle: CSSProperties = {
+  opacity: 0.45,
+  cursor: 'not-allowed',
+};
+
 function PendingReviewPanel({
   items,
   onReview,
   onDelete,
+  deleteDisabled,
 }: {
   items: any[];
   onReview: (id: string) => void;
   onDelete: (id: string) => void;
+  deleteDisabled?: boolean;
 }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -162,7 +175,12 @@ function PendingReviewPanel({
                   <button
                     type="button"
                     className="btn btn-sm btn-ghost"
-                    onClick={() => onDelete(p.id)}
+                    disabled={deleteDisabled}
+                    style={deleteDisabled ? demoDeleteDisabledStyle : undefined}
+                    onClick={() => {
+                      if (deleteDisabled) return;
+                      onDelete(p.id);
+                    }}
                   >
                     Eliminar
                   </button>
@@ -211,6 +229,25 @@ export function DocumentsView({
   onRemoveFile: (id: string) => Promise<RemoveFileResult>;
   onSmgDeleteBlocked?: (payload: SmgDeleteBlockPayload) => void;
 }) {
+  const { user } = useUser();
+  const demoUser = isDemoUser(user?.id);
+  const demoSwissSent = (() => {
+    if (!demoUser) return false;
+    try {
+      return (window.sessionStorage.getItem('traza.demo.session.swiss_sent') ?? '').length > 0;
+    } catch {
+      return false;
+    }
+  })();
+  const demoAnalyzedThisSession = (() => {
+    if (!demoUser) return true;
+    try {
+      return window.sessionStorage.getItem('traza.demo.session.analyzed') === '1';
+    } catch {
+      return false;
+    }
+  })();
+
   const normalizePrepaga = (raw: string | null | undefined) => {
     const s = String(raw || '').trim();
     if (!s) return null;
@@ -355,11 +392,13 @@ export function DocumentsView({
       {pendingDeduped.length > 0 && (
         <PendingReviewPanel
           items={pendingDeduped}
+          deleteDisabled={demoUser}
           onReview={(id) => setReviewingId(id)}
           onDelete={(id) => {
+            if (demoUser) return;
             if (!window.confirm('¿Eliminar este registro de liquidación en la nube? No se puede deshacer.')) return;
             void (async () => {
-              const result = await deleteLiquidacionById(id);
+              const result = await deleteLiquidacionById(id, user?.id);
               if (result.ok === false) {
                 if (result.blocked && result.message) {
                   onSmgDeleteBlocked?.({
@@ -436,9 +475,12 @@ export function DocumentsView({
         </div>
       )}
 
-      {validCobroDocuments.length > 0 && <CobrosBanner key={refreshKey} />}
+      {(validCobroDocuments.length > 0 || (demoUser && demoSwissSent)) && <CobrosBanner key={refreshKey} />}
       <div style={{ marginBottom: 16 }}>
-        <SwissMedicalCloseButton onSent={() => setRefreshKey((k) => k + 1)} />
+        <SwissMedicalCloseButton
+          disabled={demoUser && !demoAnalyzedThisSession}
+          onSent={() => setRefreshKey((k) => k + 1)}
+        />
       </div>
 
       <div className="docs-toolbar">
@@ -589,7 +631,16 @@ export function DocumentsView({
                             </button>
                           )
                         ) : null}
-                        <button type="button" className="btn btn-sm btn-ghost" onClick={() => setConfirmRemoveId(f.id)}>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-ghost"
+                          disabled={demoUser}
+                          style={demoUser ? demoDeleteDisabledStyle : undefined}
+                          onClick={() => {
+                            if (demoUser) return;
+                            setConfirmRemoveId(f.id);
+                          }}
+                        >
                           Sacar de Trazá
                         </button>
                       </div>

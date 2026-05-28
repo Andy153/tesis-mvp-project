@@ -7,9 +7,21 @@ type Props = {
   onClose: () => void
   onForceDelete?: () => void
   forceDeleting?: boolean
+  forceDeleteDisabled?: boolean
 }
 
-export function SmgDeletionBlockedCard({ message, onClose, onForceDelete, forceDeleting }: Props) {
+const demoDeleteDisabledStyle = {
+  opacity: 0.45,
+  cursor: 'not-allowed' as const,
+}
+
+export function SmgDeletionBlockedCard({
+  message,
+  onClose,
+  onForceDelete,
+  forceDeleting,
+  forceDeleteDisabled,
+}: Props) {
   return (
     <div
       className="modal-overlay smg-deletion-modal"
@@ -61,8 +73,10 @@ export function SmgDeletionBlockedCard({ message, onClose, onForceDelete, forceD
               <button
                 type="button"
                 className="btn btn-danger"
-                disabled={forceDeleting}
+                disabled={forceDeleting || forceDeleteDisabled}
+                style={forceDeleteDisabled ? demoDeleteDisabledStyle : undefined}
                 onClick={() => {
+                  if (forceDeleteDisabled) return
                   if (
                     window.confirm(
                       '¿Sacar este documento de Trazá igualmente? Solo se elimina en tu cuenta; si ya fue enviado por mail a Swiss Medical, contactalos por separado.',

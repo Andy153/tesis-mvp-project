@@ -1,8 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useUser } from '@clerk/nextjs';
 import { formatCaeDate } from '@/lib/arca/utils';
 import { navigateToPerfil } from '@/lib/traza-nav';
+import { isDemoUser } from '@/lib/demo-user';
+import { buildDemoFacturaResponse, DEMO_PDF_URL } from '@/lib/demo-swiss-cobros-shared';
 import {
   getFacturacionBlockedMessage,
   getFacturacionBlockedTitle,
@@ -98,6 +101,8 @@ export function FacturaARCA({
   onError,
   onNotaCreditoEmitida,
 }: FacturaARCAProps) {
+  const { user } = useUser();
+  const demoUser = isDemoUser(user?.id);
   const {
     loading: fiscalLoading,
     profile,
@@ -155,6 +160,10 @@ export function FacturaARCA({
 
   useEffect(() => {
     if (!facturaYaEmitida?.cae || !facturaYaEmitida.pdfPath) return;
+    if (demoUser) {
+      setPdfUrl(DEMO_PDF_URL);
+      return;
+    }
     let cancelled = false;
     void (async () => {
       try {
@@ -172,9 +181,38 @@ export function FacturaARCA({
     return () => {
       cancelled = true;
     };
-  }, [facturaYaEmitida?.cae, facturaYaEmitida?.pdfPath]);
+  }, [facturaYaEmitida?.cae, facturaYaEmitida?.pdfPath, demoUser]);
 
   const emitir = async () => {
+    if (demoUser) {
+      setEstado('loading');
+      setMensajeError(null);
+      const j = buildDemoFacturaResponse();
+      setCaeEmitido(j.cae);
+      setCaeFechaVtoEmitido(j.caeFechaVto);
+      setNroComprobanteEmitido(j.nroComprobante);
+      setPdfUrl(null);
+      setPdfPath(j.pdfPath);
+      setAmbienteEmitido(j.ambiente);
+      setEstado('exito');
+      try {
+        const r = await fetch('/api/arca/factura/pdf-url', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pdfPath: j.pdfPath }),
+        });
+        const jj = await r.json();
+        if (r.ok && jj.pdfUrl) setPdfUrl(jj.pdfUrl);
+        if (!r.ok) {
+          const msg = jj.error ?? 'No se pudo obtener el PDF demo';
+          setMensajeError(msg);
+        }
+      } catch {
+        setMensajeError('No se pudo obtener el PDF demo');
+      }
+      return;
+    }
+
     const blockedMsg = getFacturacionBlockedMessage(fiscalComplete, certReady);
     if (blockedMsg) {
       setMensajeError(blockedMsg);
@@ -224,6 +262,10 @@ export function FacturaARCA({
 
   const refreshPdfUrl = async () => {
     if (!pdfPath || refreshingPdfUrl) return;
+    if (demoUser) {
+      setPdfUrl(DEMO_PDF_URL);
+      return;
+    }
     setRefreshingPdfUrl(true);
     try {
       const r = await fetch('/api/arca/factura/pdf-url', {
@@ -326,7 +368,7 @@ export function FacturaARCA({
             </div>
           ) : (
             <p style={{ fontSize: 12, color: '#888', margin: '12px 0 0' }}>
-              El PDF no pudo generarse, pero el CAE es válido.
+              Cargando PDF
             </p>
           )}
         </div>
@@ -377,7 +419,7 @@ export function FacturaARCA({
         </button>
 
         {/* Botón discreto para emitir NC. Se oculta si ya hay una NC emitida. */}
-        {facturaParaNC && !ncEmitida ? (
+        {!demoUser && facturaParaNC && !ncEmitida ? (
           <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid #e5e7eb' }}>
             <button
               type="button"
@@ -397,7 +439,7 @@ export function FacturaARCA({
           </div>
         ) : null}
 
-        {ncModalAbierto && facturaParaNC ? (
+        {!demoUser && ncModalAbierto && facturaParaNC ? (
           <EmitirNotaCreditoModal
             submissionAnuladaId={submissionId}
             facturaOriginal={facturaParaNC}
@@ -446,7 +488,7 @@ export function FacturaARCA({
     );
   }
 
-  if (fiscalLoading || configLoading) {
+  if (!demoUser && (fiscalLoading || configLoading)) {
     return (
       <p style={{ fontSize: 14, color: 'var(--text-muted)', margin: 0 }}>
         Verificando configuración para facturar…
@@ -454,7 +496,7 @@ export function FacturaARCA({
     );
   }
 
-  const blockedMessage = getFacturacionBlockedMessage(fiscalComplete, certReady);
+  const blockedMessage = demoUser ? null : getFacturacionBlockedMessage(fiscalComplete, certReady);
 
   if (blockedMessage) {
     return (
@@ -471,7 +513,9 @@ export function FacturaARCA({
   }
 
   const disabled =
-    !canFacturar || estado === 'loading' || (necesitaMontoManual && montoFacturar <= 0);
+    (!demoUser && !canFacturar) ||
+    estado === 'loading' ||
+    (necesitaMontoManual && montoFacturar <= 0);
 
   return (
     <div>
@@ -536,15 +580,13 @@ export function FacturaARCA({
           <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: 14 }}>
             {emisionConfig.esProduccion
               ? 'Vas a emitir una factura REAL en AFIP (producción)'
-              : 'Emisión en homologación (sin validez fiscal)'}
+              : 'Emisión en homologación'}
           </p>
           <p style={{ margin: '0 0 6px', fontSize: 13 }}>
             <strong>Ambiente:</strong> {ambienteLabel}
-            {emisionConfig.ambienteFuente === 'env' ? ' (definido en AFIP_AMBIENTE del servidor)' : ''}
           </p>
           <p style={{ margin: '0 0 6px', fontSize: 13 }}>
-            <strong>Receptor:</strong> {emisionConfig.receptor.razonSocial} (CUIT{' '}
-            {emisionConfig.receptor.cuitFormateado})
+            <strong>Receptor:</strong> Doctor Trazá
           </p>
           {emisionConfig.esProduccion ? (
             <p style={{ margin: 0, fontSize: 12, lineHeight: 1.45 }}>
@@ -552,10 +594,7 @@ export function FacturaARCA({
               certificado de <strong>producción</strong> cargado en Tu perfil.
             </p>
           ) : (
-            <p style={{ margin: 0, fontSize: 12, lineHeight: 1.45 }}>
-              Para facturas reales, configurá <code>AFIP_AMBIENTE=produccion</code> en{' '}
-              <code>.env.local</code> y reiniciá el servidor.
-            </p>
+            <p style={{ margin: 0, fontSize: 12, lineHeight: 1.45 }} />
           )}
         </div>
       )}

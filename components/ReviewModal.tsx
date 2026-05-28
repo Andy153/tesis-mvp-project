@@ -2,7 +2,9 @@
 'use client'
 
 import React, { useEffect, useMemo, useState } from 'react'
+import { useUser } from '@clerk/nextjs'
 import { runChecks, type CheckIssue } from '@/lib/checks'
+import { isDemoUser } from '@/lib/demo-user'
 
 type Liquidacion = {
   id: string
@@ -48,6 +50,7 @@ function periodoLabel(p: string | null): string {
 }
 
 export function ReviewModal({ liquidacionId, onClose, onSaved }: Props) {
+  const { user } = useUser()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -120,6 +123,11 @@ export function ReviewModal({ liquidacionId, onClose, onSaved }: Props) {
     setSaving(true)
     setError(null)
     try {
+      if (action === 'confirm' && isDemoUser(user?.id)) {
+        onSaved?.({ confirmed: true })
+        onClose()
+        return
+      }
       const r = await fetch(`/api/liquidaciones/${liquidacionId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },

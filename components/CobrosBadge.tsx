@@ -6,6 +6,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useUser } from '@clerk/nextjs';
+import { isDemoUser } from '@/lib/demo-user';
 import { CobrosWizard } from './CobrosWizard';
 
 type ActiveSubmission = {
@@ -45,10 +47,48 @@ function pasoLabel(estado: string | null): string {
 }
 
 export function useCobrosPendientes() {
+  const { user } = useUser();
+  const demoUser = isDemoUser(user?.id);
   const [submissions, setSubmissions] = useState<ActiveSubmission[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = async () => {
+    if (demoUser) {
+      try {
+        const id = window.sessionStorage.getItem('traza.demo.session.swiss_sent');
+        if (!id) {
+          setSubmissions([]);
+          setLoading(false);
+          return;
+        }
+        // En demo, mostramos solo la submission de esta sesión.
+        const r = await fetch(`/api/submissions/${encodeURIComponent(id)}/wizard`);
+        const j = await r.json();
+        if (!r.ok || !j.submission) {
+          setSubmissions([]);
+          setLoading(false);
+          return;
+        }
+        const s = j.submission;
+        setSubmissions([
+          {
+            id: s.id,
+            periodo: s.periodo,
+            obra_social: s.obra_social,
+            wizard_estado: s.wizard_estado,
+            wizard_paso: s.wizard_paso,
+            enviado_en: s.enviado_en,
+            cantidad_partes: s.cantidad_partes,
+          },
+        ]);
+        setLoading(false);
+        return;
+      } catch {
+        setSubmissions([]);
+        setLoading(false);
+        return;
+      }
+    }
     try {
       const r = await fetch('/api/submissions/active');
       const j = await r.json();
@@ -62,7 +102,7 @@ export function useCobrosPendientes() {
 
   useEffect(() => {
     load();
-  }, []);
+  }, [demoUser]);
 
   return { submissions, loading, reload: load };
 }

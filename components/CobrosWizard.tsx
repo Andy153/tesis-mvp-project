@@ -2,7 +2,9 @@
 
 import type { CSSProperties, ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
+import { useUser } from '@clerk/nextjs';
 import { FacturaARCA } from '@/components/arca/FacturaARCA';
+import { isDemoUser } from '@/lib/demo-user';
 
 type Submission = {
   id: string;
@@ -128,6 +130,8 @@ export function CobrosWizard({
   onUpdate?: () => void;
   onCollapse?: () => void;
 }) {
+  const { user } = useUser();
+  const demoUser = isDemoUser(user?.id);
   const [sub, setSub] = useState<Submission | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -135,12 +139,31 @@ export function CobrosWizard({
   const [ready48h, setReady48h] = useState(false);
   const [readyFactura, setReadyFactura] = useState(false);
   const [comprobanteFile, setComprobanteFile] = useState<File | null>(null);
+  const [comprobanteUrlLoading, setComprobanteUrlLoading] = useState(false);
   const [caeNumero, setCaeNumero] = useState('');
   const [caeVencimiento, setCaeVencimiento] = useState('');
   const [exceptionSent, setExceptionSent] = useState(false);
+  const demoStateKey = `traza.demo.swiss_wizard_state.${submissionId}`;
 
   const load = async () => {
     try {
+      if (demoUser) {
+        try {
+          const raw = window.sessionStorage.getItem(demoStateKey);
+          if (raw) {
+            const parsed = JSON.parse(raw) as Submission;
+            if (parsed && parsed.id) {
+              setSub(parsed);
+              setCaeNumero(parsed.cae_numero ?? '');
+              setCaeVencimiento(parsed.cae_vencimiento ?? '');
+              setLoading(false);
+              return;
+            }
+          }
+        } catch {
+          // ignore y caemos al fetch
+        }
+      }
       const r = await fetch(`/api/submissions/${submissionId}/wizard`);
       const contentType = r.headers.get('content-type') ?? '';
       if (!contentType.includes('application/json')) {
@@ -184,11 +207,40 @@ export function CobrosWizard({
       const r = await fetch(`/api/submissions/${submissionId}/wizard`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, ...extraBody }),
+        body: JSON.stringify({
+          action,
+          ...extraBody,
+          ...(demoUser && sub
+            ? {
+                wizard_paso: sub.wizard_paso,
+                wizard_estado: sub.wizard_estado,
+                // Persistencia efímera demo (sin DB): reenviar estado relevante
+                comprobante_smg_path: sub.comprobante_smg_path,
+                monto_total: sub.monto_total,
+                factura_path: sub.factura_path,
+                cae_numero: sub.cae_numero,
+                cae_vencimiento: sub.cae_vencimiento,
+                numero_comprobante: sub.numero_comprobante,
+                factura_adjuntada_en: sub.factura_adjuntada_en,
+                wizard_completado_en: sub.wizard_completado_en,
+              }
+            : {}),
+        }),
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error);
-      await load();
+      if (demoUser && j.submission) {
+        setSub(j.submission);
+        setCaeNumero(j.submission.cae_numero ?? '');
+        setCaeVencimiento(j.submission.cae_vencimiento ?? '');
+        try {
+          window.sessionStorage.setItem(demoStateKey, JSON.stringify(j.submission));
+        } catch {
+          /* ignore */
+        }
+      } else {
+        await load();
+      }
       onUpdate?.();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error');
@@ -202,13 +254,36 @@ export function CobrosWizard({
     setError(null);
     try {
       formData.append('action', action);
+      if (demoUser && sub) {
+        formData.append('wizard_paso', String(sub.wizard_paso ?? 1));
+        if (sub.wizard_estado) formData.append('wizard_estado', sub.wizard_estado);
+        if (sub.comprobante_smg_path) formData.append('comprobante_smg_path', sub.comprobante_smg_path);
+        if (sub.monto_total != null) formData.append('monto_total', String(sub.monto_total));
+        if (sub.factura_path) formData.append('factura_path', sub.factura_path);
+        if (sub.cae_numero) formData.append('cae_numero', sub.cae_numero);
+        if (sub.cae_vencimiento) formData.append('cae_vencimiento', sub.cae_vencimiento);
+        if (sub.numero_comprobante != null) formData.append('numero_comprobante', String(sub.numero_comprobante));
+        if (sub.factura_adjuntada_en) formData.append('factura_adjuntada_en', sub.factura_adjuntada_en);
+        if (sub.wizard_completado_en) formData.append('wizard_completado_en', sub.wizard_completado_en);
+      }
       const r = await fetch(`/api/submissions/${submissionId}/wizard`, {
         method: 'PATCH',
         body: formData,
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error);
-      await load();
+      if (demoUser && j.submission) {
+        setSub(j.submission);
+        setCaeNumero(j.submission.cae_numero ?? '');
+        setCaeVencimiento(j.submission.cae_vencimiento ?? '');
+        try {
+          window.sessionStorage.setItem(demoStateKey, JSON.stringify(j.submission));
+        } catch {
+          /* ignore */
+        }
+      } else {
+        await load();
+      }
       onUpdate?.();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error');
@@ -225,7 +300,18 @@ export function CobrosWizard({
       const j = await r.json();
       if (!r.ok) throw new Error(j.error);
       setExceptionSent(true);
-      await load();
+      if (demoUser && j.submission) {
+        setSub(j.submission);
+        setCaeNumero(j.submission.cae_numero ?? '');
+        setCaeVencimiento(j.submission.cae_vencimiento ?? '');
+        try {
+          window.sessionStorage.setItem(demoStateKey, JSON.stringify(j.submission));
+        } catch {
+          /* ignore */
+        }
+      } else {
+        await load();
+      }
       onUpdate?.();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error');
@@ -239,6 +325,30 @@ export function CobrosWizard({
 
   const estado = sub.wizard_estado ?? '';
   const paso = sub.wizard_paso ?? 1;
+  const tieneComprobanteCargado = Boolean(sub.comprobante_smg_path?.trim());
+
+  const revisarComprobante = async () => {
+    setComprobanteUrlLoading(true);
+    setError(null);
+    try {
+      const r = await fetch(`/api/submissions/${submissionId}/comprobante-url`);
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error ?? 'No se pudo obtener el comprobante');
+      const url = j.url as string;
+      const a = document.createElement('a');
+      a.href = url;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      if (j.filename) a.download = j.filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Error al descargar');
+    } finally {
+      setComprobanteUrlLoading(false);
+    }
+  };
   const isAprobado = estado === 'aprobado';
   const isExcepcion = estado === 'excepcion_enviada';
   const isDescartado = estado === 'descartado';
@@ -452,36 +562,78 @@ export function CobrosWizard({
       {/* Paso 3 */}
       <Step numero={3} titulo="Descargá y subí el comprobante de Swiss Medical" activo={paso === 3} completado={paso > 3}>
         <p style={{ fontSize: 14, color: '#555', margin: '0 0 12px' }}>
-          Descargá el comprobante desde el portal y subilo acá para tener el registro en Trazá.
+          {tieneComprobanteCargado
+            ? 'Ya tenés un comprobante registrado en Trazá. Podés revisarlo y continuar.'
+            : 'Descargá el comprobante desde el portal y subilo acá para tener el registro en Trazá.'}
         </p>
         <img src="/wizard/paso3_comprobante.png" alt="Descargar comprobante y verificar Aprobado" style={{ width: '100%', borderRadius: 8, margin: '12px 0', border: '1px solid #e0e0e0' }} />
-        <div className="cobros-wizard__file-input-wrap">
-          <label style={labelStyle}>Comprobante SMG (PDF)</label>
-          <input
-            type="file"
-            className="cobros-wizard__file-input"
-            accept="application/pdf"
-            onChange={(e) => setComprobanteFile(e.target.files?.[0] ?? null)}
-          />
-        </div>
-        <button
-          type="button"
-          className="btn btn-primary"
-          disabled={!comprobanteFile || saving}
-          style={
-            !comprobanteFile
-              ? { background: '#cdd5d0', color: '#7a8580', cursor: 'not-allowed', borderColor: '#cdd5d0' }
-              : undefined
-          }
-          onClick={async () => {
-            if (!comprobanteFile) return;
-            const fd = new FormData();
-            fd.append('file', comprobanteFile);
-            await patchFormData('subir_comprobante', fd);
-          }}
-        >
-          {saving ? 'Subiendo...' : 'Subir comprobante'}
-        </button>
+        {tieneComprobanteCargado && (
+          <div
+            style={{
+              padding: '12px 14px',
+              marginBottom: 14,
+              borderRadius: 8,
+              background: '#e8f5ee',
+              border: '1px solid #7bc398',
+            }}
+          >
+            <p style={{ fontSize: 14, color: '#1f5d3a', margin: '0 0 10px' }}>
+              ✓ Comprobante SMG disponible {demoUser ? '— DEMO' : ''}
+              {sub.monto_total != null && sub.monto_total > 0
+                ? ` · monto $${sub.monto_total.toLocaleString('es-AR', { minimumFractionDigits: 2 })}`
+                : ''}
+            </p>
+            <div className="cobros-wizard__step-actions" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="btn"
+                disabled={comprobanteUrlLoading || saving}
+                onClick={() => void revisarComprobante()}
+              >
+                {comprobanteUrlLoading ? 'Abriendo...' : '📄 Revisar / descargar comprobante'}
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={saving}
+                onClick={() => patch('subir_comprobante')}
+              >
+                {saving ? 'Continuando...' : 'Continuar con este comprobante →'}
+              </button>
+            </div>
+          </div>
+        )}
+        {!demoUser && (
+          <>
+            <div className="cobros-wizard__file-input-wrap">
+              <label style={labelStyle}>Comprobante SMG (PDF)</label>
+              <input
+                type="file"
+                className="cobros-wizard__file-input"
+                accept="application/pdf"
+                onChange={(e) => setComprobanteFile(e.target.files?.[0] ?? null)}
+              />
+            </div>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={!comprobanteFile || saving}
+              style={
+                !comprobanteFile
+                  ? { background: '#cdd5d0', color: '#7a8580', cursor: 'not-allowed', borderColor: '#cdd5d0' }
+                  : undefined
+              }
+              onClick={async () => {
+                if (!comprobanteFile) return;
+                const fd = new FormData();
+                fd.append('file', comprobanteFile);
+                await patchFormData('subir_comprobante', fd);
+              }}
+            >
+              {saving ? 'Subiendo...' : 'Subir comprobante'}
+            </button>
+          </>
+        )}
         <button type="button" className="btn cobros-wizard__btn-muted" style={{ marginTop: 12, marginLeft: 12, marginRight: 12, fontSize: 13, color: '#666' }} onClick={goBack} disabled={saving}>
           ← Volver al paso anterior
         </button>

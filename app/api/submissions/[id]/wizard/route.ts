@@ -10,6 +10,12 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { syncWorkflowFromSubmission } from '@/lib/workflow-processes';
 import { extractMontoFromComprobante } from '@/lib/arca/extractMonto';
 import { Resend } from 'resend';
+import { isDemoUser } from '@/lib/demo-user';
+import {
+  applyDemoWizardException,
+  applyDemoWizardPatch,
+  fetchDemoWizardSubmission,
+} from '@/lib/demo-swiss-cobros';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -66,6 +72,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   //
   // No aplicar si el usuario volvió atrás desde el paso 5 (paso 4 + factura_instrucciones).
   if (
+    !isDemoUser(userId) &&
     data.cae_numero &&
     !data.anulada_at &&
     (data.wizard_paso ?? 0) === 4 &&
@@ -99,7 +106,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   // Verificar que el submission pertenece al usuario
   const { data: sub, error: subErr } = await supabaseAdmin
     .from('monthly_submissions')
-    .select('id, wizard_estado, periodo, wizard_paso')
+    .select('id, wizard_estado, periodo, wizard_paso, comprobante_smg_path, monto_total')
     .eq('id', params.id)
     .eq('clerk_user_id', userId)
     .maybeSingle();
@@ -121,6 +128,70 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   }
 
   const action = body.action as string | undefined;
+
+  if (isDemoUser(userId)) {
+    const full = await fetchDemoWizardSubmission(params.id, userId);
+    if (!full) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    if (!action) return NextResponse.json({ error: 'Acción no reconocida' }, { status: 400 });
+
+    // El wizard demo no persiste pasos en DB: usar estado que envía el cliente.
+    const clientPaso = body.wizard_paso != null ? Number(body.wizard_paso) : null;
+    const clientEstado =
+      typeof body.wizard_estado === 'string' ? body.wizard_estado : null;
+    const clientComprobantePath =
+      typeof body.comprobante_smg_path === 'string' ? body.comprobante_smg_path : null;
+    const clientMontoTotal =
+      body.monto_total != null && body.monto_total !== ''
+        ? Number(body.monto_total)
+        : null;
+    const clientFacturaPath =
+      typeof body.factura_path === 'string' ? body.factura_path : null;
+    const clientCaeNumero =
+      typeof body.cae_numero === 'string' ? body.cae_numero : null;
+    const clientCaeVencimiento =
+      typeof body.cae_vencimiento === 'string' ? body.cae_vencimiento : null;
+    const clientNumeroComprobante =
+      body.numero_comprobante != null && body.numero_comprobante !== ''
+        ? Number(body.numero_comprobante)
+        : null;
+    const clientFacturaAdjuntadaEn =
+      typeof body.factura_adjuntada_en === 'string' ? body.factura_adjuntada_en : null;
+    const clientWizardCompletadoEn =
+      typeof body.wizard_completado_en === 'string' ? body.wizard_completado_en : null;
+    const subForPatch =
+      clientPaso != null && !Number.isNaN(clientPaso)
+        ? {
+            ...full,
+            wizard_paso: clientPaso,
+            wizard_estado: clientEstado ?? full.wizard_estado,
+            comprobante_smg_path: clientComprobantePath ?? full.comprobante_smg_path,
+            monto_total:
+              clientMontoTotal != null && !Number.isNaN(clientMontoTotal)
+                ? clientMontoTotal
+                : full.monto_total,
+            factura_path: clientFacturaPath ?? full.factura_path,
+            cae_numero: clientCaeNumero ?? full.cae_numero,
+            cae_vencimiento: clientCaeVencimiento ?? full.cae_vencimiento,
+            numero_comprobante:
+              clientNumeroComprobante != null && !Number.isNaN(clientNumeroComprobante)
+                ? clientNumeroComprobante
+                : full.numero_comprobante,
+            factura_adjuntada_en: clientFacturaAdjuntadaEn ?? full.factura_adjuntada_en,
+            wizard_completado_en: clientWizardCompletadoEn ?? full.wizard_completado_en,
+          }
+        : full;
+
+    const result = applyDemoWizardPatch(subForPatch, action, body, userId);
+    if ('error' in result) {
+      return NextResponse.json({ error: result.error }, { status: 400 });
+    }
+    return NextResponse.json({
+      ok: true,
+      wizard_estado: result.wizard_estado,
+      submission: result.submission,
+    });
+  }
+
   const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
 
   if (action === 'comprobante_disponible') {
@@ -135,20 +206,26 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     }
   } else if (action === 'subir_comprobante') {
     const file = body.file as File | null;
-    if (!file || !(file instanceof File)) {
-      return NextResponse.json({ error: 'Falta el archivo del comprobante' }, { status: 400 });
-    }
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const path = `${userId}/${sub.periodo}_comprobante_smg.pdf`;
-    const { error: upErr } = await supabaseAdmin.storage
-      .from(BUCKET_SUBMISSIONS)
-      .upload(path, buffer, { contentType: 'application/pdf', upsert: true });
-    if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
-    update.comprobante_smg_path = path;
+    if (file && file instanceof File) {
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const path = `${userId}/${sub.periodo}_comprobante_smg.pdf`;
+      const { error: upErr } = await supabaseAdmin.storage
+        .from(BUCKET_SUBMISSIONS)
+        .upload(path, buffer, { contentType: 'application/pdf', upsert: true });
+      if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
+      update.comprobante_smg_path = path;
 
-    const montoExtraido = await extractMontoFromComprobante(buffer);
-    if (montoExtraido !== null) {
-      update.monto_total = montoExtraido;
+      const montoExtraido = await extractMontoFromComprobante(buffer);
+      if (montoExtraido !== null) {
+        update.monto_total = montoExtraido;
+      }
+    } else if (sub.comprobante_smg_path) {
+      // Ya había comprobante (p. ej. subido en una visita anterior): avanzar sin re-subir.
+      if (sub.monto_total != null) {
+        update.monto_total = sub.monto_total;
+      }
+    } else {
+      return NextResponse.json({ error: 'Falta el archivo del comprobante' }, { status: 400 });
     }
 
     update.wizard_estado = 'comprobante_subido';
@@ -246,6 +323,13 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
 
   if (subErr) return NextResponse.json({ error: subErr.message }, { status: 500 });
   if (!sub) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  if (isDemoUser(userId)) {
+    const full = await fetchDemoWizardSubmission(params.id, userId);
+    if (!full) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const submission = applyDemoWizardException(full);
+    return NextResponse.json({ ok: true, submission });
+  }
 
   const resendApiKey = process.env.RESEND_API_KEY;
   if (!resendApiKey) return NextResponse.json({ error: 'RESEND_API_KEY no configurado' }, { status: 500 });

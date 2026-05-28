@@ -1,5 +1,6 @@
 import { auth } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
+import { isDemoUser } from '@/lib/demo-user'
 import {
   formatCuitDisplay,
   getEffectiveAfipAmbiente,
@@ -13,6 +14,20 @@ export async function GET() {
   const { userId } = await auth()
   if (!userId) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  }
+
+  if (isDemoUser(userId)) {
+    const receptor = getReceptorFacturaEmision()
+    return NextResponse.json({
+      ambiente: 'desarrollo',
+      ambienteFuente: 'env',
+      receptor: {
+        cuit: receptor.cuit,
+        cuitFormateado: formatCuitDisplay(receptor.cuit),
+        razonSocial: receptor.razonSocial,
+      },
+      esProduccion: false,
+    })
   }
 
   const profile = await getProfileFromDB(userId)

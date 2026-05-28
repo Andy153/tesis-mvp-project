@@ -789,20 +789,30 @@ async function tryOverlayOpenAiParteText(
   };
 }
 
+export type ExtractTextOptions = {
+  /** Si false, no crea filas en Supabase vía /api/ai/extract (p. ej. re-análisis demo con document_id existente). */
+  persistToDb?: boolean;
+};
+
 export async function extractText(
   file: File,
   onProgress?: ProgressFn,
+  options?: ExtractTextOptions,
 ): Promise<ExtractionResult & { documentId: string | null }> {
+  const persistToDb = options?.persistToDb !== false;
+  if (!persistToDb) {
+    _pendingDocumentId = null;
+  }
   const type = file.type;
   let result: ExtractionResult;
   if (type === 'application/pdf') {
-    result = await extractFromPdf(file, onProgress);
+    result = await extractFromPdf(file, onProgress, { persistToDb });
   } else if (type.startsWith('image/')) {
-    result = await extractFromImage(file, onProgress);
+    result = await extractFromImage(file, onProgress, { persistToDb });
   } else {
     throw new Error('Formato no soportado: ' + type);
   }
-  const documentIdForCaller = _pendingDocumentId;
+  const documentIdForCaller = persistToDb ? _pendingDocumentId : null;
   return { ...result, documentId: documentIdForCaller };
 }
 
@@ -813,7 +823,12 @@ async function loadPdfjs() {
   return pdfjs;
 }
 
-async function extractFromPdf(file: File, onProgress?: ProgressFn): Promise<ExtractionResult> {
+async function extractFromPdf(
+  file: File,
+  onProgress?: ProgressFn,
+  opts?: { persistToDb?: boolean },
+): Promise<ExtractionResult> {
+  const persistToDb = opts?.persistToDb !== false;
   const tAll0 = Date.now();
   console.log(`${PIPE} pdf:start name=${file.name} size=${file.size} type=${file.type}`);
   onProgress?.({ progress: 0.1, message: 'Leyendo PDF...' });
@@ -991,7 +1006,7 @@ async function extractFromPdf(file: File, onProgress?: ProgressFn): Promise<Extr
   const lowQuality = !aiOk;
 
   if (!lowQuality) {
-    if (overlaid.aiParteExtract) {
+    if (overlaid.aiParteExtract && persistToDb) {
       await persistParteQuirurgicoExtraction(overlaid.aiParteExtract as ParteQuirurgicoExtract);
     }
     console.log(`${PIPE} pipeline_mode=fast_default ocr_skipped=true openai_ms=${openai_ms} total_ms=${Date.now() - pipelineStartedAt}`);
@@ -1083,7 +1098,7 @@ async function extractFromPdf(file: File, onProgress?: ProgressFn): Promise<Extr
     raw_pageTexts: [...pageTexts],
   };
   const tOpenAi1 = Date.now();
-  const overlaid2 = await tryOverlayOpenAiParteText(baseOcr, onProgress, undefined, true);
+  const overlaid2 = await tryOverlayOpenAiParteText(baseOcr, onProgress, undefined, persistToDb);
   const openai_ms2 = Date.now() - tOpenAi1;
   console.log(
     `${PIPE} pipeline_mode=ocr_fallback ocr_skipped=false fallback_reason=${fallback_reason} ocr_ms=${ocrMs} openai_ms=${openai_ms2} total_ms=${Date.now() - pipelineStartedAt}`,
@@ -1094,7 +1109,12 @@ async function extractFromPdf(file: File, onProgress?: ProgressFn): Promise<Extr
   return overlaid2;
 }
 
-async function extractFromImage(file: File, onProgress?: ProgressFn): Promise<ExtractionResult> {
+async function extractFromImage(
+  file: File,
+  onProgress?: ProgressFn,
+  opts?: { persistToDb?: boolean },
+): Promise<ExtractionResult> {
+  const persistToDb = opts?.persistToDb !== false;
   const tAll0 = Date.now();
   console.log(`${PIPE} image:start name=${file.name} size=${file.size} type=${file.type}`);
   onProgress?.({ progress: 0.1, message: 'Cargando imagen...' });
@@ -1142,7 +1162,7 @@ async function extractFromImage(file: File, onProgress?: ProgressFn): Promise<Ex
     );
   }
   console.log(`${PIPE} image:done total_ms=${Date.now() - tAll0}`);
-  return tryOverlayOpenAiParteText(base, onProgress, [0]);
+  return tryOverlayOpenAiParteText(base, onProgress, [0], persistToDb);
 }
 
 function imageDimensions(dataUrl: string): Promise<{ width: number; height: number }> {

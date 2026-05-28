@@ -1,5 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { isDemoUser } from '@/lib/demo-user'
+import { buildDemoFacturaResponse } from '@/lib/demo-swiss-cobros-shared'
 import { getReceptorFacturaEmision } from '@/lib/arca/emision-config'
 import { emitirFacturaC } from '@/lib/arca/facturacion'
 
@@ -7,6 +9,10 @@ export async function POST(req: NextRequest) {
   const { userId } = await auth()
   if (!userId) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  }
+
+  if (isDemoUser(userId)) {
+    return NextResponse.json(buildDemoFacturaResponse())
   }
 
   let body: Record<string, unknown>

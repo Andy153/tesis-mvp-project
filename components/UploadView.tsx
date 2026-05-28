@@ -1,6 +1,7 @@
 'use client';
 
 import { useUser } from '@clerk/nextjs';
+import { isDemoUser } from '@/lib/demo-user';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from './Icon';
 import { ReviewModal } from './ReviewModal';
@@ -53,6 +54,7 @@ export function UploadView({
   onEditUpload,
 }: Props) {
   const { user } = useUser();
+  const demoUser = isDemoUser(user?.id);
   const [drag, setDrag] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
@@ -66,10 +68,45 @@ export function UploadView({
   const [reanalyzeBusy, setReanalyzeBusy] = useState(false);
   const [reviewingLiqId, setReviewingLiqId] = useState<string | null>(null);
   const autoManualPrompted = useRef(new Set<string>());
+  const demoHydratedRef = useRef(false);
+  const [demoAnalyzeError, setDemoAnalyzeError] = useState<string | null>(null);
 
-  async function handleReanalyze(file: FileEntry) {
-    if (!file.file || reanalyzeBusy) return;
+  async function fetchDemoPdfAsFile(documentId: string): Promise<File> {
+    const metaRes = await fetch(`/api/demo/document-url?document_id=${encodeURIComponent(documentId)}`);
+    const meta = await metaRes.json().catch(() => ({}));
+    if (!metaRes.ok) {
+      const detail =
+        typeof meta.error === 'string'
+          ? meta.error
+          : 'No se pudo obtener el documento demo';
+      const tried = Array.isArray(meta.tried_paths) ? meta.tried_paths.join(', ') : '';
+      throw new Error(tried ? `${detail} (rutas probadas: ${tried})` : detail);
+    }
+    const pdfRes = await fetch(meta.signedUrl as string);
+    if (!pdfRes.ok) {
+      const body = await pdfRes.text().catch(() => '');
+      throw new Error(
+        body.includes('not found') || pdfRes.status === 404
+          ? 'El PDF no está en Storage en la ruta esperada. Contactá soporte si el archivo ya fue subido.'
+          : 'No se pudo descargar el PDF del documento demo',
+      );
+    }
+    const blob = await pdfRes.blob();
+    const name =
+      (typeof meta.nombre_archivo === 'string' && meta.nombre_archivo.trim()) ||
+      'parte_demo.pdf';
+    return new File([blob], name, { type: blob.type || 'application/pdf' });
+  }
+
+  async function handleReanalyze(
+    file: FileEntry,
+    opts?: { uploadFile?: File; persistToDb?: boolean },
+  ) {
+    const uploadFile = opts?.uploadFile ?? file.file;
+    const persistToDb = opts?.persistToDb !== false;
+    if (!uploadFile || reanalyzeBusy) return;
     setReanalyzeBusy(true);
+    setDemoAnalyzeError(null);
     const tAll0 = Date.now();
     console.log(`${PIPE} ui:reanalyze:start fileId=${file.id} name=${file.name} size=${file.size} type=${file.type}`);
     const base: FileEntry = {
@@ -77,6 +114,7 @@ export function UploadView({
       status: 'analyzing',
       progress: 0,
       progressMessage: 'Re-analizando...',
+      file: uploadFile,
     };
     onAddFile(base);
     try {
@@ -94,10 +132,11 @@ export function UploadView({
         raw_pageTexts,
         documentId: extractedDocumentId,
       } = await extractText(
-        file.file,
+        uploadFile,
         (p) => {
         onAddFile({ ...base, progress: p.progress, progressMessage: p.message });
         },
+        { persistToDb },
       );
       console.log(
         `${PIPE} ui:reanalyze:extract done ms=${Date.now() - tExtract0} text_len=${text.length} thumbs=${thumbnails.length} method=${method} pages=${pageTexts?.length ?? 0}`,
@@ -106,15 +145,18 @@ export function UploadView({
       const analysis = analyzeDocument(text, file.name, ocrWords, pageTexts, aiParteExtract ?? null);
       console.log(`${PIPE} ui:reanalyze:analyze done ms=${Date.now() - tAnalyze0} overall=${analysis.overall}`);
       const clerkUserId = user?.id ?? null;
-      const uploadFile = file.file;
-      if (extractedDocumentId && clerkUserId && uploadFile) {
+      const finalDocumentId =
+        persistToDb && extractedDocumentId
+          ? extractedDocumentId
+          : file.documentId ?? extractedDocumentId ?? null;
+      if (finalDocumentId && clerkUserId && uploadFile && persistToDb) {
         // Extraemos la fecha de la operación del texto del parte (si está disponible).
         const structuredForUpload = extractStructured(text, NOMEN_FOR_EXTRACT);
         const operationDate = structuredForUpload?.fechaPractica ?? null;
 
         try {
           const { uploadDocumentToStorage } = await import('@/lib/storage-upload');
-          const storagePath = await uploadDocumentToStorage(uploadFile, extractedDocumentId, operationDate);
+          const storagePath = await uploadDocumentToStorage(uploadFile, finalDocumentId, operationDate);
           if (storagePath) console.log('[TRAZA] File uploaded to storage:', storagePath);
         } catch (uploadErr) {
           console.error('[TRAZA] File upload to storage failed:', uploadErr);
@@ -135,15 +177,15 @@ export function UploadView({
         raw_pageTexts,
         institution_from_text,
         aiParteExtract,
-        documentId: extractedDocumentId ?? null,
+        documentId: finalDocumentId,
         manualChecks: undefined,
         analysis,
         errorMessage: undefined,
-        file: file.file,
+        file: uploadFile,
       });
-      if (extractedDocumentId) {
+      if (finalDocumentId) {
         try {
-          const r = await fetch(`/api/liquidaciones?document_id=${extractedDocumentId}`);
+          const r = await fetch(`/api/liquidaciones?document_id=${encodeURIComponent(finalDocumentId)}`);
           const j = await r.json();
           const liqId = j.liquidaciones?.[0]?.id;
           if (liqId) setReviewingLiqId(liqId);
@@ -156,12 +198,80 @@ export function UploadView({
         ...file,
         status: 'error',
         errorMessage: err instanceof Error ? err.message : 'Error al re-analizar',
-        file: file.file,
+        file: uploadFile,
       });
     } finally {
       setReanalyzeBusy(false);
     }
   }
+
+  async function handleDemoAnalyze(entry: FileEntry) {
+    if (!entry.documentId || reanalyzeBusy) return;
+    try {
+      const pdfFile = await fetchDemoPdfAsFile(entry.documentId);
+      await handleReanalyze(entry, { uploadFile: pdfFile, persistToDb: false });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Error al cargar el documento demo';
+      setDemoAnalyzeError(msg);
+      console.error('[TRAZA] demo_analyze_error', e);
+    }
+  }
+
+  useEffect(() => {
+    if (!demoUser || demoHydratedRef.current) return;
+
+    const withDoc = files.find((f) => f.documentId);
+    if (withDoc) {
+      demoHydratedRef.current = true;
+      if (!selectedFileId) {
+        onSelectFile(withDoc.id);
+      }
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch('/api/liquidaciones');
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok || cancelled) return;
+        const liquidaciones = Array.isArray(j.liquidaciones) ? j.liquidaciones : [];
+        const liq = liquidaciones.find((l: { document_id?: string }) => l.document_id) ?? liquidaciones[0];
+        if (!liq?.document_id) return;
+
+        const doc = liq.documents as
+          | {
+              nombre_archivo?: string | null;
+              ai_extractions?: { paciente?: string | null }[];
+            }
+          | null
+          | undefined;
+        const ext = doc?.ai_extractions?.[0];
+        const paciente = ext?.paciente ?? '';
+        const entry: FileEntry = {
+          id: `demo_${liq.document_id}`,
+          name: doc?.nombre_archivo?.trim() || (paciente ? `${paciente}.pdf` : 'parte_demo.pdf'),
+          size: 0,
+          type: 'application/pdf',
+          addedAt: liq.created_at ?? new Date().toISOString(),
+          batchId: 'demo_batch',
+          status: 'analyzed',
+          documentId: liq.document_id,
+        };
+        if (cancelled) return;
+        demoHydratedRef.current = true;
+        setActiveBatchId('demo_batch');
+        onAddFile(entry);
+        onSelectFile(entry.id);
+      } catch (e) {
+        console.warn('[TRAZA] demo_hydrate_warn', e);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [demoUser, files, onAddFile, onSelectFile, selectedFileId]);
 
   async function handleFiles(fileList: File[]) {
     const batchId = 'b_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
@@ -270,9 +380,40 @@ export function UploadView({
   const effectiveBatchId = isVirgin ? null : activeBatchId || selected?.batchId || files[0]?.batchId || null;
   const currentBatchFiles = effectiveBatchId ? files.filter((f) => f.batchId === effectiveBatchId) : [];
   const showEmpty = files.length === 0 || isVirgin;
+  /** Demo: análisis “real” en cliente = thumbnails + analysis (evita resultados fantasma de localStorage). */
+  const demoAnalysisReady = Boolean(
+    demoUser &&
+      selected?.documentId &&
+      (selected.thumbnails?.length ?? 0) > 0 &&
+      selected.analysis,
+  );
+  const demoNeedsAnalysis = Boolean(demoUser && selected?.documentId && !demoAnalysisReady);
   const serverFiles = selected?.exports?.swissCx?.files;
   const hasServerFiles = Boolean(serverFiles && typeof serverFiles === 'object' && (serverFiles as any).interventionId);
   const isFinalized = hasServerFiles;
+
+  const demoSanitizedRef = useRef(new Set<string>());
+  useEffect(() => {
+    if (!demoUser) return;
+    for (const f of files) {
+      if (!f.documentId || (f.thumbnails?.length ?? 0) > 0) continue;
+      if (!f.analysis && !f.text && !f.aiParteExtract) continue;
+      if (demoSanitizedRef.current.has(f.id)) continue;
+      demoSanitizedRef.current.add(f.id);
+      onAddFile({
+        ...f,
+        analysis: undefined,
+        text: undefined,
+        pageTexts: undefined,
+        raw_text: undefined,
+        raw_text_light: undefined,
+        raw_pageTexts: undefined,
+        aiParteExtract: undefined,
+        manualChecks: undefined,
+        method: undefined,
+      });
+    }
+  }, [demoUser, files, onAddFile]);
 
   useEffect(() => {
     setFinalizeStep('idle');
@@ -424,15 +565,54 @@ export function UploadView({
               key={f.id}
               file={f}
               onClick={() => onSelectFile(f.id)}
-              onRemove={() => setConfirmDelete({ id: f.id, name: f.name })}
+              onRemove={() => {
+                if (demoUser) return;
+                setConfirmDelete({ id: f.id, name: f.name });
+              }}
+              deleteDisabled={demoUser}
+              demoPendingAnalysis={Boolean(demoUser && f.documentId && !(f.thumbnails?.length ?? 0))}
               isSelected={f.id === selectedFileId}
             />
           ))}
         </div>
       )}
 
-      {!showEmpty && selected && selected.status === 'analyzed' && selected.analysis && (
-        <>
+      {demoNeedsAnalysis && selected && (
+        <div className="panel" style={{ padding: 20, marginTop: 16, marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6 }}>{selected.name}</div>
+          <p style={{ margin: '0 0 14px', fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.45 }}>
+            Este parte está cargado en tu cuenta demo. Ejecutá el análisis con IA para ver el documento y el
+            resultado, igual que en una carga normal.
+          </p>
+          {demoAnalyzeError && (
+            <div
+              style={{
+                marginBottom: 12,
+                padding: 10,
+                borderRadius: 8,
+                background: 'var(--error-soft, #fde2e2)',
+                color: 'var(--error)',
+                fontSize: 13,
+              }}
+            >
+              {demoAnalyzeError}
+            </div>
+          )}
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={reanalyzeBusy || selected.status === 'analyzing'}
+            onClick={() => void handleDemoAnalyze(selected)}
+          >
+            {reanalyzeBusy || selected.status === 'analyzing'
+              ? 'Analizando con IA…'
+              : 'Analizar con IA'}
+          </button>
+        </div>
+      )}
+
+      {!showEmpty && selected && selected.status === 'analyzed' && selected.analysis && !demoNeedsAnalysis && (
+        <div style={demoUser ? { marginTop: 16 } : undefined}>
           {isFinalized && (
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 14, marginBottom: 16 }}>
               <button type="button" className="btn" onClick={() => onCloseVisualization?.()}>
@@ -536,7 +716,7 @@ export function UploadView({
             pendingFinalize={Boolean(pendingFinalize)}
             allowManualReview={!isFinalized && !swissPlanillaRowReady}
           />
-        </>
+        </div>
       )}
 
       {!showEmpty && !isFinalized && currentBatchFiles.length > 0 && (
@@ -888,15 +1068,24 @@ function StoredFilesPanel({
   );
 }
 
+const demoDeleteDisabledStyle = {
+  opacity: 0.45,
+  cursor: 'not-allowed' as const,
+};
+
 function FileRow({
   file,
   onClick,
   onRemove,
+  deleteDisabled,
+  demoPendingAnalysis,
   isSelected,
 }: {
   file: FileEntry;
   onClick: () => void;
   onRemove: () => void;
+  deleteDisabled?: boolean;
+  demoPendingAnalysis?: boolean;
   isSelected: boolean;
 }) {
   const ext = file.name.split('.').pop()?.toUpperCase() || '';
@@ -949,19 +1138,25 @@ function FileRow({
             Analizando
           </span>
         )}
-        {file.status === 'analyzed' && file.analysis?.overall === 'ok' && (
+        {demoPendingAnalysis && file.status !== 'analyzing' && (
+          <span className="badge badge-neutral">
+            <span className="badge-dot" />
+            Pendiente de análisis
+          </span>
+        )}
+        {!demoPendingAnalysis && file.status === 'analyzed' && file.analysis?.overall === 'ok' && (
           <span className="badge badge-ok">
             <span className="badge-dot" />
             Sin errores
           </span>
         )}
-        {file.status === 'analyzed' && file.analysis?.overall === 'warn' && (
+        {!demoPendingAnalysis && file.status === 'analyzed' && file.analysis?.overall === 'warn' && (
           <span className="badge badge-warn">
             <span className="badge-dot" />
             {file.analysis.summary.warn} advertencia{file.analysis.summary.warn > 1 ? 's' : ''}
           </span>
         )}
-        {file.status === 'analyzed' && file.analysis?.overall === 'error' && (
+        {!demoPendingAnalysis && file.status === 'analyzed' && file.analysis?.overall === 'error' && (
           <span className="badge badge-error">
             <span className="badge-dot" />
             {file.analysis.summary.error} error{file.analysis.summary.error > 1 ? 'es' : ''}
@@ -987,8 +1182,11 @@ function FileRow({
       <button
         type="button"
         className="btn btn-sm btn-danger"
+        disabled={deleteDisabled}
+        style={deleteDisabled ? demoDeleteDisabledStyle : undefined}
         onClick={(e) => {
           e.stopPropagation();
+          if (deleteDisabled) return;
           onRemove();
         }}
         aria-label="Eliminar archivo"

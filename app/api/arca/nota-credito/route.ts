@@ -1,5 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { isDemoUser } from '@/lib/demo-user'
+import { DEMO_CAE, DEMO_PDF_URL } from '@/lib/demo-swiss-cobros-shared'
 import { emitirNotaCreditoC } from '@/lib/arca/nota-credito'
 
 export async function POST(req: NextRequest) {
@@ -22,6 +24,19 @@ export async function POST(req: NextRequest) {
       { error: 'Falta el campo requerido: submissionAnuladaId' },
       { status: 400 },
     )
+  }
+
+  if (isDemoUser(userId)) {
+    return NextResponse.json({
+      exito: true,
+      notaCreditoId: 'demo-nc',
+      nroComprobante: 2,
+      cae: DEMO_CAE,
+      caeFechaVto: new Date().toISOString().slice(0, 10),
+      fechaEmision: new Date().toISOString().slice(0, 10),
+      pdfPath: 'demo/nota-credito.pdf',
+      pdfUrl: DEMO_PDF_URL,
+    })
   }
 
   try {

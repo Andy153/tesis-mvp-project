@@ -11,13 +11,15 @@ export function ConfusedDoctorIllustration({ active = false }: Props) {
       className={[styles.chartDoctor, active ? styles.chartDoctorActive : ''].join(' ')}
       aria-hidden
     >
-      <Image
-        src="/images/doctora.jpg"
-        alt="Médica"
-        width={260}
-        height={220}
-        className={styles.chartDoctorSvg}
-      />
+      <div style={{ position: 'relative', width: 260, height: 220 }}>
+        <Image
+          src="/images/doctora.jpg"
+          alt="Médica"
+          fill
+          className={styles.chartDoctorSvg}
+          style={{ objectFit: 'contain' }}
+        />
+      </div>
       <span className={styles.chartDoctorZero}>0%</span>
     </div>
   );

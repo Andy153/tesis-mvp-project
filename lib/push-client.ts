@@ -4,9 +4,13 @@ const PROMPT_STORAGE_KEY = 'traza.push.prompt_status';
 
 export type PushPromptStatus = 'dismissed' | 'denied' | null;
 
-export type PushSubscribeResult =
-  | { ok: true; endpoint: string }
-  | { ok: false; step: string; message: string };
+/** Resultado unificado (evita problemas de narrowing en build de Next/Vercel). */
+export type PushSubscribeResult = {
+  ok: boolean;
+  step: string;
+  message: string;
+  endpoint?: string;
+};
 
 export type PushDiagnostics = {
   pushApiSupported: boolean;
@@ -239,7 +243,12 @@ export async function subscribeToPushOnServer(): Promise<PushSubscribeResult> {
   }
 
   console.log('[TRAZA push] subscribe: éxito completo');
-  return { ok: true, endpoint: subscription.endpoint };
+  return {
+    ok: true,
+    step: 'complete',
+    message: 'Push activado correctamente.',
+    endpoint: subscription.endpoint,
+  };
 }
 
 export async function unsubscribeFromPushOnServer(): Promise<boolean> {

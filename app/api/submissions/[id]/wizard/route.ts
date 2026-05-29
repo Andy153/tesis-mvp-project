@@ -16,6 +16,7 @@ import {
   applyDemoWizardPatch,
   fetchDemoWizardSubmission,
 } from '@/lib/demo-swiss-cobros';
+import { syncAccionCobros } from '@/lib/notifications-generate';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -297,6 +298,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
 
   await syncWorkflowFromSubmission(params.id, userId);
+  await syncAccionCobros(userId);
 
   return NextResponse.json({ ok: true, wizard_estado: update.wizard_estado });
 }

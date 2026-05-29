@@ -13,6 +13,8 @@ import { ProfileView } from './ProfileView';
 import { DashboardView } from './DashboardView';
 import { CobrosView } from './dashboard/CobrosView';
 import { CobrosGuard } from '@/components/cobros/CobrosGuard';
+import { NotificationsView } from '@/components/NotificationsView';
+import { useNotificationsUnreadCount } from '@/lib/use-notifications';
 import { AutoAssignRole } from '@/components/auth/AutoAssignRole';
 import { SmgDeletionBlockedCard } from './SmgDeletionBlockedCard';
 import type { AuthState, FileEntry, RemoveFileResult, SmgDeleteBlockPayload } from '@/lib/types';
@@ -23,6 +25,7 @@ import { applyThemeMode, DEFAULT_PROFILE, loadProfile } from '@/lib/profile';
 export default function TrazaApp() {
   const { user } = useUser();
   const demoUser = isDemoUser(user?.id);
+  const alertsUnreadCount = useNotificationsUnreadCount();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [active, setActive] = useState<string>('dashboard');
   const [files, setFiles] = useState<FileEntry[]>([]);
@@ -138,6 +141,32 @@ export default function TrazaApp() {
     window.addEventListener('traza:navigate', onNavigate);
     return () => window.removeEventListener('traza:navigate', onNavigate);
   }, []);
+
+  useEffect(() => {
+    if (demoUser || typeof window === 'undefined') return;
+
+    const applyViewFromUrl = () => {
+      const view = new URLSearchParams(window.location.search).get('view');
+      const allowed = [
+        'dashboard',
+        'upload',
+        'documents',
+        'errors',
+        'alerts',
+        'cobros',
+        'settings',
+      ];
+      if (!view || !allowed.includes(view)) return;
+
+      setActive(view);
+      const url = new URL(window.location.href);
+      url.searchParams.delete('view');
+      const next = `${url.pathname}${url.search}${url.hash}`;
+      window.history.replaceState({}, '', next);
+    };
+
+    applyViewFromUrl();
+  }, [demoUser]);
 
   useEffect(() => {
     if (!mobileNavOpen) return;
@@ -491,6 +520,7 @@ export default function TrazaApp() {
           setMobileNavOpen(false);
         }}
         errorCount={errorCount}
+        alertsUnreadCount={demoUser ? 0 : alertsUnreadCount}
         mobileOpen={mobileNavOpen}
         onCloseMobile={() => setMobileNavOpen(false)}
         user={{
@@ -625,6 +655,9 @@ export default function TrazaApp() {
           />
         )}
         {active === 'errors' && <ErrorsView files={files} authStates={authStates} onOpenFile={openFile} />}
+        {!demoUser && active === 'alerts' && (
+          <NotificationsView onNavigate={(view) => setActive(view)} />
+        )}
         {active === 'settings' && <ProfileView />}
       </main>
     </div>

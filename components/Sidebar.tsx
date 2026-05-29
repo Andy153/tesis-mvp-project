@@ -10,6 +10,7 @@ import { useUserRole } from '@/lib/use-user-role';
 import { LABELS_ROL } from '@/lib/roles';
 import { usePinSession } from '@/lib/use-pin-session';
 import { useMounted } from '@/lib/use-mounted';
+import { isDemoUser } from '@/lib/demo-user';
 
 type TabId =
   | 'upload'
@@ -25,6 +26,7 @@ interface SidebarProps {
   active: string;
   setActive: (id: string) => void;
   errorCount: number;
+  alertsUnreadCount?: number;
   mobileOpen?: boolean;
   onCloseMobile?: () => void;
   user?: { displayName: string; profesion: string; avatarDataUrl?: string };
@@ -39,9 +41,18 @@ interface Item {
   badge?: number;
 }
 
-export function Sidebar({ active, setActive, errorCount, mobileOpen, onCloseMobile, user }: SidebarProps) {
+export function Sidebar({
+  active,
+  setActive,
+  errorCount,
+  alertsUnreadCount = 0,
+  mobileOpen,
+  onCloseMobile,
+  user,
+}: SidebarProps) {
   const mounted = useMounted();
   const { user: clerkUser, isLoaded: clerkLoaded } = useUser();
+  const demoUser = isDemoUser(clerkUser?.id);
   const { rol, isLoaded } = useUserRole();
   const pinUnlocked = usePinSession();
 
@@ -60,9 +71,22 @@ export function Sidebar({ active, setActive, errorCount, mobileOpen, onCloseMobi
     { id: 'upload', label: 'Agregar documentos', icon: 'upload', section: 'work' },
     { id: 'documents', label: 'Mis documentos', icon: 'file', section: 'work' },
     { id: 'errors', label: 'Qué conviene revisar', icon: 'alert', section: 'work', badge: errorCount },
+    ...(demoUser
+      ? []
+      : [
+          {
+            id: 'alerts' as const,
+            label: 'Avisos',
+            icon: 'bell' as const,
+            section: 'work' as const,
+            badge: alertsUnreadCount,
+          },
+        ]),
     { id: 'cobros', label: 'Centro de cobros', icon: 'wallet', section: 'work' },
     { id: 'settings', label: 'Tu perfil', icon: 'settings', section: 'work' },
-    { id: 'alerts', label: 'Avisos', icon: 'bell', section: 'soon', disabled: true },
+    ...(demoUser
+      ? [{ id: 'alerts' as const, label: 'Avisos', icon: 'bell' as const, section: 'soon' as const, disabled: true }]
+      : []),
     { id: 'payments', label: 'Pagos in-app', icon: 'creditcard', section: 'soon', disabled: true },
   ];
 

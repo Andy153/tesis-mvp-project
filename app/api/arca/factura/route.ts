@@ -4,6 +4,7 @@ import { isDemoUser } from '@/lib/demo-user'
 import { buildDemoFacturaResponse } from '@/lib/demo-swiss-cobros-shared'
 import { getReceptorFacturaEmision } from '@/lib/arca/emision-config'
 import { emitirFacturaC } from '@/lib/arca/facturacion'
+import { notifyFacturaEmitida, notifyFacturaError } from '@/lib/notifications-generate'
 
 export async function POST(req: NextRequest) {
   const { userId } = await auth()
@@ -61,6 +62,14 @@ export async function POST(req: NextRequest) {
           : `Servicios médicos período ${periodo}`,
     })
 
+    await notifyFacturaEmitida({
+      clerkUserId: userId,
+      submissionId: String(submissionId),
+      periodo: String(periodo),
+      cae: resultado.cae,
+      nroComprobante: resultado.numeroComprobante,
+    })
+
     return NextResponse.json({
       exito: true,
       ambiente: resultado.ambiente,
@@ -77,6 +86,12 @@ export async function POST(req: NextRequest) {
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
+    await notifyFacturaError({
+      clerkUserId: userId,
+      submissionId: String(submissionId),
+      periodo: String(periodo),
+      errorMessage: message,
+    })
     if (message.includes('Datos fiscales incompletos en el perfil')) {
       return NextResponse.json({ exito: false, errores: [message] }, { status: 400 })
     }

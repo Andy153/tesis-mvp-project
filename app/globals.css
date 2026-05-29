@@ -3527,3 +3527,133 @@ html[data-theme='dark'] .modal-overlay {
   font-weight: 700;
   flex-shrink: 0;
 }
+
+/* ─────────── Centro de Avisos ─────────── */
+.notifications-view__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.notifications-view__muted {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin: 0;
+}
+.notifications-view__error {
+  font-size: 14px;
+  color: var(--error);
+  margin: 0;
+}
+.notifications-view__empty {
+  padding: 24px 20px;
+}
+.notifications-view__empty-title {
+  font-weight: 700;
+  font-size: 16px;
+  margin: 0 0 8px;
+  color: var(--text);
+}
+.notifications-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.notifications-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 14px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-panel);
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.notifications-item:hover {
+  border-color: var(--accent);
+}
+.notifications-item--unread {
+  border-color: rgba(42, 107, 82, 0.45);
+  background: var(--accent-soft);
+}
+.notifications-item__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.notifications-item__title {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--accent-ink);
+  line-height: 1.35;
+}
+.notifications-item--unread .notifications-item__title {
+  color: var(--text);
+}
+.notifications-item__time {
+  font-size: 12px;
+  color: var(--text-soft);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.notifications-item__message {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+html[data-theme='dark'] .notifications-item__title {
+  color: var(--text);
+}
+html[data-theme='dark'] .notifications-item--unread {
+  border-color: rgba(125, 206, 168, 0.35);
+}
+
+/* Push opt-in (Avisos) */
+.push-opt-in {
+  margin-bottom: 16px;
+  padding: 14px 16px;
+}
+.push-opt-in--ok {
+  background: var(--ok-soft);
+  border: 1px solid rgba(42, 107, 82, 0.35);
+}
+.push-opt-in--info {
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+}
+.push-opt-in__title {
+  font-weight: 700;
+  font-size: 14px;
+  margin: 0 0 6px;
+  color: var(--accent-ink);
+}
+.push-opt-in__text {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+.push-opt-in__text:last-child {
+  margin-bottom: 0;
+}
+.push-opt-in__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.push-opt-in__btn {
+  margin-top: 4px;
+}
+html[data-theme='dark'] .push-opt-in__title {
+  color: var(--text);
+}

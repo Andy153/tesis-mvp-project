@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { isDemoUser } from '@/lib/demo-user'
 import { upsertDemoMonthlySubmission } from '@/lib/demo-swiss-cobros'
 import { sendSwissMonthlyForUser } from '@/lib/swissCxSend'
+import { syncAccionCobros } from '@/lib/notifications-generate'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -57,6 +58,7 @@ export async function POST(req: Request) {
       { status: result.status },
     )
   }
+  await syncAccionCobros(userId)
   return NextResponse.json(result)
 }
 

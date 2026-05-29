@@ -3,6 +3,7 @@ import { ClerkProvider } from '@clerk/nextjs';
 import { esES } from '@clerk/localizations';
 import { Dela_Gothic_One, Unbounded, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
+import { ServiceWorkerRegistrar } from '@/components/push/ServiceWorkerRegistrar';
 
 const delaGothicOne = Dela_Gothic_One({
   subsets: ['latin'],
@@ -60,7 +61,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             }}
           />
         </head>
-        <body>{children}</body>
+        <body>
+          {children}
+          <ServiceWorkerRegistrar />
+        </body>
       </html>
     </ClerkProvider>
   );

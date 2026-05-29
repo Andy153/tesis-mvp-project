@@ -7,6 +7,7 @@ import {
   fetchPushSubscriptionStatus,
   isPushApiSupported,
   subscribeToPushOnServer,
+  type PushSubscribeResult,
   unsubscribeFromPushOnServer,
 } from '@/lib/push-client';
 
@@ -33,13 +34,19 @@ export function usePushSubscription() {
     void refresh();
   }, [refresh]);
 
-  const subscribe = useCallback(async () => {
-    if (demoUser) return false;
+  const subscribe = useCallback(async (): Promise<PushSubscribeResult> => {
+    if (demoUser) {
+      return { ok: false, step: 'demo', message: 'Push deshabilitado en modo demo.' };
+    }
     setBusy(true);
     try {
-      const ok = await subscribeToPushOnServer();
-      if (ok) setSubscribed(true);
-      return ok;
+      const result = await subscribeToPushOnServer();
+      if (result.ok) setSubscribed(true);
+      return result;
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.error('[TRAZA push] subscribe excepción:', message);
+      return { ok: false, step: 'exception', message };
     } finally {
       setBusy(false);
     }

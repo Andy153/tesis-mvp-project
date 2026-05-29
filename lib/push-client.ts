@@ -4,6 +4,24 @@ const PROMPT_STORAGE_KEY = 'traza.push.prompt_status';
 
 export type PushPromptStatus = 'dismissed' | 'denied' | null;
 
+export type PushSubscribeResult =
+  | { ok: true; endpoint: string }
+  | { ok: false; step: string; message: string };
+
+export type PushDiagnostics = {
+  pushApiSupported: boolean;
+  hasNotification: boolean;
+  hasServiceWorker: boolean;
+  hasPushManager: boolean;
+  isIos: boolean;
+  isStandalone: boolean;
+  iosNeedsPwa: boolean;
+  notificationPermission: string;
+  vapidPublicKeySet: boolean;
+  serviceWorkerController: boolean;
+  serviceWorkerRegistrations: number;
+};
+
 export function getPushPromptStatus(): PushPromptStatus {
   if (typeof window === 'undefined') return null;
   try {
@@ -50,6 +68,43 @@ export function iosNeedsPwaForPush(): boolean {
   return isIosDevice() && !isStandalonePwa();
 }
 
+export async function getPushDiagnostics(): Promise<PushDiagnostics> {
+  let registrations = 0;
+  if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+    try {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      registrations = regs.length;
+    } catch {
+      registrations = -1;
+    }
+  }
+
+  return {
+    pushApiSupported: isPushApiSupported(),
+    hasNotification: typeof window !== 'undefined' && 'Notification' in window,
+    hasServiceWorker: typeof navigator !== 'undefined' && 'serviceWorker' in navigator,
+    hasPushManager: typeof window !== 'undefined' && 'PushManager' in window,
+    isIos: isIosDevice(),
+    isStandalone: isStandalonePwa(),
+    iosNeedsPwa: iosNeedsPwaForPush(),
+    notificationPermission:
+      typeof Notification !== 'undefined' ? Notification.permission : 'unavailable',
+    vapidPublicKeySet: Boolean(getVapidPublicKey()),
+    serviceWorkerController: Boolean(navigator.serviceWorker?.controller),
+    serviceWorkerRegistrations: registrations,
+  };
+}
+
+export function formatPushDiagnostics(d: PushDiagnostics): string {
+  return [
+    `API push: ${d.pushApiSupported ? 'sí' : 'no'}`,
+    `iOS: ${d.isIos ? 'sí' : 'no'} · PWA instalada: ${d.isStandalone ? 'sí' : 'no'}`,
+    `Permiso notif: ${d.notificationPermission}`,
+    `VAPID pública: ${d.vapidPublicKeySet ? 'configurada' : 'FALTA en .env'}`,
+    `SW activo: ${d.serviceWorkerController ? 'sí' : 'no'} · registros: ${d.serviceWorkerRegistrations}`,
+  ].join('\n');
+}
+
 export function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
@@ -66,35 +121,125 @@ export function getVapidPublicKey(): string | null {
   return key || null;
 }
 
-export async function subscribeToPushOnServer(): Promise<boolean> {
-  if (!isPushApiSupported()) return false;
+function fail(step: string, message: string): PushSubscribeResult {
+  console.error('[TRAZA push]', step, message);
+  return { ok: false, step, message };
+}
+
+function waitForServiceWorkerReady(timeoutMs = 20000): Promise<ServiceWorkerRegistration> {
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      reject(
+        new Error(
+          `Service worker no listo tras ${timeoutMs / 1000}s. Cerrá la PWA, volvé a abrirla desde el ícono y probá de nuevo.`,
+        ),
+      );
+    }, timeoutMs);
+
+    navigator.serviceWorker.ready
+      .then((reg) => {
+        window.clearTimeout(timer);
+        resolve(reg);
+      })
+      .catch((err) => {
+        window.clearTimeout(timer);
+        reject(err instanceof Error ? err : new Error(String(err)));
+      });
+  });
+}
+
+export async function subscribeToPushOnServer(): Promise<PushSubscribeResult> {
+  console.log('[TRAZA push] subscribe: inicio');
+
+  if (!isPushApiSupported()) {
+    return fail('check_api', 'Este navegador no expone Notification + ServiceWorker + PushManager.');
+  }
 
   const vapidKey = getVapidPublicKey();
-  if (!vapidKey) return false;
+  if (!vapidKey) {
+    return fail(
+      'vapid',
+      'Falta NEXT_PUBLIC_VAPID_PUBLIC_KEY. Reiniciá npm run dev después de agregarla al .env.local.',
+    );
+  }
 
-  const permission = await Notification.requestPermission();
+  if (iosNeedsPwaForPush()) {
+    return fail(
+      'ios_pwa',
+      'En iPhone hay que abrir Trazá desde el ícono de inicio (PWA), no desde Safari.',
+    );
+  }
+
+  let permission: NotificationPermission;
+  try {
+    console.log('[TRAZA push] solicitando permiso…');
+    permission = await Notification.requestPermission();
+    console.log('[TRAZA push] permiso:', permission);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return fail('permission', `Error al pedir permiso: ${msg}`);
+  }
+
   if (permission !== 'granted') {
     if (permission === 'denied') setPushPromptStatus('denied');
-    return false;
+    return fail(
+      'permission',
+      `Permiso de notificaciones: ${permission}. En iPhone: Ajustes → Notificaciones → Trazá.`,
+    );
   }
 
-  const registration = await navigator.serviceWorker.ready;
-  let subscription = await registration.pushManager.getSubscription();
+  let registration: ServiceWorkerRegistration;
+  try {
+    console.log('[TRAZA push] esperando serviceWorker.ready…');
+    registration = await waitForServiceWorkerReady();
+    console.log('[TRAZA push] SW listo, scope:', registration.scope);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return fail('service_worker', msg);
+  }
 
-  if (!subscription) {
-    subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(vapidKey) as BufferSource,
+  let subscription: PushSubscription | null;
+  try {
+    subscription = await registration.pushManager.getSubscription();
+    console.log('[TRAZA push] suscripción existente:', subscription ? 'sí' : 'no');
+
+    if (!subscription) {
+      console.log('[TRAZA push] pushManager.subscribe…');
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidKey) as BufferSource,
+      });
+      console.log('[TRAZA push] subscribe OK, endpoint:', subscription.endpoint?.slice(0, 48));
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return fail('push_subscribe', `No se pudo suscribir al push: ${msg}`);
+  }
+
+  if (!subscription?.endpoint) {
+    return fail('push_subscribe', 'Suscripción sin endpoint.');
+  }
+
+  try {
+    console.log('[TRAZA push] POST /api/push/subscribe…');
+    const r = await fetch('/api/push/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subscription: subscription.toJSON() }),
     });
+    const text = await r.text();
+    console.log('[TRAZA push] subscribe API', r.status, text.slice(0, 200));
+
+    if (!r.ok) {
+      return fail('api_subscribe', `Servidor respondió ${r.status}: ${text.slice(0, 300)}`);
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return fail('api_subscribe', `Red al guardar suscripción: ${msg}`);
   }
 
-  const r = await fetch('/api/push/subscribe', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ subscription: subscription.toJSON() }),
-  });
-
-  return r.ok;
+  console.log('[TRAZA push] subscribe: éxito completo');
+  return { ok: true, endpoint: subscription.endpoint };
 }
 
 export async function unsubscribeFromPushOnServer(): Promise<boolean> {

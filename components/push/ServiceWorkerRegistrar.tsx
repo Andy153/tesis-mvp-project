@@ -14,8 +14,12 @@ export function ServiceWorkerRegistrar() {
 
     void navigator.serviceWorker
       .register('/sw.js', { scope: '/' })
+      .then((reg) => {
+        console.log('[TRAZA push] SW registrado OK, scope:', reg.scope);
+      })
       .catch((err) => {
-        console.warn('[TRAZA] sw:register_failed', err);
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[TRAZA push] SW registro falló:', msg);
       });
   }, [isLoaded, user?.id]);
 

@@ -1,10 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { isDemoUser } from '@/lib/demo-user';
 import { usePushSubscription } from '@/lib/use-push-subscription';
 import {
+  formatPushDiagnostics,
+  getPushDiagnostics,
   getPushPromptStatus,
   iosNeedsPwaForPush,
   isPushApiSupported,
@@ -20,10 +22,55 @@ export function PushOptInBanner({ onNavigateSettings }: PushOptInBannerProps) {
   const demoUser = isDemoUser(user?.id);
   const { subscribed, loading, busy, subscribe, unsubscribe } = usePushSubscription();
   const [dismissed, setDismissed] = useState(false);
+  const [debugLog, setDebugLog] = useState<string | null>(null);
+  const [diagSummary, setDiagSummary] = useState<string>('');
 
   useEffect(() => {
     setDismissed(getPushPromptStatus() === 'dismissed');
   }, []);
+
+  useEffect(() => {
+    if (demoUser) return;
+    void (async () => {
+      const d = await getPushDiagnostics();
+      const summary = formatPushDiagnostics(d);
+      setDiagSummary(summary);
+      console.log('[TRAZA push] diagnóstico al cargar:\n' + summary);
+    })();
+  }, [demoUser]);
+
+  const handleActivate = useCallback(async () => {
+    setDebugLog('Iniciando activación…');
+    console.log('[TRAZA push] botón Activar — tap');
+
+    try {
+      const result = await subscribe();
+      console.log('[TRAZA push] resultado subscribe:', result);
+
+      if (result.ok) {
+        const msg = `OK — Push activado.\n\nEndpoint (inicio):\n${result.endpoint.slice(0, 60)}…`;
+        setDebugLog(msg);
+        window.alert('OK: notificaciones push activadas.');
+      } else {
+        const msg = `Paso: ${result.step}\n\n${result.message}`;
+        setDebugLog(msg);
+        window.alert(`Error push (${result.step}):\n\n${result.message}`);
+      }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.error('[TRAZA push] handleActivate catch:', e);
+      const msg = `Excepción inesperada:\n${message}`;
+      setDebugLog(msg);
+      window.alert(`Error push:\n\n${message}`);
+    }
+  }, [subscribe]);
+
+  const debugPanel =
+    debugLog || diagSummary ? (
+      <pre className="push-opt-in__debug" aria-live="polite">
+        {debugLog ?? diagSummary}
+      </pre>
+    ) : null;
 
   if (demoUser) return null;
 
@@ -33,6 +80,7 @@ export function PushOptInBanner({ onNavigateSettings }: PushOptInBannerProps) {
         <p className="push-opt-in__text">
           Tu navegador no admite notificaciones push. Podés seguir viendo los avisos dentro de la app.
         </p>
+        {debugPanel}
       </div>
     );
   }
@@ -50,6 +98,7 @@ export function PushOptInBanner({ onNavigateSettings }: PushOptInBannerProps) {
             Ver cómo instalar
           </button>
         ) : null}
+        {debugPanel}
       </div>
     );
   }
@@ -69,6 +118,7 @@ export function PushOptInBanner({ onNavigateSettings }: PushOptInBannerProps) {
         >
           Desactivar notificaciones
         </button>
+        {debugPanel}
       </div>
     );
   }
@@ -78,13 +128,15 @@ export function PushOptInBanner({ onNavigateSettings }: PushOptInBannerProps) {
       return (
         <div className="panel push-opt-in push-opt-in--info">
           <p className="push-opt-in__text">
-            Bloqueaste las notificaciones en el navegador. Podés habilitarlas desde la configuración del sitio
-            (ícono del candado en la barra de direcciones).
+            Bloqueaste las notificaciones. En iPhone: Ajustes → Notificaciones → Trazá → Permitir.
           </p>
+          {debugPanel}
         </div>
       );
     }
-    return null;
+    return debugPanel ? (
+      <div className="panel push-opt-in push-opt-in--info">{debugPanel}</div>
+    ) : null;
   }
 
   return (
@@ -93,14 +145,20 @@ export function PushOptInBanner({ onNavigateSettings }: PushOptInBannerProps) {
       <p className="push-opt-in__text">
         Activá las notificaciones para recibir avisos aunque no estés en la app.
       </p>
+      {diagSummary ? (
+        <pre className="push-opt-in__debug push-opt-in__debug--muted">{diagSummary}</pre>
+      ) : null}
       <div className="push-opt-in__actions">
         <button
           type="button"
           className="btn btn-primary"
           disabled={loading || busy}
-          onClick={() => void subscribe()}
+          onClick={() => {
+            console.log('[TRAZA push] click Activar, loading=', loading, 'busy=', busy);
+            void handleActivate();
+          }}
         >
-          Activar
+          {busy ? 'Activando…' : 'Activar'}
         </button>
         <button
           type="button"
@@ -114,6 +172,7 @@ export function PushOptInBanner({ onNavigateSettings }: PushOptInBannerProps) {
           Ahora no
         </button>
       </div>
+      {debugLog ? <pre className="push-opt-in__debug">{debugLog}</pre> : null}
     </div>
   );
 }

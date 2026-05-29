@@ -3654,6 +3654,25 @@ html[data-theme='dark'] .notifications-item--unread {
 .push-opt-in__btn {
   margin-top: 4px;
 }
+.push-opt-in__debug {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text);
+  font-family: var(--font-jetbrains-mono, ui-monospace, monospace);
+  max-height: 220px;
+  overflow: auto;
+}
+.push-opt-in__debug--muted {
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
 html[data-theme='dark'] .push-opt-in__title {
   color: var(--text);
 }

@@ -43,9 +43,10 @@ function configureVapid(): boolean {
   return true;
 }
 
+import { resolveNotificationView } from '@/lib/notification-nav';
+
 export function buildPushUrlFromMetadata(metadata?: Record<string, unknown>): string {
-  const nav = metadata?.navigate_to;
-  const view = nav === 'documents' ? 'documents' : 'alerts';
+  const view = resolveNotificationView(metadata?.navigate_to, 'alerts');
   return `/?view=${view}`;
 }
 

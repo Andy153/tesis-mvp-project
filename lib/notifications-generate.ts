@@ -1,9 +1,14 @@
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { isSwissMedicalPrepaga } from '@/lib/swissCxBuild';
 import {
+  biDailyDedupeDateAR,
   currentPeriodoAR,
-  isLastFiveDaysOfMonthAR,
+  dayOfMonthAR,
+  isDayOfMonthAR,
+  nextMonthNameFromPeriodo,
+  nowInArgentina,
   periodoLabel,
+  periodoMonthName,
+  previousPeriodoAR,
 } from '@/lib/dates-ar';
 import {
   insertNotificationOnce,
@@ -11,11 +16,45 @@ import {
   upsertNotification,
   upsertOrInsertNotificationWithPushOnFirst,
 } from '@/lib/notifications';
+import { isDemoUser } from '@/lib/demo-user';
+import { getProfileFromDB } from '@/lib/profile-db';
+import { isFiscalProfileComplete } from '@/lib/profile-fiscal-ui';
+import { userHasArcaCerts } from '@/lib/arca/profile-certs';
 import { fetchActiveSubmissions } from '@/lib/active-submissions';
 import { filterSubmissionsWithLiveLiquidaciones } from '@/lib/monthlySubmissions';
+import type { NotificationTipo } from '@/lib/notifications';
 
 const OBRA_SOCIAL = 'swiss_medical';
+const HOURS_24_MS = 24 * 60 * 60 * 1000;
 const HOURS_48_MS = 48 * 60 * 60 * 1000;
+const WIZARD_TERMINAL_ESTADOS = new Set(['aprobado', 'excepcion_enviada', 'descartado']);
+
+// TODO: quitar logs temporales de sync_debug cuando termine el diagnóstico
+function syncDebug(clerkUserId: string, fn: string, detail: Record<string, unknown>) {
+  console.log('[TRAZA] notifications:sync_debug', {
+    fn,
+    clerkUserId,
+    now_ar: nowInArgentina().toISOString(),
+    ...detail,
+  });
+}
+
+function logInsertResult(
+  clerkUserId: string,
+  fn: string,
+  tipo: string,
+  dedupeKey: string,
+  result: { inserted: boolean; blockedBy?: string; errorMessage?: string },
+  extra?: Record<string, unknown>,
+) {
+  syncDebug(clerkUserId, fn, {
+    tipo,
+    dedupeKey,
+    insert: result.inserted ? 'ok' : result.blockedBy ?? 'skipped',
+    ...(result.errorMessage ? { dbError: result.errorMessage } : {}),
+    ...extra,
+  });
+}
 
 function accionCobrosCopy(
   wizardEstado: string | null,
@@ -58,60 +97,283 @@ function accionCobrosCopy(
   }
 }
 
-async function countPendingSwissPartesForPeriodo(
-  clerkUserId: string,
-  periodo: string,
-): Promise<number> {
-  const { data: rows, error } = await supabaseAdmin
-    .from('liquidaciones')
-    .select(
-      `
-      periodo,
-      prepaga,
-      ai_extractions!inner (
-        id,
-        documents!inner ( id )
-      )
-    `,
-    )
+async function hasPlanillaEnviadaSwiss(clerkUserId: string, periodo: string): Promise<boolean> {
+  const { data, error } = await supabaseAdmin
+    .from('monthly_submissions')
+    .select('id')
     .eq('clerk_user_id', clerkUserId)
-    .eq('estado', 'pendiente')
-    .eq('estado_revision', 'confirmado')
+    .eq('obra_social', OBRA_SOCIAL)
     .eq('periodo', periodo)
-    .not('periodo', 'is', null);
+    .eq('status', 'enviado')
+    .limit(1)
+    .maybeSingle();
 
   if (error) {
-    console.warn('[TRAZA] notifications:pending_liq_error', error.message);
-    return 0;
+    console.warn('[TRAZA] notifications:envio_check_error', error.message);
+    return true;
   }
-
-  let count = 0;
-  for (const l of rows ?? []) {
-    if (l.periodo === periodo && isSwissMedicalPrepaga(l.prepaga)) count += 1;
-  }
-  return count;
+  return Boolean(data);
 }
 
-export async function syncRecordatorioEnvio(clerkUserId: string): Promise<void> {
-  if (!isNotificationsEnabledForUser(clerkUserId)) return;
-  if (!isLastFiveDaysOfMonthAR()) return;
+async function maybeInsertRecordatorioEnvio(input: {
+  clerkUserId: string;
+  fn: string;
+  tipo: Extract<
+    NotificationTipo,
+    'recordatorio_envio_29' | 'recordatorio_envio_5' | 'recordatorio_envio_8'
+  >;
+  titulo: string;
+  mensaje: string;
+  dedupeKey: string;
+  periodo: string;
+}): Promise<void> {
+  const planillaEnviada = await hasPlanillaEnviadaSwiss(input.clerkUserId, input.periodo);
+  syncDebug(input.clerkUserId, input.fn, {
+    periodo: input.periodo,
+    planillaEnviada,
+    dedupeKey: input.dedupeKey,
+    skipReason: planillaEnviada ? 'planilla_ya_enviada' : null,
+  });
+  if (planillaEnviada) return;
 
-  const periodo = currentPeriodoAR();
-  const cantidad = await countPendingSwissPartesForPeriodo(clerkUserId, periodo);
-  if (cantidad <= 0) return;
-
-  await insertNotificationOnce({
-    clerkUserId,
-    tipo: 'recordatorio_envio',
-    titulo: 'Cierre de mes próximo',
-    mensaje: `Tenés ${cantidad} parte${cantidad === 1 ? '' : 's'} confirmado${cantidad === 1 ? '' : 's'} sin enviar para ${periodoLabel(periodo)}. Cerrá la liquidación antes de fin de mes.`,
-    dedupeKey: `recordatorio_envio:${periodo}`,
+  const result = await insertNotificationOnce({
+    clerkUserId: input.clerkUserId,
+    tipo: input.tipo,
+    titulo: input.titulo,
+    mensaje: input.mensaje,
+    dedupeKey: input.dedupeKey,
     metadata: {
-      periodo,
-      cantidad_pendientes: cantidad,
+      periodo: input.periodo,
       navigate_to: 'documents',
     },
   });
+  logInsertResult(input.clerkUserId, input.fn, input.tipo, input.dedupeKey, result);
+}
+
+export async function syncRecordatorioEnvio(clerkUserId: string): Promise<void> {
+  const fn = 'syncRecordatorioEnvio';
+  syncDebug(clerkUserId, fn, {
+    entered: true,
+    dayOfMonthAR: dayOfMonthAR(),
+    periodoActual: currentPeriodoAR(),
+    isDay29: isDayOfMonthAR(29),
+    isDay5: isDayOfMonthAR(5),
+    isDay8: isDayOfMonthAR(8),
+  });
+  if (!isNotificationsEnabledForUser(clerkUserId)) {
+    syncDebug(clerkUserId, fn, { skipped: 'demo_or_disabled' });
+    return;
+  }
+
+  if (isDayOfMonthAR(29)) {
+    const periodo = currentPeriodoAR();
+    await maybeInsertRecordatorioEnvio({
+      clerkUserId,
+      fn,
+      tipo: 'recordatorio_envio_29',
+      titulo: 'Recordá enviar la planilla a Swiss Medical',
+      mensaje: `El período de ${periodoLabel(periodo)} está por cerrar. Enviá tu planilla para cobrar a tiempo. Tenés hasta el 8 de ${nextMonthNameFromPeriodo(periodo)}.`,
+      dedupeKey: `recordatorio_envio_29:${periodo}`,
+      periodo,
+    });
+  }
+
+  if (isDayOfMonthAR(5)) {
+    const periodo = previousPeriodoAR();
+    const mes = periodoMonthName(periodo);
+    await maybeInsertRecordatorioEnvio({
+      clerkUserId,
+      fn,
+      tipo: 'recordatorio_envio_5',
+      titulo: `Todavía no enviaste la planilla de ${mes}`,
+      mensaje: `Tenés hasta el 8 para enviar la planilla de ${periodoLabel(periodo)} y cobrar a tiempo.`,
+      dedupeKey: `recordatorio_envio_5:${periodo}`,
+      periodo,
+    });
+  }
+
+  if (isDayOfMonthAR(8)) {
+    const periodo = previousPeriodoAR();
+    const mes = periodoMonthName(periodo);
+    await maybeInsertRecordatorioEnvio({
+      clerkUserId,
+      fn,
+      tipo: 'recordatorio_envio_8',
+      titulo: `Último día para enviar la planilla de ${mes}`,
+      mensaje: `Hoy vence el plazo para enviar la planilla de ${periodoLabel(periodo)} a Swiss Medical y cobrar a tiempo.`,
+      dedupeKey: `recordatorio_envio_8:${periodo}`,
+      periodo,
+    });
+  }
+
+  if (!isDayOfMonthAR(29) && !isDayOfMonthAR(5) && !isDayOfMonthAR(8)) {
+    syncDebug(clerkUserId, fn, { skipReason: 'no_es_dia_29_5_ni_8' });
+  }
+}
+
+async function countPartesPendientesRevision(clerkUserId: string): Promise<number> {
+  const { count, error } = await supabaseAdmin
+    .from('liquidaciones')
+    .select('id', { count: 'exact', head: true })
+    .eq('clerk_user_id', clerkUserId)
+    .in('estado', ['pendiente', 'vencido'])
+    .in('estado_revision', ['bloqueado', 'en_revision']);
+
+  if (error) {
+    console.warn('[TRAZA] notifications:partes_revision_count_error', error.message);
+    return 0;
+  }
+  return count ?? 0;
+}
+
+/** Cada 2 días si hay liquidaciones bloqueadas o en revisión (motor pre-envío). */
+export async function syncPartesConErrores(clerkUserId: string): Promise<void> {
+  const fn = 'syncPartesConErrores';
+  syncDebug(clerkUserId, fn, { entered: true });
+  if (!isNotificationsEnabledForUser(clerkUserId)) {
+    syncDebug(clerkUserId, fn, { skipped: 'demo_or_disabled' });
+    return;
+  }
+
+  const cantidad = await countPartesPendientesRevision(clerkUserId);
+  if (cantidad <= 0) {
+    syncDebug(clerkUserId, fn, { skipReason: 'sin_partes_pendientes_revision', cantidad });
+    return;
+  }
+
+  const bucketDate = biDailyDedupeDateAR();
+  const dedupeKey = `partes_con_errores:${bucketDate}`;
+
+  const result = await insertNotificationOnce({
+    clerkUserId,
+    tipo: 'partes_con_errores',
+    titulo: 'Tenés partes pendientes de revisión',
+    mensaje: `Hay ${cantidad} parte${cantidad === 1 ? '' : 's'} con errores o advertencias. Revisalos antes de enviar la planilla.`,
+    dedupeKey,
+    metadata: {
+      cantidad_pendientes: cantidad,
+      navigate_to: 'errors',
+      bi_daily_bucket: bucketDate,
+    },
+  });
+  logInsertResult(clerkUserId, fn, 'partes_con_errores', dedupeKey, result, { cantidad, bucketDate });
+}
+
+/** Cada 2 días si faltan datos fiscales o certificado ARCA. */
+export async function syncPerfilFiscalIncompleto(clerkUserId: string): Promise<void> {
+  const fn = 'syncPerfilFiscalIncompleto';
+  syncDebug(clerkUserId, fn, { entered: true });
+  if (!isNotificationsEnabledForUser(clerkUserId)) {
+    syncDebug(clerkUserId, fn, { skipped: 'demo_or_disabled' });
+    return;
+  }
+
+  const profile = await getProfileFromDB(clerkUserId);
+  const fiscalComplete = isFiscalProfileComplete(profile);
+  const hasCerts = fiscalComplete ? await userHasArcaCerts(clerkUserId) : false;
+  const completo = fiscalComplete && hasCerts;
+
+  if (completo) {
+    syncDebug(clerkUserId, fn, {
+      skipReason: 'perfil_fiscal_completo',
+      fiscalComplete,
+      hasCerts,
+    });
+    return;
+  }
+
+  const bucketDate = biDailyDedupeDateAR();
+  const dedupeKey = `perfil_fiscal_incompleto:${bucketDate}`;
+
+  const result = await insertNotificationOnce({
+    clerkUserId,
+    tipo: 'perfil_fiscal_incompleto',
+    titulo: 'Completá tus datos de facturación',
+    mensaje:
+      'Para poder emitir facturas desde Trazá, necesitás tener completos tus datos fiscales y el certificado de ARCA. Revisá tu perfil.',
+    dedupeKey,
+    metadata: {
+      navigate_to: 'profile',
+      bi_daily_bucket: bucketDate,
+    },
+  });
+  logInsertResult(clerkUserId, fn, 'perfil_fiscal_incompleto', dedupeKey, result, {
+    fiscalComplete,
+    hasCerts,
+    bucketDate,
+  });
+}
+
+/** Wizard iniciado (paso 4+) sin actividad en las últimas 24 h. */
+export async function syncWizardAbandonado(clerkUserId: string): Promise<void> {
+  const fn = 'syncWizardAbandonado';
+  syncDebug(clerkUserId, fn, { entered: true });
+  if (!isNotificationsEnabledForUser(clerkUserId)) {
+    syncDebug(clerkUserId, fn, { skipped: 'demo_or_disabled' });
+    return;
+  }
+
+  const cutoffMs = Date.now() - HOURS_24_MS;
+
+  const { data, error } = await supabaseAdmin
+    .from('monthly_submissions')
+    .select(
+      'id, periodo, wizard_paso, wizard_estado, updated_at, enviado_en, wizard_completado_en, partes_incluidos',
+    )
+    .eq('clerk_user_id', clerkUserId)
+    .eq('obra_social', OBRA_SOCIAL)
+    .eq('status', 'enviado')
+    .eq('tipo_comprobante', 11)
+    .is('anulada_at', null)
+    .gte('wizard_paso', 4)
+    .is('wizard_completado_en', null);
+
+  if (error) {
+    syncDebug(clerkUserId, fn, { queryError: error.message });
+    console.warn('[TRAZA] notifications:wizard_abandonado_query_error', error.message);
+    return;
+  }
+
+  const stale = (data ?? []).filter((sub) => {
+    if (!sub.wizard_estado || WIZARD_TERMINAL_ESTADOS.has(sub.wizard_estado)) return false;
+    const lastAt = sub.updated_at ?? sub.enviado_en;
+    if (!lastAt) return false;
+    return new Date(lastAt).getTime() < cutoffMs;
+  });
+
+  syncDebug(clerkUserId, fn, {
+    candidatosWizardPaso4Plus: data?.length ?? 0,
+    staleSinActividad24h: stale.length,
+    submissionIds: stale.map((s) => s.id),
+  });
+
+  const subs = await filterSubmissionsWithLiveLiquidaciones(clerkUserId, stale);
+
+  if (subs.length === 0) {
+    syncDebug(clerkUserId, fn, { skipReason: 'sin_submissions_abandonadas_vivas' });
+    return;
+  }
+
+  for (const sub of subs) {
+    const dedupeKey = `wizard_abandonado:${sub.id}`;
+    const result = await insertNotificationOnce({
+      clerkUserId,
+      tipo: 'wizard_abandonado',
+      titulo: 'Tenés un cobro sin completar',
+      mensaje: `Iniciaste el proceso de cobro de ${periodoLabel(sub.periodo)} pero no lo terminaste. Continuá desde donde lo dejaste.`,
+      dedupeKey,
+      metadata: {
+        submission_id: sub.id,
+        periodo: sub.periodo,
+        wizard_paso: sub.wizard_paso,
+        navigate_to: 'documents',
+      },
+    });
+    logInsertResult(clerkUserId, fn, 'wizard_abandonado', dedupeKey, result, {
+      submissionId: sub.id,
+      wizard_paso: sub.wizard_paso,
+    });
+  }
 }
 
 export async function sync48hCumplidas(clerkUserId: string): Promise<void> {
@@ -257,11 +519,72 @@ export async function notifyFacturaError(input: {
 
 /** Sync-on-read: ejecutar antes de listar avisos. */
 export async function syncAllNotificationsForUser(clerkUserId: string): Promise<void> {
-  if (!isNotificationsEnabledForUser(clerkUserId)) return;
+  syncDebug(clerkUserId, 'syncAllNotificationsForUser', {
+    entered: true,
+    enabled: isNotificationsEnabledForUser(clerkUserId),
+    dayOfMonthAR: dayOfMonthAR(),
+    periodoActual: currentPeriodoAR(),
+  });
 
-  await Promise.all([
-    syncRecordatorioEnvio(clerkUserId),
-    sync48hCumplidas(clerkUserId),
-    syncAccionCobros(clerkUserId),
-  ]);
+  if (!isNotificationsEnabledForUser(clerkUserId)) {
+    syncDebug(clerkUserId, 'syncAllNotificationsForUser', { skipped: 'demo_or_disabled' });
+    return;
+  }
+
+  const planillaActualEnviada = await hasPlanillaEnviadaSwiss(clerkUserId, currentPeriodoAR());
+  syncDebug(clerkUserId, 'syncAllNotificationsForUser', {
+    planillaEnviadaPeriodoActual: planillaActualEnviada,
+    periodoActual: currentPeriodoAR(),
+  });
+
+  syncDebug(clerkUserId, 'syncAllNotificationsForUser', { running: 'syncRecordatorioEnvio' });
+  await syncRecordatorioEnvio(clerkUserId);
+
+  syncDebug(clerkUserId, 'syncAllNotificationsForUser', { running: 'syncPartesConErrores' });
+  await syncPartesConErrores(clerkUserId);
+
+  syncDebug(clerkUserId, 'syncAllNotificationsForUser', { running: 'syncPerfilFiscalIncompleto' });
+  await syncPerfilFiscalIncompleto(clerkUserId);
+
+  syncDebug(clerkUserId, 'syncAllNotificationsForUser', { running: 'syncWizardAbandonado' });
+  await syncWizardAbandonado(clerkUserId);
+
+  syncDebug(clerkUserId, 'syncAllNotificationsForUser', { running: 'sync48hCumplidas' });
+  await sync48hCumplidas(clerkUserId);
+
+  syncDebug(clerkUserId, 'syncAllNotificationsForUser', { running: 'syncAccionCobros' });
+  await syncAccionCobros(clerkUserId);
+
+  syncDebug(clerkUserId, 'syncAllNotificationsForUser', { done: true });
+}
+
+/** Cron diario: sync para todos los usuarios con perfil (excluye demo). */
+export async function syncAllNotificationsForAllUsers(): Promise<{
+  processed: number;
+  errors: number;
+}> {
+  const { data, error } = await supabaseAdmin.from('profiles').select('clerk_user_id');
+
+  if (error) {
+    console.warn('[TRAZA] notifications:profiles_list_error', error.message);
+    return { processed: 0, errors: 1 };
+  }
+
+  let processed = 0;
+  let errors = 0;
+
+  for (const row of data ?? []) {
+    const clerkUserId = row.clerk_user_id;
+    if (!clerkUserId || isDemoUser(clerkUserId)) continue;
+
+    try {
+      await syncAllNotificationsForUser(clerkUserId);
+      processed += 1;
+    } catch (e) {
+      errors += 1;
+      console.warn('[TRAZA] notifications:sync_user_error', clerkUserId, e);
+    }
+  }
+
+  return { processed, errors };
 }

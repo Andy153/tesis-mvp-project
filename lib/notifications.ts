@@ -4,6 +4,13 @@ import { buildPushUrlFromMetadata, sendPushToUser } from '@/lib/push';
 
 export type NotificationTipo =
   | 'recordatorio_envio'
+  | 'recordatorio_envio_29'
+  | 'recordatorio_envio_5'
+  | 'recordatorio_envio_8'
+  | 'partes_con_errores'
+  | 'perfil_fiscal_incompleto'
+  | 'wizard_abandonado'
+  | 'engagement_tip'
   | '48h_cumplidas'
   | 'factura_emitida'
   | 'error_critico'
@@ -34,7 +41,13 @@ export type UpsertNotificationInput = {
 };
 
 const PUSH_ON_INSERT_TIPOS: NotificationTipo[] = [
-  'recordatorio_envio',
+  'recordatorio_envio_29',
+  'recordatorio_envio_5',
+  'recordatorio_envio_8',
+  'partes_con_errores',
+  'perfil_fiscal_incompleto',
+  'wizard_abandonado',
+  'engagement_tip',
   '48h_cumplidas',
   'factura_emitida',
   'error_critico',
@@ -82,9 +95,9 @@ export async function upsertNotification(input: UpsertNotificationInput): Promis
 
 export async function insertNotificationOnce(
   input: UpsertNotificationInput,
-): Promise<{ inserted: boolean }> {
+): Promise<{ inserted: boolean; blockedBy?: 'dedupe' | 'disabled' | 'db_error'; errorMessage?: string }> {
   if (!isNotificationsEnabledForUser(input.clerkUserId)) {
-    return { inserted: false };
+    return { inserted: false, blockedBy: 'disabled' };
   }
 
   const { error } = await supabaseAdmin.from('notifications').insert({
@@ -98,10 +111,10 @@ export async function insertNotificationOnce(
 
   if (error) {
     if (error.code === '23505') {
-      return { inserted: false };
+      return { inserted: false, blockedBy: 'dedupe' };
     }
     console.warn('[TRAZA] notifications:insert_error', error.message, input.dedupeKey);
-    return { inserted: false };
+    return { inserted: false, blockedBy: 'db_error', errorMessage: error.message };
   }
 
   await maybeSendPushForNotification(input);

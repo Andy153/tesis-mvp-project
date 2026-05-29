@@ -4,6 +4,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useNotificationsList } from '@/lib/use-notifications';
 import type { NotificationRow } from '@/lib/notifications';
+import { resolveNotificationView } from '@/lib/notification-nav';
 import { PushOptInBanner } from '@/components/push/PushOptInBanner';
 
 type NotificationsViewProps = {
@@ -11,8 +12,7 @@ type NotificationsViewProps = {
 };
 
 function navigateTarget(n: NotificationRow): string {
-  const nav = n.metadata?.navigate_to;
-  return typeof nav === 'string' ? nav : 'documents';
+  return resolveNotificationView(n.metadata?.navigate_to, 'documents');
 }
 
 export function NotificationsView({ onNavigate }: NotificationsViewProps) {

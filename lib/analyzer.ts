@@ -2000,7 +2000,8 @@ export function analyzeDocument(
   const tNomen0 = Date.now();
   if (!isPartogramOnly && validCodes.length > 0) {
     console.log(`${PIPE} nomenclador:matching attempt=yes reason=valid_codes_present`);
-    for (const code of validCodes) {
+    const uniqueValidCodes = Array.from(new Set(validCodes));
+    for (const code of uniqueValidCodes) {
       const nomenHit = getNomencladorRow(code);
       const nomen = nomenHit?.row;
       if (!nomen) continue;

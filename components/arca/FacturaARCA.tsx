@@ -28,6 +28,8 @@ export interface FacturaARCAProps {
   onError: (mensaje: string) => void;
   /** Tras NC durante el wizard de cobros: recargar submission (vuelve al paso 4). */
   onNotaCreditoEmitida?: () => void | Promise<void>;
+  /** Override del receptor (cuit + razonSocial). Si no se pasa, usa el del emision-config. */
+  receptorOverride?: { cuit: string; razonSocial: string };
 }
 
 type Estado = 'idle' | 'loading' | 'exito' | 'error';
@@ -87,6 +89,7 @@ export function FacturaARCA({
   onExito,
   onError,
   onNotaCreditoEmitida,
+  receptorOverride,
 }: FacturaARCAProps) {
   const { user } = useUser();
   const demoUser = isDemoUser(user?.id);
@@ -291,7 +294,7 @@ export function FacturaARCA({
         ? {
             numero: formatNumeroComprobanteDisplay(0, nroComprobanteEmitido).replace(/^0{4}-/, ''),
             fecha: new Date().toLocaleDateString('es-AR'),
-            receptorRazonSocial: SWISS_MEDICAL_RAZON_SOCIAL,
+            receptorRazonSocial: receptorOverride?.razonSocial ?? SWISS_MEDICAL_RAZON_SOCIAL,
             monto: formatPesos(montoFacturar),
             cae: caeEmitido,
           }
@@ -501,7 +504,7 @@ export function FacturaARCA({
             <strong>Ambiente:</strong> {ambienteLabel}
           </p>
           <p className="factura-arca__row" style={{ fontSize: 13, marginBottom: 6 }}>
-            <strong>Receptor:</strong> Doctor Trazá
+            <strong>Receptor:</strong> {receptorOverride?.razonSocial ?? SWISS_MEDICAL_RAZON_SOCIAL}
           </p>
           {emisionConfig.esProduccion ? (
             <p className="factura-arca__row" style={{ fontSize: 12, margin: 0 }}>
@@ -524,7 +527,7 @@ export function FacturaARCA({
       </button>
       <p className="factura-arca__muted factura-arca__muted--footer">
         Factura C · {ambienteLabel}
-        {emisionConfig ? ` · ${emisionConfig.receptor.razonSocial}` : ''}
+        {receptorOverride ? ` · ${receptorOverride.razonSocial}` : emisionConfig ? ` · ${emisionConfig.receptor.razonSocial}` : ''}
         {facturaYaEmitida?.cae ? ' · Ya tenés una factura emitida para este período' : ''}
       </p>
     </div>

@@ -391,7 +391,6 @@ export default function TrazaApp() {
           ),
         );
         // Si es OSDE, crear la cirugía automáticamente y navegar a Mis documentos.
-        console.log("[TRAZA] prepagas detected:", prepagas, "isOsde check next");
         const isOsde = prepagas.some((p: string) => p.toLowerCase().includes('osde'));
         if (isOsde) {
           try {
@@ -400,7 +399,7 @@ export default function TrazaApp() {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                ai_extraction_id: parte.documentId ?? null,
+                document_id: parte.documentId ?? null,
                 paciente: ext?.paciente?.apellido_nombre ?? null,
                 afiliado: ext?.cobertura?.numero_afiliado ?? null,
                 fecha_cirugia: ext?.cirugia?.fecha ?? null,

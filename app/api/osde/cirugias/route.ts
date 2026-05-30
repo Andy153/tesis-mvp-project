@@ -2,7 +2,7 @@
 //
 // GET:  lista las cirugías OSDE del usuario (para el dashboard), sin las descartadas.
 // POST: crea una cirugía nueva para arrancar el cobro. Opcionalmente la asocia a un
-//       parte (ai_extraction_id) y precarga paciente/afiliado/fecha/monto.
+//       parte (document_id) y precarga paciente/afiliado/fecha/monto.
 //
 // Aditivo: tabla osde_cirugias. No toca nada de Swiss.
 
@@ -14,7 +14,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const COLUMNS = `
-  id, ai_extraction_id, paciente, afiliado, fecha_cirugia, monto_estimado,
+  id, document_id, paciente, afiliado, fecha_cirugia, monto_estimado,
   wizard_paso, wizard_estado, resultado_consulta, created_at, updated_at
 `;
 
@@ -48,12 +48,27 @@ export async function POST(req: Request) {
     v != null && v !== '' && !Number.isNaN(Number(v)) ? Number(v) : null;
   const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
 
+  // Normalizar fecha a YYYY-MM-DD (la IA puede devolver DD/MM/YYYY, DD/MM/YY, etc.)
+  const parseDate = (v: unknown): string | null => {
+    const s = str(v);
+    if (!s) return null;
+    // Ya es YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    // DD/MM/YYYY
+    const m1 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (m1) return `${m1[3]}-${m1[2].padStart(2,'0')}-${m1[1].padStart(2,'0')}`;
+    // DD/MM/YY
+    const m2 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})$/);
+    if (m2) return `20${m2[3]}-${m2[2].padStart(2,'0')}-${m2[1].padStart(2,'0')}`;
+    return null; // formato no reconocido, no insertar basura
+  };
+
   const insert = {
     clerk_user_id: userId,
-    ai_extraction_id: str(body.ai_extraction_id),
+    document_id: str(body.document_id),
     paciente: str(body.paciente),
     afiliado: str(body.afiliado),
-    fecha_cirugia: str(body.fecha_cirugia), // 'YYYY-MM-DD'
+    fecha_cirugia: parseDate(body.fecha_cirugia), // 'YYYY-MM-DD'
     monto_estimado: num(body.monto_estimado),
     wizard_paso: 1,
     wizard_estado: 'en_curso',

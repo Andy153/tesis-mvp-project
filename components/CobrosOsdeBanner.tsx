@@ -57,23 +57,11 @@ export function CobrosOsdeBanner() {
             tabIndex={0}
           >
             <div className="cobros-banner__head-inner">
-              <div
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 6,
-                  background: 'var(--accent)',
-                  color: '#fff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: 700,
-                  fontSize: 14,
-                  flexShrink: 0,
-                }}
-              >
-                OS
-              </div>
+              <img
+                src="/osde-logo.png"
+                alt="OSDE"
+                className="cobros-banner__logo"
+              />
               <div>
                 <div className="cobros-banner__title">
                   Cobro OSDE — {cir.paciente ?? 'Cirugía'}{cir.fecha_cirugia ? ` · ${cir.fecha_cirugia}` : ''}

@@ -23,6 +23,16 @@ export function requiresAuthorization(analysis: Analysis | undefined): {
 } {
   const codes = analysis?.detected?.codes || [];
   const procedureGuess = analysis?.detected?.procedureGuess;
+  const prepagas = analysis?.detected?.prepagas || [];
+  const isOsde = prepagas.some((p) => p.toLowerCase().includes('osde'));
+
+  if (isOsde) {
+    return {
+      required: true,
+      confidence: 'high',
+      reason: 'OSDE exige autorización previa para todas las cirugías. La autorización es obligatoria para facturar.',
+    };
+  }
 
   for (const code of codes) {
     for (const prefix of TRAZA_CIRUGIA_PREFIXES) {

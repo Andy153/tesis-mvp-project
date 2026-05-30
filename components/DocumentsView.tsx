@@ -640,7 +640,7 @@ export function DocumentsView({
                                         method: 'POST',
                                         headers: { 'Content-Type': 'application/json' },
                                         body: JSON.stringify({
-                                          ai_extraction_id: f.documentId ?? null,
+                                          document_id: f.documentId ?? null,
                                           paciente: ext?.paciente?.apellido_nombre ?? null,
                                           afiliado: ext?.cobertura?.numero_afiliado ?? null,
                                           fecha_cirugia: ext?.cirugia?.fecha ?? null,

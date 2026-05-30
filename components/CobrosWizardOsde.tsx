@@ -13,7 +13,7 @@ type WizardEstado = 'en_curso' | 'rechazado' | 'cobrado' | 'descartado'
 
 type Cirugia = {
   id: string
-  ai_extraction_id: string | null
+  document_id: string | null
   paciente: string | null
   afiliado: string | null
   fecha_cirugia: string | null
@@ -306,6 +306,7 @@ export function CobrosWizardOsde({ cirugiaId, onUpdate, onCollapse }: Props) {
       {/* ── Paso 4: Factura ARCA ── */}
       <Step numero={4} titulo="Emití la Factura C en ARCA" activo={paso === 4} completado={paso > 4}>
         <FacturaARCA
+          receptorOverride={{ cuit: '30687313272', razonSocial: 'OSDE' }}
           submissionId={cir.id}
           monto={cir.monto_estimado ?? 0}
           periodo={cir.fecha_cirugia ? cir.fecha_cirugia.slice(0, 7) : new Date().toISOString().slice(0, 7)}

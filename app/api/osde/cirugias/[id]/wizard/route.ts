@@ -6,7 +6,7 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 const COLUMNS = `
-  id, clerk_user_id, ai_extraction_id,
+  id, clerk_user_id, document_id,
   paciente, afiliado, fecha_cirugia, monto_estimado,
   wizard_paso, wizard_estado,
   numero_tramite_apligem, numero_registracion_protocolo, resultado_consulta,

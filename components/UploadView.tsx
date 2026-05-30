@@ -459,6 +459,16 @@ export function UploadView({
 
   const finalizeBlockReason = useMemo(() => {
     if (!selected?.analysis || !selected?.text) return null;
+    // OSDE: bloquear si no se cargó autorización (ni se confirmó "tengo el bono")
+    const prepagasSel = selected.analysis?.detected?.prepagas || [];
+    const isOsdeSel = prepagasSel.some((p) => p.toLowerCase().includes('osde'));
+    if (isOsdeSel) {
+      const authSt = authStates[selected.id];
+      const okAuth = authSt && (authSt.status === 'checked' || authSt.status === 'uploading' || authSt.status === 'processing');
+      if (!okAuth) {
+        return 'OSDE exige autorización previa. Cargá el bono antes de confirmar y guardar.';
+      }
+    }
     const structured = extractStructured(selected.text, NOMEN_FOR_EXTRACT);
     const required: Array<'patient' | 'procedure'> = [];
     if (structured?.paciente) required.push('patient');
@@ -486,7 +496,7 @@ export function UploadView({
     if (!row.codigo?.trim()) miss.push('código');
     if (miss.length) return `No se pudo generar la planilla porque falta: ${miss.join(', ')}.`;
     return null;
-  }, [selected?.analysis, selected?.text, selected?.manualChecks, selected?.exports?.swissCx?.row]);
+  }, [selected?.analysis, selected?.text, selected?.manualChecks, selected?.exports?.swissCx?.row, authStates, selected?.id]);
 
   return (
     <div>
@@ -724,7 +734,8 @@ export function UploadView({
           <button
             type="button"
             className="btn btn-primary"
-            disabled={finalizeStep === 'saving'}
+            disabled={finalizeStep === 'saving' || !!finalizeBlockReason}
+            title={finalizeBlockReason || undefined}
             onClick={async () => {
               setFinalizeBlocked(null);
               const args = { parteFileId: selected?.id || null, batchId: effectiveBatchId };
@@ -1218,6 +1229,11 @@ function AuthorizationCard({
     [parteFile.analysis],
   );
 
+  const isOsde = useMemo(() => {
+    const prepagas = parteFile.analysis?.detected?.prepagas || [];
+    return prepagas.some((p) => p.toLowerCase().includes('osde'));
+  }, [parteFile.analysis]);
+
   if (!authRule.required && !authState) return null;
 
   if (!authState) {
@@ -1246,9 +1262,11 @@ function AuthorizationCard({
           <button type="button" className="auth-btn" onClick={() => onDecision({ status: 'missing' })}>
             Todavía no la tengo
           </button>
-          <button type="button" className="auth-btn" onClick={() => onDecision({ status: 'skipped' })}>
-            En este caso no hace falta
-          </button>
+          {!isOsde && (
+            <button type="button" className="auth-btn" onClick={() => onDecision({ status: 'skipped' })}>
+              En este caso no hace falta
+            </button>
+          )}
         </div>
       </div>
     );

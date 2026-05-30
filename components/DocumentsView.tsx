@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { getEstadoEfectivo, type HistoryItem } from '@/lib/history';
 import { markAsPresented } from '@/lib/tracking';
 import { CobrosBanner } from './CobrosBadge';
+import { CobrosOsdeBanner } from './CobrosOsdeBanner';
 import { SwissMedicalCloseButton } from './SwissMedicalCloseButton';
 import { ReviewModal } from './ReviewModal';
 
@@ -343,6 +344,19 @@ export function DocumentsView({
     [],
   );
 
+  const isOsdeFile = useCallback(
+    (f: FileEntry) => {
+      const prepaga =
+        normalizePrepaga(f.aiParteExtract?.cobertura?.prepaga) ||
+        normalizePrepaga(f.analysis?.detected?.prepagas?.[0]) ||
+        normalizePrepaga(f.raw_text_light) ||
+        normalizePrepaga(f.raw_text) ||
+        normalizePrepaga(f.text);
+      return prepaga === 'OSDE';
+    },
+    [],
+  );
+
   /** OK o listo para presentar, sin errores de análisis — misma noción que la tabla de cobro. */
   const isValidCobroDocument = useCallback((f: FileEntry) => {
     const { estado } = getEstadoEfectivo(f as unknown as HistoryItem);
@@ -476,6 +490,7 @@ export function DocumentsView({
       )}
 
       {(validCobroDocuments.length > 0 || (demoUser && demoSwissSent)) && <CobrosBanner key={refreshKey} />}
+      <CobrosOsdeBanner />
       <div style={{ marginBottom: 16 }}>
         <SwissMedicalCloseButton
           disabled={demoUser && !demoAnalyzedThisSession}
@@ -616,6 +631,24 @@ export function DocumentsView({
                                     await markPresentedInCloud(f);
                                   } catch (e) {
                                     console.warn('[TRAZA] mark_presented_cloud_warn', e);
+                                  }
+                                  // Auto-crear cirugía OSDE si el parte es de OSDE
+                                  if (isOsdeFile(f)) {
+                                    try {
+                                      const ext = f.aiParteExtract;
+                                      await fetch('/api/osde/cirugias', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                          ai_extraction_id: f.documentId ?? null,
+                                          paciente: ext?.paciente?.apellido_nombre ?? null,
+                                          afiliado: ext?.cobertura?.numero_afiliado ?? null,
+                                          fecha_cirugia: ext?.cirugia?.fecha ?? null,
+                                        }),
+                                      });
+                                    } catch (e) {
+                                      console.warn('[TRAZA] osde_cirugia_create_warn', e);
+                                    }
                                   }
                                 }}
                               >

@@ -815,7 +815,7 @@ html[data-theme='dark'] .btn-danger {
 .cobros-wizard__img {
   width: 100%;
   border-radius: var(--radius-sm);
-  margin: 12px 0;
+  margin: 12px auto;
   border: 1px solid var(--border);
 }
 .cobros-wizard__img--tight {
@@ -3675,4 +3675,15 @@ html[data-theme='dark'] .notifications-item--unread {
 }
 html[data-theme='dark'] .push-opt-in__title {
   color: var(--text);
+}
+.cobros-wizard__img--phone {
+  display: block;
+  max-height: 280px;
+  max-width: 240px;
+  width: auto;
+  height: auto;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border);
+  margin: 12px auto;
+  object-fit: contain;
 }

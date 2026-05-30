@@ -379,7 +379,7 @@ export default function TrazaApp() {
       const prepagas = parte.analysis?.detected?.prepagas || [];
       const isSwiss = prepagas.includes('Swiss Medical');
       if (!isSwiss) {
-        // Para prepagas no-Swiss: permitir "Listo y guardar" sin generar planilla/export.
+        // Para prepagas no-Swiss: marcar como listo.
         setFiles((prev) =>
           prev.map((f) =>
             f.id === parte.id
@@ -390,6 +390,26 @@ export default function TrazaApp() {
               : f,
           ),
         );
+        // Si es OSDE, crear la cirugía automáticamente y navegar a Mis documentos.
+        console.log("[TRAZA] prepagas detected:", prepagas, "isOsde check next");
+        const isOsde = prepagas.some((p: string) => p.toLowerCase().includes('osde'));
+        if (isOsde) {
+          try {
+            const ext = parte.aiParteExtract;
+            await fetch('/api/osde/cirugias', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                ai_extraction_id: parte.documentId ?? null,
+                paciente: ext?.paciente?.apellido_nombre ?? null,
+                afiliado: ext?.cobertura?.numero_afiliado ?? null,
+                fecha_cirugia: ext?.cirugia?.fecha ?? null,
+              }),
+            });
+          } catch (e) {
+            console.warn('[TRAZA] osde_cirugia_create_warn', e);
+          }
+        }
         return;
       }
       const auth = authStates[parte.id];

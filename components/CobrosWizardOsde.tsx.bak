@@ -26,7 +26,6 @@ type OsdeCirugia = {
   comprobante_cargado_en: string | null
   cobrado_en: string | null
   tiene_debito: boolean
-  monthly_submission_id: string | null
 }
 
 type OsdeCirugiaPatch = Partial<{
@@ -42,7 +41,6 @@ type OsdeCirugiaPatch = Partial<{
   comprobante_cargado_en: string | null
   cobrado_en: string | null
   tiene_debito: boolean
-  monthly_submission_id: string | null
 }>
 
 type Props = {
@@ -416,7 +414,7 @@ export function CobrosWizardOsde({ cirugiaId, onUpdate, onCollapse }: Props) {
       <Step numero={5} titulo="Emití la Factura C en ARCA" activo={paso === 5} completado={paso > 5 || !!cir.factura_emitida_en}>
         <FacturaARCA
           receptorOverride={{ cuit: '30687313272', razonSocial: 'OSDE' }}
-          submissionId={cir.monthly_submission_id ?? ''}
+          submissionId={cir.id}
           monto={cir.monto_extranet ?? 0}
           periodo={cir.fecha_cirugia ? cir.fecha_cirugia.slice(0, 7) : new Date().toISOString().slice(0, 7)}
           facturaYaEmitida={undefined}

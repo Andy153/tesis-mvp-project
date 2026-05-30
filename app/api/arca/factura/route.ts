@@ -23,8 +23,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Body JSON inválido' }, { status: 400 })
   }
 
-  const { importeTotal, periodoDesde, periodoHasta, periodo, submissionId } = body
-  const receptor = getReceptorFacturaEmision()
+  const { importeTotal, periodoDesde, periodoHasta, periodo, submissionId, receptorCuit: overrideCuit, receptorRazonSocial: overrideRazon } = body
+  const defaultReceptor = getReceptorFacturaEmision()
+  const receptor = (overrideCuit && overrideRazon)
+    ? { cuit: String(overrideCuit), razonSocial: String(overrideRazon) }
+    : defaultReceptor
 
   if (
     importeTotal == null ||

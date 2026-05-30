@@ -414,20 +414,34 @@ export function CobrosWizardOsde({ cirugiaId, onUpdate, onCollapse }: Props) {
 
       {/* ── Paso 5: Factura ARCA ── */}
       <Step numero={5} titulo="Emití la Factura C en ARCA" activo={paso === 5} completado={paso > 5 || !!cir.factura_emitida_en}>
-        <FacturaARCA
-          receptorOverride={{ cuit: '30687313272', razonSocial: 'OSDE' }}
-          submissionId={cir.monthly_submission_id ?? ''}
-          monto={cir.monto_extranet ?? 0}
-          periodo={cir.fecha_cirugia ? cir.fecha_cirugia.slice(0, 7) : new Date().toISOString().slice(0, 7)}
-          facturaYaEmitida={undefined}
-          onExito={async () => {
-            await save({ wizard_paso: 6, factura_emitida_en: new Date().toISOString() })
-          }}
-          onError={(mensaje) => {
-            console.error('Error emitiendo factura OSDE:', mensaje)
-            setError(mensaje)
-          }}
-        />
+        {cir.factura_emitida_en ? (
+          <div>
+            <p className="cobros-wizard__text">Ya emitiste la factura para esta cirugía.</p>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={saving}
+              onClick={() => save({ wizard_paso: 6 })}
+            >
+              Continuar al paso 6 →
+            </button>
+          </div>
+        ) : (
+          <FacturaARCA
+            receptorOverride={{ cuit: '30687313272', razonSocial: 'OSDE' }}
+            submissionId={cir.monthly_submission_id ?? ''}
+            monto={cir.monto_extranet ?? 0}
+            periodo={cir.fecha_cirugia ? cir.fecha_cirugia.slice(0, 7) : new Date().toISOString().slice(0, 7)}
+            facturaYaEmitida={undefined}
+            onExito={async () => {
+              await save({ wizard_paso: 6, factura_emitida_en: new Date().toISOString() })
+            }}
+            onError={(mensaje) => {
+              console.error('Error emitiendo factura OSDE:', mensaje)
+              setError(mensaje)
+            }}
+          />
+        )}
         <button type="button" className="btn cobros-wizard__btn-muted" style={{ marginTop: 12, fontSize: 13 }} onClick={goBack} disabled={saving}>
           ← Volver al paso anterior
         </button>
@@ -439,9 +453,10 @@ export function CobrosWizardOsde({ cirugiaId, onUpdate, onCollapse }: Props) {
           Entrá a la EXTRANET de OSDE → <strong>envío de comprobantes fiscales</strong> →{' '}
           <strong>subir documentación</strong>, y cargá la factura. Pasa a <strong>recibidos</strong>.
         </p>
-        <p className="cobros-wizard__text-muted">
-          Todavía no tenemos capturas de la EXTRANET; las sumamos cuando las consigas.
-        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center', marginTop: 12 }}>
+          <img src="/wizard/osde/paso6_extranet_envio_comprobantes.png" alt="EXTRANET envío de comprobantes" style={{ maxWidth: '100%', width: 600, border: '1px solid var(--border)', borderRadius: 8 }} />
+          <img src="/wizard/osde/paso8_extranet_anexos.png" alt="EXTRANET anexos" style={{ maxWidth: '100%', width: 600, border: '1px solid var(--border)', borderRadius: 8 }} />
+        </div>
         <div className="cobros-wizard__step-actions">
           <button
             type="button"
@@ -462,6 +477,10 @@ export function CobrosWizardOsde({ cirugiaId, onUpdate, onCollapse }: Props) {
         <p className="cobros-wizard__text">
           En la EXTRANET → <strong>cuenta corriente</strong> vas a ver el pago pendiente y, después, el acreditado.
         </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center', marginTop: 12, marginBottom: 12 }}>
+          <img src="/wizard/osde/paso4_extranet_pagos_pendientes.png" alt="EXTRANET pagos pendientes" style={{ maxWidth: '100%', width: 600, border: '1px solid var(--border)', borderRadius: 8 }} />
+          <img src="/wizard/osde/paso7_extranet_fecha_corte.png" alt="EXTRANET fecha de corte" style={{ maxWidth: '100%', width: 600, border: '1px solid var(--border)', borderRadius: 8 }} />
+        </div>
         <div className="cobros-wizard__panel cobros-wizard__panel--neutral">
           <p className="cobros-wizard__text cobros-wizard__text--tight">
             Ojo: OSDE no paga el mes calendario completo. Hace cortes según el último dígito de tu número

@@ -67,7 +67,7 @@ export function CobrosOsdeBanner() {
                   Cobro OSDE — {cir.paciente ?? 'Cirugía'}{cir.fecha_cirugia ? ` · ${cir.fecha_cirugia}` : ''}
                 </div>
                 <div className="cobros-banner__meta">
-                  Paso {cir.wizard_paso}/6 · {pasoLabel(cir.wizard_estado)}
+                  Paso {cir.wizard_paso}/7 · {pasoLabel(cir.wizard_estado)}
                 </div>
               </div>
             </div>

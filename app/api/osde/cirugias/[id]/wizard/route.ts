@@ -119,6 +119,7 @@ export async function PATCH(
           .eq('clerk_user_id', userId);
 
         if (upErr) {
+          console.error('[OSDE] update_submission_failed:', upErr);
           return NextResponse.json({ error: 'update_submission_failed: ' + upErr.message }, { status: 500 });
         }
       } else {
@@ -144,11 +145,12 @@ export async function PATCH(
                 monto: finalMonto,
               },
             ],
-            wizard_estado: 'esperando_factura',
+            wizard_estado: 'esperando_comprobante',
           })
           .select('id')
           .single();
 
+        if (insErr) console.error('[OSDE] insert_submission_failed:', insErr);
         if (insErr || !sub) {
           return NextResponse.json(
             { error: 'create_submission_failed: ' + (insErr?.message ?? 'unknown') },

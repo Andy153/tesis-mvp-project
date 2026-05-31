@@ -10,6 +10,8 @@ const isPublicRoute = createRouteMatcher([
   '/sw.js',
   // Cron endpoints must bypass Clerk auth (they use Authorization: Bearer <CRON_SECRET>)
   '/api/cron(.*)',
+  // Supabase Database Webhook (x-webhook-secret: SUPABASE_WEBHOOK_SECRET)
+  '/api/webhooks/subscription-activated',
 ]);
 
 export default clerkMiddleware(async (auth, request) => {

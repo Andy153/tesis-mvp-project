@@ -1,149 +1,209 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { CheckCircle2, CircleDollarSign, FileText, Send, Sparkles } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import { Logo } from '@/components/Logo';
 import { useInView } from './hooks/useInView';
 import styles from './landing.module.css';
 
-const TIMELINE_STEPS = [
+const ORBIT_RADIUS_PX = 200;
+const SVG_SIZE = 400;
+const SVG_CENTER = SVG_SIZE / 2;
+const SVG_LINE_RADIUS = 155;
+
+type SolveStep = {
+  title: string;
+  extra: string;
+  icon: LucideIcon;
+  angle: number;
+};
+
+const SOLVE_STEPS: SolveStep[] = [
   {
     title: 'Parte quirúrgico',
-    description: 'El médico sube el parte desde el celular o desktop.',
-    extra:
-      'Subí una foto o PDF del parte desde el celular. Sin escaners, sin formularios manuales.',
+    extra: 'Subí foto/PDF desde el celular. Sin escáneres ni formularios manuales.',
     icon: FileText,
+    angle: 270,
   },
   {
     title: 'Extracción con IA',
-    description:
-      'Trazá lee el documento y extrae paciente, práctica y códigos automáticamente.',
-    extra:
-      'Detectamos automáticamente el código de prestación, datos del paciente, fecha e institución. Sin tipeo.',
+    extra: 'Código, paciente, fecha e institución detectados automáticamente. Sin tipeo.',
     icon: Sparkles,
+    angle: 342,
   },
   {
     title: 'Validación instantánea',
-    description:
-      'Se verifican códigos y requisitos según Swiss Medical u OSDE antes de enviar.',
-    extra:
-      'Antes de enviar, Trazá verifica que el código sea válido para Swiss Medical u OSDE y te avisa si hay algo para corregir.',
+    extra: 'Trazá avisa si hay algo para corregir antes de enviar a Swiss Medical u OSDE.',
     icon: CheckCircle2,
+    angle: 54,
   },
   {
     title: 'Envío a la prepaga',
-    description:
-      'La liquidación se presenta en tiempo y forma, sin archivos sueltos ni mails.',
-    extra: 'Generamos y presentamos la liquidación en tiempo y forma.',
+    extra: 'Genera y presenta la liquidación en tiempo y forma.',
     icon: Send,
+    angle: 126,
   },
   {
     title: 'Cobro trazado',
-    description:
-      'Sabés qué entró, qué fue rechazado y qué falta corregir. Todo en un lugar.',
-    extra:
-      'Sabés exactamente qué se acreditó, qué fue rechazado y qué necesita corrección. Todo en un lugar.',
+    extra: 'Sabés qué se acreditó, qué fue rechazado y qué falta corregir. Todo en un lugar.',
     icon: CircleDollarSign,
+    angle: 198,
   },
-] as const;
+];
 
-function TimelineLine() {
-  const { ref, inView } = useInView<HTMLDivElement>(0.15);
+function polarToSvg(angleDeg: number, radius: number) {
+  const rad = (angleDeg * Math.PI) / 180;
+  return {
+    x: SVG_CENTER + radius * Math.cos(rad),
+    y: SVG_CENTER + radius * Math.sin(rad),
+  };
+}
 
+function ConnectorLines({
+  inView,
+  activeIndex,
+}: {
+  inView: boolean;
+  activeIndex: number | null;
+}) {
   return (
-    <div
-      ref={ref}
-      className={[styles.solveTimelineLine, inView ? styles.solveTimelineLineVisible : ''].join(
-        ' ',
-      )}
+    <svg
+      className={styles.solveConnectors}
+      viewBox={`0 0 ${SVG_SIZE} ${SVG_SIZE}`}
       aria-hidden
-    />
+    >
+      {SOLVE_STEPS.map((step, index) => {
+        const end = polarToSvg(step.angle, SVG_LINE_RADIUS);
+        return (
+          <line
+            key={step.title}
+            x1={SVG_CENTER}
+            y1={SVG_CENTER}
+            x2={end.x}
+            y2={end.y}
+            className={[
+              styles.solveConnectorLine,
+              inView ? styles.solveConnectorLineVisible : '',
+              activeIndex === index ? styles.solveConnectorLineActive : '',
+            ].join(' ')}
+            style={{ transitionDelay: inView ? `${index * 0.1}s` : undefined }}
+          />
+        );
+      })}
+    </svg>
   );
 }
 
-function TimelineItem({
+function SolveBullet({
   step,
   index,
+  inView,
+  isActive,
+  onActivate,
 }: {
-  step: (typeof TIMELINE_STEPS)[number];
+  step: SolveStep;
   index: number;
+  inView: boolean;
+  isActive: boolean;
+  onActivate: () => void;
 }) {
-  const { ref, inView } = useInView<HTMLDivElement>(0.2);
-  const [activated, setActivated] = useState(false);
   const Icon = step.icon;
-  const isLeft = index % 2 === 0;
-
-  const activate = () => setActivated(true);
-
-  const stepCard = (
-    <div
-      className={[
-        styles.solveTimelineStep,
-        activated ? styles.solveTimelineStepActive : '',
-      ].join(' ')}
-      tabIndex={0}
-      onMouseEnter={activate}
-      onFocus={activate}
-      onClick={activate}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          activate();
-        }
-      }}
-    >
-      <h3 className={styles.solveTimelineStepTitle}>{step.title}</h3>
-      <p className={styles.solveTimelineStepDesc}>{step.description}</p>
-    </div>
-  );
-
-  const extraPanel = (
-    <aside
-      className={[
-        styles.solveTimelineExtra,
-        activated ? styles.solveTimelineExtraVisible : '',
-      ].join(' ')}
-      aria-hidden={!activated}
-    >
-      <p>{step.extra}</p>
-    </aside>
-  );
-
-  const node = (
-    <div className={styles.solveTimelineNode} aria-hidden>
-      <Icon size={22} strokeWidth={1.75} />
-    </div>
-  );
 
   return (
     <div
-      ref={ref}
-      role="listitem"
       className={[
-        styles.solveTimelineItem,
-        isLeft ? styles.solveTimelineItemLeft : styles.solveTimelineItemRight,
-        inView ? styles.solveTimelineItemVisible : '',
-        activated ? styles.solveTimelineItemActivated : '',
+        styles.solveBulletSlot,
+        inView ? styles.solveBulletSlotVisible : '',
+        isActive ? styles.solveBulletSlotActive : '',
       ].join(' ')}
-      style={{ transitionDelay: inView ? `${index * 0.12}s` : '0s' }}
+      style={
+        {
+          '--solve-angle': `${step.angle}deg`,
+          '--solve-radius': `${ORBIT_RADIUS_PX}px`,
+          '--solve-delay': `${index * 0.1}s`,
+        } as CSSProperties
+      }
     >
-      {isLeft ? (
-        <>
-          {stepCard}
-          {node}
-          {extraPanel}
-        </>
-      ) : (
-        <>
-          {extraPanel}
-          {node}
-          {stepCard}
-        </>
-      )}
+      <button
+        type="button"
+        className={styles.solveBullet}
+        onMouseEnter={onActivate}
+        onFocus={onActivate}
+        aria-expanded={isActive}
+        aria-describedby={isActive ? `solve-card-${index}` : undefined}
+      >
+        <span className={styles.solveBulletIcon} aria-hidden>
+          <Icon size={22} strokeWidth={1.75} />
+        </span>
+        <span className={styles.solveBulletTitle}>{step.title}</span>
+      </button>
+      <div
+        id={`solve-card-${index}`}
+        className={[styles.solveBulletCard, isActive ? styles.solveBulletCardVisible : ''].join(
+          ' ',
+        )}
+        role="tooltip"
+      >
+        <p className={styles.solveBulletCardTitle}>{step.title}</p>
+        <p className={styles.solveBulletCardText}>{step.extra}</p>
+      </div>
+    </div>
+  );
+}
+
+function SolveMobileItem({
+  step,
+  index,
+  inView,
+  isExpanded,
+  onToggle,
+}: {
+  step: SolveStep;
+  index: number;
+  inView: boolean;
+  isExpanded: boolean;
+  onToggle: () => void;
+}) {
+  const Icon = step.icon;
+
+  return (
+    <div
+      className={[styles.solveMobileItem, inView ? styles.solveMobileItemVisible : ''].join(' ')}
+      style={{ transitionDelay: inView ? `${index * 0.1}s` : '0s' }}
+    >
+      <button
+        type="button"
+        className={[styles.solveMobileBullet, isExpanded ? styles.solveMobileBulletActive : ''].join(
+          ' ',
+        )}
+        onClick={onToggle}
+        aria-expanded={isExpanded}
+      >
+        <span className={styles.solveBulletIcon} aria-hidden>
+          <Icon size={22} strokeWidth={1.75} />
+        </span>
+        <span className={styles.solveBulletTitle}>{step.title}</span>
+      </button>
+      <div
+        className={[styles.solveMobileCard, isExpanded ? styles.solveMobileCardVisible : ''].join(
+          ' ',
+        )}
+      >
+        <p className={styles.solveBulletCardTitle}>{step.title}</p>
+        <p className={styles.solveBulletCardText}>{step.extra}</p>
+      </div>
     </div>
   );
 }
 
 export function LandingFeatures() {
+  const { ref: orbitRef, inView } = useInView<HTMLDivElement>(0.12);
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [mobileExpanded, setMobileExpanded] = useState<number | null>(null);
+
+  const hubPulsing = activeIndex !== null;
+
   return (
     <section className={styles.section} aria-labelledby="landing-features-title">
       <div className={styles.solveSection}>
@@ -160,11 +220,63 @@ export function LandingFeatures() {
           </div>
         </header>
 
-        <div className={styles.solveTimeline} role="list" aria-label="Flujo de Trazá">
-          <TimelineLine />
-          {TIMELINE_STEPS.map((step, index) => (
-            <TimelineItem key={step.title} step={step} index={index} />
-          ))}
+        <div
+          ref={orbitRef}
+          className={styles.solveMockupWrap}
+          role="group"
+          aria-label="Flujo de Trazá"
+        >
+          <div
+            className={styles.solveOrbit}
+            onMouseLeave={() => setActiveIndex(null)}
+          >
+            <ConnectorLines inView={inView} activeIndex={activeIndex} />
+
+            <div
+              className={[
+                styles.solveHub,
+                inView ? styles.solveHubVisible : '',
+                hubPulsing ? styles.solveHubPulsing : '',
+              ].join(' ')}
+            >
+              <Logo size={56} variant="light" />
+            </div>
+
+            {SOLVE_STEPS.map((step, index) => (
+              <SolveBullet
+                key={step.title}
+                step={step}
+                index={index}
+                inView={inView}
+                isActive={activeIndex === index}
+                onActivate={() => setActiveIndex(index)}
+              />
+            ))}
+          </div>
+
+          <div className={styles.solveMobileList}>
+            <div
+              className={[
+                styles.solveHub,
+                styles.solveHubMobile,
+                inView ? styles.solveHubVisible : '',
+              ].join(' ')}
+            >
+              <Logo size={56} variant="light" />
+            </div>
+            {SOLVE_STEPS.map((step, index) => (
+              <SolveMobileItem
+                key={step.title}
+                step={step}
+                index={index}
+                inView={inView}
+                isExpanded={mobileExpanded === index}
+                onToggle={() =>
+                  setMobileExpanded((prev) => (prev === index ? null : index))
+                }
+              />
+            ))}
+          </div>
         </div>
       </div>
     </section>

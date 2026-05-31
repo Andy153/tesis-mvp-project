@@ -1887,6 +1887,14 @@
   }
 }
 
+.solveOrbitCards {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+  overflow: visible;
+}
+
 .solveBulletSlot {
   position: absolute;
   left: 50%;
@@ -1906,7 +1914,7 @@
 }
 
 .solveBullet {
-  position: absolute;
+  position: relative;
   left: 0;
   top: 0;
   display: flex;
@@ -1970,7 +1978,9 @@
 .solveBulletCard {
   position: absolute;
   box-sizing: border-box;
-  width: 220px;
+  width: 200px;
+  max-width: 200px;
+  min-width: 200px;
   padding: 16px 20px;
   border-radius: 12px;
   background: rgba(20, 61, 46, 0.98);
@@ -1978,8 +1988,10 @@
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
-  z-index: 20;
-  overflow: visible;
+  z-index: 100;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: normal;
   transition:
     opacity 200ms ease,
     transform 200ms ease,
@@ -1987,55 +1999,31 @@
 }
 
 .solveBulletCardTop {
-  bottom: calc(100% + 14px);
-  left: 50%;
-  top: auto;
-  right: auto;
-  transform: translateX(-50%) translateY(8px);
+  transform: translate(-50%, calc(-100% - 14px));
 }
 
 .solveBulletCardLeft {
-  top: 50%;
-  right: calc(100% + 14px);
-  left: auto;
-  bottom: auto;
-  transform: translateY(-50%) translateX(8px);
+  transform: translate(calc(-100% - 14px), -50%);
 }
 
 .solveBulletCardRight {
-  top: 50%;
-  left: calc(100% + 14px);
-  right: auto;
-  bottom: auto;
-  transform: translateY(-50%) translateX(-8px);
+  transform: translate(14px, -50%);
 }
 
-.solveBulletCardVisible.solveBulletCardTop {
+.solveBulletCardVisible {
   opacity: 1;
   visibility: visible;
-  transform: translateX(-50%) translateY(0);
-}
-
-.solveBulletCardVisible.solveBulletCardLeft {
-  opacity: 1;
-  visibility: visible;
-  transform: translateY(-50%) translateX(0);
-}
-
-.solveBulletCardVisible.solveBulletCardRight {
-  opacity: 1;
-  visibility: visible;
-  transform: translateY(-50%) translateX(0);
 }
 
 .solveBulletCardTitle {
   margin: 0 0 8px;
   font-family: var(--font-sans);
-  font-size: 0.9rem;
+  font-size: 0.82rem;
   font-weight: 700;
   line-height: 1.35;
   color: #fff;
   overflow-wrap: break-word;
+  white-space: normal;
 }
 
 .solveBulletCardText {
@@ -2046,6 +2034,7 @@
   color: rgba(232, 245, 238, 0.88);
   overflow-wrap: break-word;
   word-break: normal;
+  white-space: normal;
 }
 
 .solveMobileList {

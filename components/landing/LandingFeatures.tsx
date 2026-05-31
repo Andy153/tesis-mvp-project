@@ -74,6 +74,16 @@ function polarToSvg(angleDeg: number, radius: number) {
   };
 }
 
+function getBulletAnchorPosition(angleDeg: number): CSSProperties {
+  const rad = (angleDeg * Math.PI) / 180;
+  const x = ORBIT_RADIUS_PX * Math.cos(rad);
+  const y = ORBIT_RADIUS_PX * Math.sin(rad);
+  return {
+    left: `calc(50% + ${x}px)`,
+    top: `calc(50% + ${y}px)`,
+  };
+}
+
 function ConnectorLines({
   inView,
   activeIndex,
@@ -152,18 +162,29 @@ function SolveBullet({
         </span>
         <span className={styles.solveBulletTitle}>{step.title}</span>
       </button>
-      <div
-        id={`solve-card-${index}`}
-        className={[
-          styles.solveBulletCard,
-          CARD_PLACEMENT_CLASS[step.cardPlacement],
-          isActive ? styles.solveBulletCardVisible : '',
-        ].join(' ')}
-        role="tooltip"
-      >
-        <p className={styles.solveBulletCardTitle}>{step.title}</p>
-        <p className={styles.solveBulletCardText}>{step.extra}</p>
-      </div>
+    </div>
+  );
+}
+
+function SolveHoverCards({ activeIndex }: { activeIndex: number | null }) {
+  return (
+    <div className={styles.solveOrbitCards} aria-hidden={activeIndex === null}>
+      {SOLVE_STEPS.map((step, index) => (
+        <div
+          key={step.title}
+          id={`solve-card-${index}`}
+          className={[
+            styles.solveBulletCard,
+            CARD_PLACEMENT_CLASS[step.cardPlacement],
+            activeIndex === index ? styles.solveBulletCardVisible : '',
+          ].join(' ')}
+          style={getBulletAnchorPosition(step.angle)}
+          role="tooltip"
+        >
+          <p className={styles.solveBulletCardTitle}>{step.title}</p>
+          <p className={styles.solveBulletCardText}>{step.extra}</p>
+        </div>
+      ))}
     </div>
   );
 }
@@ -269,6 +290,8 @@ export function LandingFeatures() {
                 onActivate={() => setActiveIndex(index)}
               />
             ))}
+
+            <SolveHoverCards activeIndex={activeIndex} />
           </div>
 
           <div className={styles.solveMobileList}>

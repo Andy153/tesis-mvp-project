@@ -7,16 +7,25 @@ import { Logo } from '@/components/Logo';
 import { useInView } from './hooks/useInView';
 import styles from './landing.module.css';
 
-const ORBIT_RADIUS_PX = 200;
-const SVG_SIZE = 400;
+const ORBIT_RADIUS_PX = 248;
+const SVG_SIZE = 560;
 const SVG_CENTER = SVG_SIZE / 2;
-const SVG_LINE_RADIUS = 155;
+const SVG_LINE_RADIUS = 214;
+
+type CardPlacement = 'top' | 'left' | 'right';
 
 type SolveStep = {
   title: string;
   extra: string;
   icon: LucideIcon;
   angle: number;
+  cardPlacement: CardPlacement;
+};
+
+const CARD_PLACEMENT_CLASS: Record<CardPlacement, string> = {
+  top: styles.solveBulletCardTop,
+  left: styles.solveBulletCardLeft,
+  right: styles.solveBulletCardRight,
 };
 
 const SOLVE_STEPS: SolveStep[] = [
@@ -25,30 +34,35 @@ const SOLVE_STEPS: SolveStep[] = [
     extra: 'Subí foto/PDF desde el celular. Sin escáneres ni formularios manuales.',
     icon: FileText,
     angle: 270,
+    cardPlacement: 'top',
   },
   {
     title: 'Extracción con IA',
     extra: 'Código, paciente, fecha e institución detectados automáticamente. Sin tipeo.',
     icon: Sparkles,
     angle: 342,
+    cardPlacement: 'right',
   },
   {
     title: 'Validación instantánea',
     extra: 'Trazá avisa si hay algo para corregir antes de enviar a Swiss Medical u OSDE.',
     icon: CheckCircle2,
     angle: 54,
+    cardPlacement: 'right',
   },
   {
     title: 'Envío a la prepaga',
     extra: 'Genera y presenta la liquidación en tiempo y forma.',
     icon: Send,
     angle: 126,
+    cardPlacement: 'left',
   },
   {
     title: 'Cobro trazado',
     extra: 'Sabés qué se acreditó, qué fue rechazado y qué falta corregir. Todo en un lugar.',
     icon: CircleDollarSign,
     angle: 198,
+    cardPlacement: 'left',
   },
 ];
 
@@ -140,9 +154,11 @@ function SolveBullet({
       </button>
       <div
         id={`solve-card-${index}`}
-        className={[styles.solveBulletCard, isActive ? styles.solveBulletCardVisible : ''].join(
-          ' ',
-        )}
+        className={[
+          styles.solveBulletCard,
+          CARD_PLACEMENT_CLASS[step.cardPlacement],
+          isActive ? styles.solveBulletCardVisible : '',
+        ].join(' ')}
         role="tooltip"
       >
         <p className={styles.solveBulletCardTitle}>{step.title}</p>
@@ -207,6 +223,7 @@ export function LandingFeatures() {
   return (
     <section className={styles.section} aria-labelledby="landing-features-title">
       <div className={styles.solveSection}>
+        <div className={styles.solveSectionInner}>
         <header className={styles.solveHeader}>
           <p className={styles.sectionLabel}>Qué resuelve</p>
           <div className={styles.solveHeaderRow}>
@@ -277,6 +294,7 @@ export function LandingFeatures() {
               />
             ))}
           </div>
+        </div>
         </div>
       </div>
     </section>

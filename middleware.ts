@@ -5,6 +5,7 @@ const isPublicRoute = createRouteMatcher([
   '/sign-in(.*)',
   '/sign-up(.*)',
   '/sign-up/secretaria(.*)',
+  '/activacion-pendiente',
   // PWA estáticos (el matcher de abajo no excluye .json ni /sw.js de forma fiable)
   '/manifest.json',
   '/sw.js',

@@ -1803,6 +1803,7 @@
   width: 100%;
   max-width: 640px;
   overflow: visible;
+  background: transparent;
 }
 
 .solveOrbit {
@@ -1814,6 +1815,7 @@
   margin: 0 auto;
   display: none;
   overflow: visible;
+  background: transparent;
 }
 
 .solveConnectors {
@@ -1889,9 +1891,13 @@
 
 .solveOrbitCards {
   position: absolute;
-  inset: 0;
-  z-index: 50;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
   pointer-events: none;
+  z-index: 50;
   overflow: visible;
 }
 
@@ -1978,11 +1984,13 @@
 .solveBulletCard {
   position: absolute;
   box-sizing: border-box;
+  display: none;
   width: 200px;
   max-width: 200px;
   min-width: 200px;
   padding: 16px 20px;
   border-radius: 12px;
+  background-color: rgba(20, 61, 46, 0.98);
   background: rgba(20, 61, 46, 0.98);
   border: 1px solid #7dcea8;
   opacity: 0;
@@ -2011,8 +2019,10 @@
 }
 
 .solveBulletCardVisible {
+  display: block;
   opacity: 1;
   visibility: visible;
+  pointer-events: auto;
 }
 
 .solveBulletCardTitle {

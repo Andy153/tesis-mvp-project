@@ -1,4 +1,6 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+import { NextResponse } from 'next/server';
+import { checkSubscriptionStatus } from '@/lib/subscription';
 
 const isPublicRoute = createRouteMatcher([
   '/',
@@ -11,13 +13,39 @@ const isPublicRoute = createRouteMatcher([
   '/sw.js',
   // Cron endpoints must bypass Clerk auth (they use Authorization: Bearer <CRON_SECRET>)
   '/api/cron(.*)',
-  // Supabase Database Webhook (x-webhook-secret: SUPABASE_WEBHOOK_SECRET)
-  '/api/webhooks/subscription-activated',
+  // Supabase Database Webhooks (x-webhook-secret: SUPABASE_WEBHOOK_SECRET)
+  '/api/webhooks(.*)',
+]);
+
+const skipSubscriptionCheck = createRouteMatcher([
+  '/',
+  '/sign-in(.*)',
+  '/sign-up(.*)',
+  '/activacion-pendiente',
+  '/api/webhooks(.*)',
+  '/api/cron(.*)',
 ]);
 
 export default clerkMiddleware(async (auth, request) => {
   if (!isPublicRoute(request)) {
     await auth.protect();
+  }
+
+  if (!isPublicRoute(request) && !skipSubscriptionCheck(request)) {
+    const { userId } = await auth();
+    if (userId) {
+      try {
+        const { allowed } = await checkSubscriptionStatus(userId);
+        if (!allowed) {
+          return NextResponse.redirect(new URL('/activacion-pendiente', request.url));
+        }
+      } catch (err) {
+        console.warn(
+          '[TRAZA] middleware:subscription_check_failed',
+          err instanceof Error ? err.message : err,
+        );
+      }
+    }
   }
 });
 
@@ -29,4 +57,3 @@ export const config = {
     '/(api|trpc)(.*)',
   ],
 };
-

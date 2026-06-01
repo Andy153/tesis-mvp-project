@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Trazá — paleta verde / blanco · títulos: Dela Gothic One · texto: Unbounded */
+/* Trazá — paleta verde / blanco · texto y títulos de app: Unbounded · landing/marketing: Dela Gothic (--font-title) */
 :root {
   --bg: #F4F8F5;
   --bg-panel: #FFFFFF;
@@ -28,7 +28,7 @@
   --font-sans: var(--font-unbounded), system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-serif: var(--font-unbounded), system-ui, sans-serif;
   --font-mono: var(--font-jetbrains-mono), ui-monospace, Menlo, monospace;
-  /* Solo títulos de pantalla (h1.page-title): Dela Gothic One. El resto: Unbounded. */
+  /* Marketing / landing (h1 hero, etc.): Dela Gothic One. App: Unbounded vía --font-display. */
   --font-title: var(--font-dela-gothic-one), system-ui, sans-serif;
   --font-display: var(--font-unbounded), system-ui, sans-serif;
   --tap-min: 44px;
@@ -540,12 +540,12 @@ html[data-theme='dark'] .brand__wordmark {
   flex-wrap: wrap;
 }
 .page-title {
-  font-family: var(--font-title);
+  font-family: var(--font-display);
   font-size: clamp(1.35rem, 2.4vw, 1.65rem);
-  font-weight: 400;
+  font-weight: 800;
   margin: 0;
   letter-spacing: -0.02em;
-  color: var(--accent-ink);
+  color: var(--text);
   line-height: 1.18;
 }
 .page-subtitle {

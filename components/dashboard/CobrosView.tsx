@@ -758,13 +758,9 @@ export function CobrosView({
       <TooltipProvider>
         <div className="px-6 md:px-10 pt-6 pb-10 max-w-[1600px] mx-auto">
           <div className="page-head mb-10">
-            <div style={{ display: 'grid', gap: 6 }}>
-              <div style={{ fontWeight: 900, fontSize: 26, lineHeight: 1.15, color: 'var(--text)' }}>
-                Centro de cobros
-              </div>
-              <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.45 }}>
-                Detalle de todos los cobros estimados y registrados
-              </div>
+            <div>
+              <h1 className="page-title">Centro de cobros</h1>
+              <p className="page-subtitle">Detalle de todos los cobros estimados y registrados</p>
             </div>
           </div>
           <div className="panel" style={{ padding: 24 }}>
@@ -779,13 +775,9 @@ export function CobrosView({
     <TooltipProvider>
       <div className="px-6 md:px-10 pt-6 pb-10 max-w-[1600px] mx-auto">
         <div className="page-head mb-10">
-          <div style={{ display: 'grid', gap: 6 }}>
-            <div style={{ fontWeight: 900, fontSize: 26, lineHeight: 1.15, color: 'var(--text)' }}>
-              Centro de cobros
-            </div>
-            <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.45 }}>
-              Detalle de todos los cobros estimados y registrados
-            </div>
+          <div>
+            <h1 className="page-title">Centro de cobros</h1>
+            <p className="page-subtitle">Detalle de todos los cobros estimados y registrados</p>
           </div>
         </div>
 

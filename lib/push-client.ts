@@ -52,6 +52,19 @@ export function setPushPromptStatus(status: PushPromptStatus): void {
   }
 }
 
+/** Quita "denied" guardado si el navegador ya no reporta bloqueo (común en iOS/PWA). */
+export function syncPushPromptWithBrowserPermission(): void {
+  if (typeof Notification === 'undefined') return;
+  if (Notification.permission !== 'denied' && getPushPromptStatus() === 'denied') {
+    setPushPromptStatus(null);
+  }
+}
+
+export function getNotificationPermission(): NotificationPermission | 'unavailable' {
+  if (typeof Notification === 'undefined') return 'unavailable';
+  return Notification.permission;
+}
+
 export function isPushApiSupported(): boolean {
   return (
     typeof window !== 'undefined' &&
@@ -203,12 +216,15 @@ export async function subscribeToPushOnServer(): Promise<PushSubscribeResult> {
   }
 
   if (permission !== 'granted') {
-    if (permission === 'denied') setPushPromptStatus('denied');
     return fail(
       'permission',
-      `Permiso de notificaciones: ${permission}. En iPhone: Ajustes → Notificaciones → Trazá.`,
+      permission === 'denied'
+        ? 'Permiso denegado. En iPhone: Ajustes → Notificaciones → Trazá → Permitir, o tocá Activar de nuevo.'
+        : `Permiso de notificaciones: ${permission}. Tocá Activar para solicitarlo.`,
     );
   }
+
+  setPushPromptStatus(null);
 
   let registration: ServiceWorkerRegistration;
   try {

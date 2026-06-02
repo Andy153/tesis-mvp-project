@@ -5,11 +5,13 @@ import { useUser } from '@clerk/nextjs';
 import { isDemoUser } from '@/lib/demo-user';
 import { usePushSubscription } from '@/lib/use-push-subscription';
 import {
+  getNotificationPermission,
   getPushDiagnostics,
   getPushPromptStatus,
   iosNeedsPwaForPush,
   isPushApiSupported,
   setPushPromptStatus,
+  syncPushPromptWithBrowserPermission,
 } from '@/lib/push-client';
 
 type PushOptInBannerProps = {
@@ -29,9 +31,12 @@ export function PushOptInBanner({ onNavigateSettings }: PushOptInBannerProps) {
   const [dismissed, setDismissed] = useState(false);
   const [debugLog, setDebugLog] = useState<string | null>(null);
   const [showDebug, setShowDebug] = useState(false);
+  const [permission, setPermission] = useState(getNotificationPermission());
 
   useEffect(() => {
+    syncPushPromptWithBrowserPermission();
     setDismissed(getPushPromptStatus() === 'dismissed');
+    setPermission(getNotificationPermission());
     setShowDebug(isPushDebugEnabled());
   }, []);
 
@@ -49,6 +54,7 @@ export function PushOptInBanner({ onNavigateSettings }: PushOptInBannerProps) {
 
     try {
       const result = await subscribe();
+      setPermission(getNotificationPermission());
       if (!result.ok) {
         setDebugLog(`Paso: ${result.step}\n\n${result.message}`);
       } else {
@@ -67,11 +73,22 @@ export function PushOptInBanner({ onNavigateSettings }: PushOptInBannerProps) {
     setDebugLog('Desactivando…');
     const result = await unsubscribe();
     await refresh();
+    setPermission(getNotificationPermission());
     if (result.ok) {
       setDebugLog('Notificaciones push desactivadas en este dispositivo.');
     } else {
       setDebugLog(result.message ?? 'No se pudo desactivar. Probá de nuevo.');
     }
+  }, [unsubscribe, refresh]);
+
+  const handleResetPush = useCallback(async () => {
+    setPushPromptStatus(null);
+    setDismissed(false);
+    setDebugLog('Restableciendo…');
+    await unsubscribe();
+    await refresh();
+    setPermission(getNotificationPermission());
+    setDebugLog('Listo. Tocá Activar para volver a registrar este dispositivo.');
   }, [unsubscribe, refresh]);
 
   const debugPanel =
@@ -132,27 +149,17 @@ export function PushOptInBanner({ onNavigateSettings }: PushOptInBannerProps) {
     );
   }
 
-  const permissionDenied =
-    typeof Notification !== 'undefined' && Notification.permission === 'denied';
-
-  if (permissionDenied || getPushPromptStatus() === 'denied') {
-    return (
-      <div className="panel push-opt-in push-opt-in--info">
-        <p className="push-opt-in__text">
-          Bloqueaste las notificaciones. En iPhone: Ajustes → Notificaciones → Trazá → Permitir.
-        </p>
-        {debugPanel}
-      </div>
-    );
-  }
+  const browserSaysDenied = permission === 'denied';
 
   return (
     <div className="panel push-opt-in">
       <p className="push-opt-in__title">Notificaciones push</p>
       <p className="push-opt-in__text">
-        {dismissed
-          ? 'Podés activarlas cuando quieras para recibir avisos fuera de la app.'
-          : 'Activá las notificaciones para recibir avisos aunque no estés en la app.'}
+        {browserSaysDenied
+          ? 'Si en Ajustes ya tenés Trazá en Permitir, tocá Restablecer y después Activar. Si no, activá el permiso en Ajustes → Notificaciones → Trazá.'
+          : dismissed
+            ? 'Podés activarlas cuando quieras para recibir avisos fuera de la app.'
+            : 'Activá las notificaciones para recibir avisos aunque no estés en la app.'}
       </p>
       <div className="push-opt-in__actions">
         <button
@@ -163,7 +170,15 @@ export function PushOptInBanner({ onNavigateSettings }: PushOptInBannerProps) {
         >
           {busy ? 'Activando…' : 'Activar'}
         </button>
-        {!dismissed ? (
+        <button
+          type="button"
+          className="btn"
+          disabled={loading || busy}
+          onClick={() => void handleResetPush()}
+        >
+          Restablecer
+        </button>
+        {!dismissed && !browserSaysDenied ? (
           <button
             type="button"
             className="btn"

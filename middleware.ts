@@ -22,7 +22,6 @@ const isPublicRoute = createRouteMatcher([
 ]);
 
 const skipSubscriptionCheck = createRouteMatcher([
-  '/',
   '/sign-in(.*)',
   '/sign-up(.*)',
   '/activacion-pendiente',

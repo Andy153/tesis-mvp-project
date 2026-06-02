@@ -78,7 +78,10 @@ export async function checkSubscriptionStatus(
   if (!clerkId.trim()) return denied
 
   const profileClerkId = await resolveSubscriptionClerkId(clerkId)
-  if (!profileClerkId) return denied
+  if (profileClerkId) {
+    return checkProfileSubscription(profileClerkId)
+  }
 
-  return checkProfileSubscription(profileClerkId)
+  // Sin rol en Clerk aún (p. ej. AutoAssignRole no corrió): probar fila directa.
+  return checkProfileSubscription(clerkId)
 }

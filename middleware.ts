@@ -37,16 +37,17 @@ export default clerkMiddleware(async (auth, request) => {
   if (!isPublicRoute(request) && !skipSubscriptionCheck(request)) {
     const { userId } = await auth();
     if (userId) {
+      let allowed = true;
       try {
-        const { allowed } = await checkSubscriptionStatus(userId);
-        if (!allowed) {
-          return NextResponse.redirect(new URL('/activacion-pendiente', request.url));
-        }
+        ({ allowed } = await checkSubscriptionStatus(userId));
       } catch (err) {
         console.warn(
           '[TRAZA] middleware:subscription_check_failed',
           err instanceof Error ? err.message : err,
         );
+      }
+      if (!allowed) {
+        return NextResponse.redirect(new URL('/activacion-pendiente', request.url));
       }
     }
   }

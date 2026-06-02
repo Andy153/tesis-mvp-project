@@ -265,28 +265,76 @@ export async function subscribeToPushOnServer(): Promise<PushSubscribeResult> {
   };
 }
 
-export async function unsubscribeFromPushOnServer(): Promise<boolean> {
+/** Suscripción push activa en este navegador/PWA (no en otros dispositivos). */
+export async function hasLocalPushSubscription(): Promise<boolean> {
   if (!isPushApiSupported()) return false;
-
-  const registration = await navigator.serviceWorker.ready;
-  const subscription = await registration.pushManager.getSubscription();
-  if (!subscription) return true;
-
-  const endpoint = subscription.endpoint;
-  await apiFetch('/api/push/unsubscribe', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ endpoint }),
-  });
-
-  await subscription.unsubscribe();
-  return true;
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.getSubscription();
+    return Boolean(subscription);
+  } catch {
+    return false;
+  }
 }
 
+function isRedirectResponse(r: Response): boolean {
+  return (
+    r.type === 'opaqueredirect' ||
+    r.status === 301 ||
+    r.status === 302 ||
+    r.status === 307 ||
+    r.status === 308
+  );
+}
+
+export async function unsubscribeFromPushOnServer(): Promise<{
+  ok: boolean;
+  message?: string;
+}> {
+  if (!isPushApiSupported()) {
+    return { ok: false, message: 'Push no disponible en este navegador.' };
+  }
+
+  let endpoint: string | undefined;
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.getSubscription();
+    if (subscription) {
+      endpoint = subscription.endpoint;
+      await subscription.unsubscribe();
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.warn('[TRAZA push] unsubscribe local:', msg);
+  }
+
+  try {
+    const r = await apiFetch('/api/push/unsubscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(endpoint ? { endpoint } : { all: true }),
+    });
+
+    if (isRedirectResponse(r)) {
+      return { ok: false, message: 'Sesión expirada. Volvé a iniciar sesión.' };
+    }
+    if (!r.ok) {
+      const j = await readJsonResponse<{ error?: string }>(r);
+      return { ok: false, message: j?.error ?? `Error del servidor (${r.status})` };
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, message: msg };
+  }
+
+  return { ok: true };
+}
+
+/** ¿Hay alguna suscripción guardada en servidor? (cualquier dispositivo) */
 export async function fetchPushSubscriptionStatus(): Promise<boolean> {
   try {
     const r = await apiFetch('/api/push/status');
-    if (r.redirected || !r.ok) return false;
+    if (isRedirectResponse(r) || !r.ok) return false;
     const j = await readJsonResponse<{ subscribed?: boolean }>(r);
     return Boolean(j?.subscribed);
   } catch {

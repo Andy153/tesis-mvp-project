@@ -198,6 +198,22 @@ export async function removePushSubscription(
     .eq('endpoint', endpoint);
 }
 
+export async function removeAllPushSubscriptions(clerkUserId: string): Promise<number> {
+  if (!pushEnabledForUser(clerkUserId)) return 0;
+
+  const { data, error } = await supabaseAdmin
+    .from('push_subscriptions')
+    .delete()
+    .eq('clerk_user_id', clerkUserId)
+    .select('id');
+
+  if (error) {
+    console.warn('[TRAZA] push:unsubscribe_all_error', error.message);
+    return 0;
+  }
+  return data?.length ?? 0;
+}
+
 export async function userHasPushSubscription(clerkUserId: string): Promise<boolean> {
   if (!pushEnabledForUser(clerkUserId)) return false;
 

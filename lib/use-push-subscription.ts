@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { isDemoUser } from '@/lib/demo-user';
 import {
-  fetchPushSubscriptionStatus,
+  hasLocalPushSubscription,
   isPushApiSupported,
   subscribeToPushOnServer,
   type PushSubscribeResult,
@@ -25,8 +25,8 @@ export function usePushSubscription() {
       return;
     }
     setLoading(true);
-    const ok = await fetchPushSubscriptionStatus();
-    setSubscribed(ok);
+    const local = await hasLocalPushSubscription();
+    setSubscribed(local);
     setLoading(false);
   }, [demoUser, user?.id]);
 
@@ -41,7 +41,7 @@ export function usePushSubscription() {
     setBusy(true);
     try {
       const result = await subscribeToPushOnServer();
-      if (result.ok) setSubscribed(true);
+      if (result.ok) await refresh();
       return result;
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
@@ -50,19 +50,19 @@ export function usePushSubscription() {
     } finally {
       setBusy(false);
     }
-  }, [demoUser]);
+  }, [demoUser, refresh]);
 
   const unsubscribe = useCallback(async () => {
-    if (demoUser) return false;
+    if (demoUser) return { ok: false as const, message: 'Modo demo.' };
     setBusy(true);
     try {
-      const ok = await unsubscribeFromPushOnServer();
-      if (ok) setSubscribed(false);
-      return ok;
+      const result = await unsubscribeFromPushOnServer();
+      await refresh();
+      return result;
     } finally {
       setBusy(false);
     }
-  }, [demoUser]);
+  }, [demoUser, refresh]);
 
   return {
     supported: !demoUser && isPushApiSupported(),

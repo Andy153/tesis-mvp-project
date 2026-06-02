@@ -20,7 +20,7 @@ type PushOptInBannerProps = {
 export function PushOptInBanner({ onNavigateSettings }: PushOptInBannerProps) {
   const { user } = useUser();
   const demoUser = isDemoUser(user?.id);
-  const { subscribed, loading, busy, subscribe, unsubscribe } = usePushSubscription();
+  const { subscribed, loading, busy, subscribe, unsubscribe, refresh } = usePushSubscription();
   const [dismissed, setDismissed] = useState(false);
   const [debugLog, setDebugLog] = useState<string | null>(null);
   const [diagSummary, setDiagSummary] = useState<string>('');
@@ -61,6 +61,17 @@ export function PushOptInBanner({ onNavigateSettings }: PushOptInBannerProps) {
       setDebugLog(`Excepción inesperada:\n${message}`);
     }
   }, [subscribe]);
+
+  const handleDeactivate = useCallback(async () => {
+    setDebugLog('Desactivando…');
+    const result = await unsubscribe();
+    await refresh();
+    if (result.ok) {
+      setDebugLog('Notificaciones push desactivadas en este dispositivo.');
+    } else {
+      setDebugLog(result.message ?? 'No se pudo desactivar. Probá de nuevo.');
+    }
+  }, [unsubscribe, refresh]);
 
   const debugPanel =
     debugLog || diagSummary ? (
@@ -111,9 +122,9 @@ export function PushOptInBanner({ onNavigateSettings }: PushOptInBannerProps) {
           type="button"
           className="btn push-opt-in__btn"
           disabled={loading || busy}
-          onClick={() => void unsubscribe()}
+          onClick={() => void handleDeactivate()}
         >
-          Desactivar notificaciones
+          {busy ? 'Desactivando…' : 'Desactivar notificaciones'}
         </button>
         {debugPanel}
       </div>

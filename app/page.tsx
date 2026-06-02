@@ -1,6 +1,6 @@
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
-import TrazaApp from '@/components/TrazaApp';
+import { LandingPage } from '@/components/landing/LandingPage';
 
 export const metadata = {
   title: 'Trazá — Del parte al cobro, con trazabilidad',
@@ -11,9 +11,9 @@ export const metadata = {
 export default async function Page() {
   const { userId } = await auth();
 
-  if (!userId) {
-    redirect('/sign-in');
+  if (userId) {
+    redirect('/app');
   }
 
-  return <TrazaApp />;
+  return <LandingPage />;
 }

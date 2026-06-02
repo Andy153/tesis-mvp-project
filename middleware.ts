@@ -15,9 +15,10 @@ const isPublicRoute = createRouteMatcher([
   '/api/cron(.*)',
   // Supabase Database Webhooks (x-webhook-secret: SUPABASE_WEBHOOK_SECRET)
   '/api/webhooks(.*)',
-  // Push API: auth en cada route handler (401 JSON). Sin esto, auth.protect() puede
-  // redirigir POST a sign-in → el cliente sigue con GET → 405 Method Not Allowed.
+  // APIs con auth en el route handler (401 JSON). Evita redirects de auth.protect()
+  // que en fetch terminan como HTML o 405 y rompen la PWA.
   '/api/push(.*)',
+  '/api/notifications(.*)',
 ]);
 
 const skipSubscriptionCheck = createRouteMatcher([

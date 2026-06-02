@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useUser } from '@clerk/nextjs';
+import { useAuth, useUser } from '@clerk/nextjs';
 import { isDemoUser } from '@/lib/demo-user';
 import type { NotificationRow } from '@/lib/notifications';
 import { fetchApiJson } from '@/lib/safe-api-json';
@@ -15,11 +15,12 @@ export function dispatchNotificationsUpdated() {
 
 export function useNotificationsUnreadCount(): number {
   const { user } = useUser();
+  const { isLoaded, isSignedIn } = useAuth();
   const demoUser = isDemoUser(user?.id);
   const [count, setCount] = useState(0);
 
   const load = useCallback(async () => {
-    if (demoUser || !user?.id) {
+    if (!isLoaded || !isSignedIn || demoUser || !user?.id) {
       setCount(0);
       return;
     }
@@ -32,7 +33,7 @@ export function useNotificationsUnreadCount(): number {
     } catch {
       /* ignore */
     }
-  }, [demoUser, user?.id]);
+  }, [isLoaded, isSignedIn, demoUser, user?.id]);
 
   useEffect(() => {
     void load();
@@ -49,6 +50,7 @@ export function useNotificationsUnreadCount(): number {
 
 export function useNotificationsList() {
   const { user } = useUser();
+  const { isLoaded, isSignedIn } = useAuth();
   const demoUser = isDemoUser(user?.id);
   const [notifications, setNotifications] = useState<NotificationRow[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -56,10 +58,13 @@ export function useNotificationsList() {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    if (demoUser || !user?.id) {
+    if (!isLoaded) return;
+
+    if (!isSignedIn || demoUser || !user?.id) {
       setNotifications([]);
       setUnreadCount(0);
       setLoading(false);
+      setError(null);
       return;
     }
     setLoading(true);
@@ -79,7 +84,7 @@ export function useNotificationsList() {
     } finally {
       setLoading(false);
     }
-  }, [demoUser, user?.id]);
+  }, [isLoaded, isSignedIn, demoUser, user?.id]);
 
   useEffect(() => {
     void load();
@@ -88,7 +93,10 @@ export function useNotificationsList() {
   const markRead = useCallback(
     async (id: string) => {
       if (demoUser) return;
-      const r = await fetch(`/api/notifications/${encodeURIComponent(id)}`, { method: 'PATCH' });
+      const r = await fetch(`/api/notifications/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        credentials: 'same-origin',
+      });
       if (!r.ok) return;
       setNotifications((prev) =>
         prev.map((n) => (n.id === id ? { ...n, leida: true, read_at: new Date().toISOString() } : n)),
@@ -101,7 +109,10 @@ export function useNotificationsList() {
 
   const markAllRead = useCallback(async () => {
     if (demoUser) return;
-    const r = await fetch('/api/notifications/mark-all-read', { method: 'PATCH' });
+    const r = await fetch('/api/notifications/mark-all-read', {
+      method: 'PATCH',
+      credentials: 'same-origin',
+    });
     if (!r.ok) return;
     setNotifications((prev) =>
       prev.map((n) => ({ ...n, leida: true, read_at: n.read_at ?? new Date().toISOString() })),

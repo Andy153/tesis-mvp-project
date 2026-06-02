@@ -10,7 +10,22 @@ export async function readJsonResponse<T>(r: Response): Promise<T | null> {
 }
 
 export function apiFetch(input: string, init?: RequestInit): Promise<Response> {
-  return fetch(input, { credentials: 'same-origin', ...init });
+  return fetch(input, {
+    credentials: 'same-origin',
+    redirect: 'manual',
+    ...init,
+  });
+}
+
+function messageForRedirectResponse(r: Response): string {
+  const location = r.headers.get('location') ?? '';
+  if (location.includes('activacion-pendiente')) {
+    return 'Tu cuenta está pendiente de activación.';
+  }
+  if (location.includes('sign-in')) {
+    return 'Iniciá sesión para continuar.';
+  }
+  return 'No se pudo completar la solicitud (redirección inesperada).';
 }
 
 export async function fetchApiJson<T>(
@@ -18,9 +33,11 @@ export async function fetchApiJson<T>(
   init?: RequestInit,
 ): Promise<{ ok: true; data: T } | { ok: false; status: number; message: string }> {
   const r = await apiFetch(input, init);
-  if (r.redirected) {
-    return { ok: false, status: r.status, message: 'Sesión expirada. Volvé a iniciar sesión.' };
+
+  if (r.type === 'opaqueredirect' || r.status === 301 || r.status === 302 || r.status === 307 || r.status === 308) {
+    return { ok: false, status: r.status || 0, message: messageForRedirectResponse(r) };
   }
+
   const data = await readJsonResponse<T>(r);
   if (data === null) {
     return {

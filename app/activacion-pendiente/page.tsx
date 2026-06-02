@@ -1,6 +1,6 @@
-import Link from 'next/link'
 import { Clock } from 'lucide-react'
 import { Logo } from '@/components/Logo'
+import { VolverAlInicioButton } from './VolverAlInicioButton'
 import styles from './activacion-pendiente.module.css'
 
 const CONTACT_EMAIL = 'soporte@traza.app'
@@ -29,9 +29,7 @@ export default function ActivacionPendientePage() {
         </p>
 
         <div className={styles.actions}>
-          <Link href="/" className="btn btn-primary">
-            Volver al inicio
-          </Link>
+          <VolverAlInicioButton />
         </div>
 
         <p className={styles.footer}>

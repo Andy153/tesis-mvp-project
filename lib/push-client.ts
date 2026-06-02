@@ -40,8 +40,12 @@ export function getPushPromptStatus(): PushPromptStatus {
 }
 
 export function setPushPromptStatus(status: PushPromptStatus): void {
-  if (typeof window === 'undefined' || !status) return;
+  if (typeof window === 'undefined') return;
   try {
+    if (!status) {
+      window.localStorage.removeItem(PROMPT_STORAGE_KEY);
+      return;
+    }
     window.localStorage.setItem(PROMPT_STORAGE_KEY, status);
   } catch {
     /* ignore */

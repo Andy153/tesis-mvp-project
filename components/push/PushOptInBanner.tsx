@@ -5,7 +5,6 @@ import { useUser } from '@clerk/nextjs';
 import { isDemoUser } from '@/lib/demo-user';
 import { usePushSubscription } from '@/lib/use-push-subscription';
 import {
-  formatPushDiagnostics,
   getPushDiagnostics,
   getPushPromptStatus,
   iosNeedsPwaForPush,
@@ -17,36 +16,39 @@ type PushOptInBannerProps = {
   onNavigateSettings?: () => void;
 };
 
+function isPushDebugEnabled(): boolean {
+  if (process.env.NODE_ENV === 'development') return true;
+  if (typeof window === 'undefined') return false;
+  return new URLSearchParams(window.location.search).get('push_debug') === '1';
+}
+
 export function PushOptInBanner({ onNavigateSettings }: PushOptInBannerProps) {
   const { user } = useUser();
   const demoUser = isDemoUser(user?.id);
   const { subscribed, loading, busy, subscribe, unsubscribe, refresh } = usePushSubscription();
   const [dismissed, setDismissed] = useState(false);
   const [debugLog, setDebugLog] = useState<string | null>(null);
-  const [diagSummary, setDiagSummary] = useState<string>('');
+  const [showDebug, setShowDebug] = useState(false);
 
   useEffect(() => {
     setDismissed(getPushPromptStatus() === 'dismissed');
+    setShowDebug(isPushDebugEnabled());
   }, []);
 
   useEffect(() => {
-    if (demoUser) return;
-    void (async () => {
-      const d = await getPushDiagnostics();
-      const summary = formatPushDiagnostics(d);
-      setDiagSummary(summary);
-      console.log('[TRAZA push] diagnóstico al cargar:\n' + summary);
-    })();
-  }, [demoUser]);
+    if (demoUser || !showDebug) return;
+    void getPushDiagnostics().then((d) => {
+      console.log('[TRAZA push] diagnóstico al cargar:', d);
+    });
+  }, [demoUser, showDebug]);
 
   const handleActivate = useCallback(async () => {
+    setPushPromptStatus(null);
+    setDismissed(false);
     setDebugLog('Iniciando activación…');
-    console.log('[TRAZA push] botón Activar — tap');
 
     try {
       const result = await subscribe();
-      console.log('[TRAZA push] resultado subscribe:', result);
-
       if (!result.ok) {
         setDebugLog(`Paso: ${result.step}\n\n${result.message}`);
       } else {
@@ -57,7 +59,6 @@ export function PushOptInBanner({ onNavigateSettings }: PushOptInBannerProps) {
       }
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      console.error('[TRAZA push] handleActivate catch:', e);
       setDebugLog(`Excepción inesperada:\n${message}`);
     }
   }, [subscribe]);
@@ -74,9 +75,9 @@ export function PushOptInBanner({ onNavigateSettings }: PushOptInBannerProps) {
   }, [unsubscribe, refresh]);
 
   const debugPanel =
-    debugLog || diagSummary ? (
+    showDebug && debugLog ? (
       <pre className="push-opt-in__debug" aria-live="polite">
-        {debugLog ?? diagSummary}
+        {debugLog}
       </pre>
     ) : null;
 
@@ -131,56 +132,52 @@ export function PushOptInBanner({ onNavigateSettings }: PushOptInBannerProps) {
     );
   }
 
-  if (dismissed || getPushPromptStatus() === 'denied') {
-    if (typeof Notification !== 'undefined' && Notification.permission === 'denied') {
-      return (
-        <div className="panel push-opt-in push-opt-in--info">
-          <p className="push-opt-in__text">
-            Bloqueaste las notificaciones. En iPhone: Ajustes → Notificaciones → Trazá → Permitir.
-          </p>
-          {debugPanel}
-        </div>
-      );
-    }
-    return debugPanel ? (
-      <div className="panel push-opt-in push-opt-in--info">{debugPanel}</div>
-    ) : null;
+  const permissionDenied =
+    typeof Notification !== 'undefined' && Notification.permission === 'denied';
+
+  if (permissionDenied || getPushPromptStatus() === 'denied') {
+    return (
+      <div className="panel push-opt-in push-opt-in--info">
+        <p className="push-opt-in__text">
+          Bloqueaste las notificaciones. En iPhone: Ajustes → Notificaciones → Trazá → Permitir.
+        </p>
+        {debugPanel}
+      </div>
+    );
   }
 
   return (
     <div className="panel push-opt-in">
       <p className="push-opt-in__title">Notificaciones push</p>
       <p className="push-opt-in__text">
-        Activá las notificaciones para recibir avisos aunque no estés en la app.
+        {dismissed
+          ? 'Podés activarlas cuando quieras para recibir avisos fuera de la app.'
+          : 'Activá las notificaciones para recibir avisos aunque no estés en la app.'}
       </p>
-      {diagSummary ? (
-        <pre className="push-opt-in__debug push-opt-in__debug--muted">{diagSummary}</pre>
-      ) : null}
       <div className="push-opt-in__actions">
         <button
           type="button"
           className="btn btn-primary"
           disabled={loading || busy}
-          onClick={() => {
-            console.log('[TRAZA push] click Activar, loading=', loading, 'busy=', busy);
-            void handleActivate();
-          }}
+          onClick={() => void handleActivate()}
         >
           {busy ? 'Activando…' : 'Activar'}
         </button>
-        <button
-          type="button"
-          className="btn"
-          disabled={loading || busy}
-          onClick={() => {
-            setPushPromptStatus('dismissed');
-            setDismissed(true);
-          }}
-        >
-          Ahora no
-        </button>
+        {!dismissed ? (
+          <button
+            type="button"
+            className="btn"
+            disabled={loading || busy}
+            onClick={() => {
+              setPushPromptStatus('dismissed');
+              setDismissed(true);
+            }}
+          >
+            Ahora no
+          </button>
+        ) : null}
       </div>
-      {debugLog ? <pre className="push-opt-in__debug">{debugLog}</pre> : null}
+      {debugPanel}
     </div>
   );
 }

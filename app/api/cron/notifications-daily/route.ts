@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { syncAllNotificationsForAllUsers } from '@/lib/notifications-generate';
-import { syncEngagementTipsForAllUsers } from '@/lib/notifications-engagement';
+import {
+  forceEngagementTipForUser,
+  syncEngagementTipsForAllUsers,
+} from '@/lib/notifications-engagement';
 import { dayOfMonthAR, hourOfDayAR, nowInArgentina } from '@/lib/dates-ar';
 import { isVapidConfigured } from '@/lib/push';
 export const runtime = 'nodejs';
@@ -27,6 +30,34 @@ async function handleCron(req: Request) {
     vapid_configured: vapidOk,
     has_cron_secret: Boolean(secret),
   };
+
+  const url = new URL(req.url);
+  const forceEngagement = url.searchParams.get('force_engagement') === '1';
+  const forceUserId = url.searchParams.get('clerk_user_id')?.trim();
+
+  if (forceEngagement) {
+    if (!forceUserId) {
+      return NextResponse.json(
+        { error: 'Falta query param clerk_user_id (id de Clerk del médico)' },
+        { status: 400 },
+      );
+    }
+
+    console.log('[TRAZA] cron:notifications-daily:force_engagement', {
+      clerk_user_id: forceUserId.slice(0, 12),
+      ...cronMeta,
+    });
+
+    const forced = await forceEngagementTipForUser(forceUserId);
+
+    return NextResponse.json({
+      ok: true,
+      mode: 'force_engagement',
+      clerk_user_id: forceUserId,
+      ...cronMeta,
+      ...forced,
+    });
+  }
 
   console.log('[TRAZA] cron:notifications-daily:start', cronMeta);
 

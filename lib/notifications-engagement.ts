@@ -10,26 +10,31 @@ import {
 } from '@/lib/engagement-tips';
 
 /** Un tip de engagement cada 3 días (solo cron, no sync-on-read). */
-export async function syncEngagementTipForUser(clerkUserId: string): Promise<boolean> {
+export async function syncEngagementTipForUser(
+  clerkUserId: string,
+  opts?: { force?: boolean },
+): Promise<boolean> {
   if (!isNotificationsEnabledForUser(clerkUserId)) return false;
 
-  const { data: last, error: lastErr } = await supabaseAdmin
-    .from('notifications')
-    .select('created_at')
-    .eq('clerk_user_id', clerkUserId)
-    .eq('tipo', 'engagement_tip')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  if (!opts?.force) {
+    const { data: last, error: lastErr } = await supabaseAdmin
+      .from('notifications')
+      .select('created_at')
+      .eq('clerk_user_id', clerkUserId)
+      .eq('tipo', 'engagement_tip')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-  if (lastErr) {
-    console.warn('[TRAZA] notifications:engagement_tip_last_error', lastErr.message);
-    return false;
-  }
+    if (lastErr) {
+      console.warn('[TRAZA] notifications:engagement_tip_last_error', lastErr.message);
+      return false;
+    }
 
-  if (last?.created_at) {
-    const elapsed = Date.now() - new Date(last.created_at).getTime();
-    if (elapsed < ENGAGEMENT_TIP_INTERVAL_MS) return false;
+    if (last?.created_at) {
+      const elapsed = Date.now() - new Date(last.created_at).getTime();
+      if (elapsed < ENGAGEMENT_TIP_INTERVAL_MS) return false;
+    }
   }
 
   const { count, error: countErr } = await supabaseAdmin
@@ -62,6 +67,59 @@ export async function syncEngagementTipForUser(clerkUserId: string): Promise<boo
   });
 
   return inserted;
+}
+
+/** Prueba manual (CRON_SECRET): ignora intervalo de 3 días para un usuario. */
+export async function forceEngagementTipForUser(clerkUserId: string): Promise<{
+  inserted: boolean;
+  skippedReason?: string;
+  tip?: { titulo: string; mensaje: string; dedupeKey: string };
+  push: Awaited<ReturnType<typeof deliverCronPushesForUser>>;
+}> {
+  if (isDemoUser(clerkUserId)) {
+    return {
+      inserted: false,
+      skippedReason: 'demo_user',
+      push: { attempted: 0, sent: 0, failed: 0, noSubscriptions: false },
+    };
+  }
+
+  if (!isNotificationsEnabledForUser(clerkUserId)) {
+    return {
+      inserted: false,
+      skippedReason: 'notifications_disabled',
+      push: { attempted: 0, sent: 0, failed: 0, noSubscriptions: false },
+    };
+  }
+
+  const { count } = await supabaseAdmin
+    .from('notifications')
+    .select('id', { count: 'exact', head: true })
+    .eq('clerk_user_id', clerkUserId)
+    .eq('tipo', 'engagement_tip');
+
+  const total = count ?? 0;
+  const tipIndex = total % ENGAGEMENT_TIP_COUNT;
+  const sequential = total + 1;
+  const tip = ENGAGEMENT_TIPS[tipIndex];
+  const dedupeKey = `engagement_tip:${sequential}`;
+
+  const inserted = await syncEngagementTipForUser(clerkUserId, { force: true });
+  const push = await deliverCronPushesForUser(clerkUserId);
+
+  console.log('[TRAZA] notifications:force_engagement_tip', {
+    clerkUserId: clerkUserId.slice(0, 12),
+    inserted,
+    dedupeKey,
+    push,
+  });
+
+  return {
+    inserted,
+    skippedReason: inserted ? undefined : 'insert_failed_or_dedupe',
+    tip: { titulo: tip.titulo, mensaje: tip.mensaje, dedupeKey },
+    push,
+  };
 }
 
 /** Cron diario: tips de engagement para todos los usuarios con perfil (excluye demo). */

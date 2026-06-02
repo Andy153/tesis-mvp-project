@@ -4033,6 +4033,29 @@ html[data-theme='dark'] .notifications-item--unread {
 html[data-theme='dark'] .push-opt-in__title {
   color: var(--text);
 }
+
+/* Clerk — formularios de auth (legibilidad fija en light) */
+.cl-card {
+  background: #ffffff !important;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.1) !important;
+}
+.cl-headerTitle,
+.cl-headerSubtitle,
+.cl-formFieldLabel,
+.cl-footerActionText {
+  color: #0f1f17 !important;
+}
+.cl-formFieldInput {
+  background: #ffffff !important;
+  color: #0f1f17 !important;
+  border-color: #cdd9d4 !important;
+}
+.cl-socialButtonsBlockButton {
+  background: #ffffff !important;
+  color: #0f1f17 !important;
+  border-color: #cdd9d4 !important;
+}
+
 .cobros-wizard__img--phone {
   display: block;
   max-height: 280px;

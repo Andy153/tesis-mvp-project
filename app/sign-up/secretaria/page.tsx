@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { SignUp, useUser } from '@clerk/nextjs';
 import { validateInvitationToken } from '@/app/actions/invitations';
+import { AUTH_SHELL_STYLE } from '@/components/auth/AuthPageShell';
+import { useAuthLightTheme } from '@/components/auth/useAuthLightTheme';
 
 type ValidateResult = Awaited<ReturnType<typeof validateInvitationToken>>;
 
@@ -16,6 +18,7 @@ function isValidateSuccess(
 }
 
 function SecretariaSignUpInner() {
+  useAuthLightTheme();
   const searchParams = useSearchParams();
   const { user, isLoaded: userLoaded, isSignedIn } = useUser();
   const [phase, setPhase] = useState<'loading' | 'error' | 'form' | 'already_signed_in'>('loading');
@@ -61,14 +64,7 @@ function SecretariaSignUpInner() {
     };
   }, [searchParams, userLoaded, isSignedIn, user]);
 
-  const shellStyle: CSSProperties = {
-    minHeight: '100vh',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'var(--bg)',
-    padding: '24px',
-  };
+  const shellStyle: CSSProperties = AUTH_SHELL_STYLE;
 
   const cardStyle: CSSProperties = {
     width: '100%',
@@ -259,17 +255,9 @@ function SecretariaSignUpInner() {
 }
 
 function SecretariaSignUpFallback() {
+  useAuthLightTheme();
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: 'var(--bg)',
-        padding: '24px',
-      }}
-    >
+    <div style={AUTH_SHELL_STYLE}>
       <div
         style={{
           width: '100%',

@@ -24,7 +24,12 @@ export interface FacturaARCAProps {
     nroComprobante: number | null;
     pdfPath: string | null;
   };
-  onExito: (cae: string, caeFechaVto: string, nroComprobante: number) => void | Promise<void>;
+  onExito: (
+    cae: string,
+    caeFechaVto: string,
+    nroComprobante: number,
+    montoFacturado: number,
+  ) => void | Promise<void>;
   onError: (mensaje: string) => void;
   /** Tras NC durante el wizard de cobros: recargar submission (vuelve al paso 4). */
   onNotaCreditoEmitida?: () => void | Promise<void>;
@@ -116,14 +121,17 @@ export function FacturaARCA({
   const [refreshingPdfUrl, setRefreshingPdfUrl] = useState(false);
   const [mensajeError, setMensajeError] = useState<string | null>(null);
   const [continuando, setContinuando] = useState(false);
-  const [montoManual, setMontoManual] = useState('');
+  const [montoInput, setMontoInput] = useState(() => (monto > 0 ? String(monto) : ''));
   const [ncModalAbierto, setNcModalAbierto] = useState(false);
   const [ncEmitida, setNcEmitida] = useState<{ cae: string; numero: number; pdfUrl?: string } | null>(null);
   const [emisionConfig, setEmisionConfig] = useState<EmisionConfig | null>(null);
   const [configLoading, setConfigLoading] = useState(true);
 
-  const necesitaMontoManual = monto === 0;
-  const montoFacturar = necesitaMontoManual ? Number(montoManual) || 0 : monto;
+  const montoFacturar = Number(montoInput) || 0;
+
+  useEffect(() => {
+    setMontoInput(monto > 0 ? String(monto) : '');
+  }, [monto, submissionId]);
 
   const ambienteEfectivo = ambienteEmitido ?? emisionConfig?.ambiente ?? 'desarrollo';
   const ambienteLabel = ambienteEfectivo === 'produccion' ? 'Producción' : 'Homologación';
@@ -277,7 +285,7 @@ export function FacturaARCA({
     if (!caeEmitido || nroComprobanteEmitido == null || continuando) return;
     setContinuando(true);
     try {
-      await onExito(caeEmitido, caeFechaVtoEmitido ?? '', nroComprobanteEmitido);
+      await onExito(caeEmitido, caeFechaVtoEmitido ?? '', nroComprobanteEmitido, montoFacturar);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Error al guardar';
       setMensajeError(msg);
@@ -455,33 +463,38 @@ export function FacturaARCA({
   }
 
   const disabled =
-    (!demoUser && !canFacturar) ||
-    estado === 'loading' ||
-    (necesitaMontoManual && montoFacturar <= 0);
+    (!demoUser && !canFacturar) || estado === 'loading' || montoFacturar <= 0;
 
   return (
     <div className="factura-arca">
-      {necesitaMontoManual ? (
-        <div className="factura-arca__panel factura-arca__panel--warn">
-          No se pudo leer el monto del comprobante. Completá el monto manualmente.
-          <label className="factura-arca__label-block">
-            Monto a facturar
-            <input
-              type="number"
-              min={0}
-              step={0.01}
-              className="factura-arca__input"
-              value={montoManual}
-              onChange={(e) => setMontoManual(e.target.value)}
-              placeholder="Ej: 435112.91"
-            />
-          </label>
-        </div>
-      ) : (
-        <p className="factura-arca__muted">
-          Monto a facturar: <strong className="factura-arca__accent-strong">{formatPesos(monto)}</strong>
-        </p>
-      )}
+      <div
+        className={
+          monto > 0 ? 'factura-arca__panel' : 'factura-arca__panel factura-arca__panel--warn'
+        }
+      >
+        {monto > 0 ? (
+          <p className="factura-arca__text factura-arca__text--tight">
+            Monto detectado del comprobante: <strong>{formatPesos(monto)}</strong>. Podés corregirlo antes de
+            emitir.
+          </p>
+        ) : (
+          <p className="factura-arca__text factura-arca__text--tight">
+            No se pudo leer el monto del comprobante. Completalo antes de emitir.
+          </p>
+        )}
+        <label className="factura-arca__label-block">
+          Monto a facturar
+          <input
+            type="number"
+            min={0}
+            step={0.01}
+            className="factura-arca__input"
+            value={montoInput}
+            onChange={(e) => setMontoInput(e.target.value)}
+            placeholder="Ej: 435112.91"
+          />
+        </label>
+      </div>
       <p className="factura-arca__muted factura-arca__muted--period">
         Período: <strong>{periodoLabel(periodo)}</strong>
       </p>

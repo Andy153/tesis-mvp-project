@@ -1,3 +1,10 @@
+import {
+  applyComprobanteMontos,
+  applyCobradoMontos,
+  applyFacturadoMontos,
+  clearMontosCobro,
+  montoFiscalPrincipal,
+} from '@/lib/cobros-montos';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { DEMO_CAE, DEMO_MONTO } from '@/lib/demo-swiss-cobros-shared';
 
@@ -28,6 +35,9 @@ export type DemoWizardSubmission = {
   enviado_en: string;
   cantidad_partes: number | null;
   monto_total: number | null;
+  monto_comprobante?: number | null;
+  monto_facturado?: number | null;
+  monto_cobrado?: number | null;
   comprobante_smg_path: string | null;
   factura_path: string | null;
   cae_numero: string | null;
@@ -139,7 +149,8 @@ export async function fetchDemoWizardSubmission(
       `
       id, periodo, obra_social, status,
       wizard_estado, wizard_paso,
-      enviado_en, cantidad_partes, monto_total,
+      enviado_en, cantidad_partes,
+      monto_total, monto_comprobante, monto_facturado, monto_cobrado,
       comprobante_smg_path, factura_path,
       cae_numero, cae_vencimiento, numero_comprobante,
       factura_adjuntada_en, wizard_completado_en,
@@ -169,7 +180,7 @@ export function applyDemoWizardPatch(
       next.wizard_paso = 3;
       next.wizard_estado = 'comprobante_disponible';
       next.comprobante_smg_path = demoComprobantePath(userId, sub.periodo);
-      next.monto_total = DEMO_MONTO_NUM;
+      applyComprobanteMontos(next, DEMO_MONTO_NUM);
     } else {
       next.wizard_estado = 'comprobante_disponible';
       next.wizard_paso = 2;
@@ -177,7 +188,7 @@ export function applyDemoWizardPatch(
   } else if (action === 'subir_comprobante') {
     next.comprobante_smg_path =
       sub.comprobante_smg_path ?? demoComprobantePath(userId, sub.periodo);
-    next.monto_total = sub.monto_total ?? DEMO_MONTO_NUM;
+    applyComprobanteMontos(next, sub.monto_comprobante ?? sub.monto_total ?? DEMO_MONTO_NUM);
     next.wizard_estado = 'comprobante_subido';
     next.wizard_paso = 4;
   } else if (action === 'factura_instrucciones_ok') {
@@ -188,6 +199,16 @@ export function applyDemoWizardPatch(
     next.cae_vencimiento = defaultCaeVencimiento();
     next.numero_comprobante = DEMO_NUMERO_COMPROBANTE;
     next.factura_path = demoFacturaPath(userId, sub.periodo);
+    const montoEmitido =
+      body.monto_facturado != null && body.monto_facturado !== ''
+        ? Number(body.monto_facturado)
+        : null;
+    applyFacturadoMontos(
+      next,
+      montoEmitido != null && !Number.isNaN(montoEmitido) && montoEmitido > 0
+        ? montoEmitido
+        : (montoFiscalPrincipal(sub) ?? DEMO_MONTO_NUM),
+    );
     next.wizard_estado = 'factura_instrucciones';
     next.wizard_paso = 5;
   } else if (action === 'adjuntar_factura') {
@@ -204,6 +225,8 @@ export function applyDemoWizardPatch(
     next.wizard_estado = 'aprobado';
     next.wizard_paso = 6;
     next.wizard_completado_en = new Date().toISOString();
+    const montoCobrado = montoFiscalPrincipal(next);
+    if (montoCobrado != null) applyCobradoMontos(next, montoCobrado);
   } else if (action === 'descartar_seguimiento') {
     next.wizard_estado = 'descartado';
     next.wizard_completado_en = new Date().toISOString();
@@ -216,7 +239,7 @@ export function applyDemoWizardPatch(
     next.cae_numero = null;
     next.cae_vencimiento = null;
     next.factura_adjuntada_en = null;
-    next.monto_total = null;
+    clearMontosCobro(next);
     next.numero_comprobante = null;
   } else if (action === 'go_back') {
     const nuevoPaso = Math.max(1, (sub.wizard_paso ?? 1) - 1);

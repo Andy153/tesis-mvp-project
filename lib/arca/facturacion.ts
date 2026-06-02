@@ -241,6 +241,7 @@ export async function emitirFacturaC(params: EmitirFacturaCParams): Promise<{
   await persistFacturaEmitidaToSubmission({
     submissionId: params.submissionId,
     clerkUserId: params.clerkUserId,
+    montoFacturado: monto,
     facturaPath: pdfPath,
     caeNumero: cae,
     caeVencimiento: caeVencimientoDb,

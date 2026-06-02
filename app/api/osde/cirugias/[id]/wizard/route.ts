@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createClient } from '@supabase/supabase-js';
+import { montoFiscalPrincipal } from '@/lib/cobros-montos';
+import {
+  buildSubmissionMontosFromComprobante,
+  buildSubmissionMontosFromCobrado,
+  buildSubmissionMontosFromFacturado,
+} from '@/lib/osde-cirugias-montos';
 
 const ALLOWED: ReadonlyArray<string> = [
   'wizard_paso',
@@ -9,6 +15,9 @@ const ALLOWED: ReadonlyArray<string> = [
   'numero_registracion_protocolo',
   'resultado_consulta',
   'monto_extranet',
+  'monto_comprobante',
+  'monto_facturado',
+  'monto_cobrado',
   'nro_tramite_osde',
   'fecha_corte_estimada',
   'factura_emitida_en',
@@ -87,6 +96,66 @@ export async function PATCH(
     return NextResponse.json({ error: 'invalid_monto' }, { status: 400 });
   }
 
+  if (patch.monto_facturado !== undefined) {
+    const montoFact = Number(patch.monto_facturado);
+    if (!Number.isFinite(montoFact) || montoFact <= 0) {
+      return NextResponse.json({ error: 'invalid_monto_facturado' }, { status: 400 });
+    }
+    patch.monto_facturado = montoFact;
+
+    const { data: cirFact, error: factReadErr } = await supabase
+      .from('osde_cirugias')
+      .select('monthly_submission_id')
+      .eq('id', params.id)
+      .eq('clerk_user_id', userId)
+      .single();
+
+    if (!factReadErr && cirFact?.monthly_submission_id) {
+      const { error: subFactErr } = await supabase
+        .from('monthly_submissions')
+        .update({
+          ...buildSubmissionMontosFromFacturado(montoFact),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', cirFact.monthly_submission_id)
+        .eq('clerk_user_id', userId);
+      if (subFactErr) {
+        console.error('[OSDE] update_submission_facturado_failed:', subFactErr);
+      }
+    }
+  }
+
+  if (patch.cobrado_en != null && String(patch.cobrado_en).trim() !== '') {
+    const { data: cirCobro, error: cobroReadErr } = await supabase
+      .from('osde_cirugias')
+      .select(
+        'monto_facturado, monto_comprobante, monto_extranet, monto_total, monthly_submission_id',
+      )
+      .eq('id', params.id)
+      .eq('clerk_user_id', userId)
+      .single();
+
+    if (!cobroReadErr && cirCobro) {
+      const montoCobrado = montoFiscalPrincipal(cirCobro);
+      if (montoCobrado != null) {
+        patch.monto_cobrado = montoCobrado;
+        if (cirCobro.monthly_submission_id) {
+          const { error: subCobroErr } = await supabase
+            .from('monthly_submissions')
+            .update({
+              ...buildSubmissionMontosFromCobrado(cirCobro),
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', cirCobro.monthly_submission_id)
+            .eq('clerk_user_id', userId);
+          if (subCobroErr) {
+            console.error('[OSDE] update_submission_cobrado_failed:', subCobroErr);
+          }
+        }
+      }
+    }
+  }
+
   const tocaSubmission = patch.monto_extranet !== undefined || patch.nro_tramite_osde !== undefined;
 
   if (tocaSubmission) {
@@ -106,12 +175,13 @@ export async function PATCH(
 
     if (finalMonto != null && finalTramite != null) {
       const periodo = (existing.fecha_cirugia ?? new Date().toISOString()).slice(0, 7);
+      (patch as Record<string, unknown>).monto_comprobante = finalMonto;
 
       if (existing.monthly_submission_id) {
         const { error: upErr } = await supabase
           .from('monthly_submissions')
           .update({
-            monto_total: finalMonto,
+            ...buildSubmissionMontosFromComprobante(finalMonto),
             nro_tramite_osde: finalTramite,
             updated_at: new Date().toISOString(),
           })
@@ -132,7 +202,7 @@ export async function PATCH(
             tipo_comprobante: 11,
             status: 'enviado',
             cantidad_partes: 1,
-            monto_total: finalMonto,
+            ...buildSubmissionMontosFromComprobante(finalMonto),
             nro_tramite_osde: finalTramite,
             receptor_cuit: '30687313272',
             receptor_razon_social: 'OSDE',

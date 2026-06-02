@@ -205,6 +205,9 @@ export type CobroItem = {
   monto: number | null;
   esEstimado: boolean;
   motivo?: string;
+  /** Tooltip en montos del wizard (comprobante / facturado / cobrado). */
+  montoHint?: string;
+  fuenteDatos?: 'wizard' | 'estimado';
   desglose?: ReturnType<typeof obtenerDesglosePrecio> | null;
   motivoRechazo?: string | null;
   fechaPractica: Date | null;

@@ -13,6 +13,22 @@ export type ActiveSubmission = {
   factura_adjuntada_en: string | null;
 };
 
+/** Un envío activo por período (el más reciente por enviado_en). */
+export function dedupeActiveSubmissionsByPeriodo<T extends Pick<ActiveSubmission, 'periodo' | 'enviado_en'>>(
+  rows: T[],
+): T[] {
+  const byPeriodo = new Map<string, T>();
+  for (const row of rows) {
+    const prev = byPeriodo.get(row.periodo);
+    if (!prev || new Date(row.enviado_en).getTime() > new Date(prev.enviado_en).getTime()) {
+      byPeriodo.set(row.periodo, row);
+    }
+  }
+  return [...byPeriodo.values()].sort(
+    (a, b) => new Date(b.enviado_en).getTime() - new Date(a.enviado_en).getTime(),
+  );
+}
+
 /** Misma selección que GET /api/submissions/active */
 export async function fetchActiveSubmissions(clerkUserId: string): Promise<ActiveSubmission[]> {
   const { data, error } = await supabaseAdmin
@@ -38,5 +54,6 @@ export async function fetchActiveSubmissions(clerkUserId: string): Promise<Activ
     return [];
   }
 
-  return filterSubmissionsWithLiveLiquidaciones(clerkUserId, data ?? []);
+  const filtered = await filterSubmissionsWithLiveLiquidaciones(clerkUserId, data ?? []);
+  return dedupeActiveSubmissionsByPeriodo(filtered);
 }

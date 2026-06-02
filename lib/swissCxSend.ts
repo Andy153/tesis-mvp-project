@@ -220,10 +220,12 @@ export async function sendSwissMonthlyForUser(
   // PASO 1: Reservar slot
   const { data: existing, error: existingErr } = await supabaseAdmin
     .from('monthly_submissions')
-    .select('id, status, resend_message_id, enviado_en, partes_incluidos')
+    .select('id, status, resend_message_id, enviado_en, partes_incluidos, anulada_at')
     .eq('clerk_user_id', userId)
     .eq('periodo', periodo)
     .eq('obra_social', OBRA_SOCIAL)
+    .is('anulada_at', null)
+    .eq('tipo_comprobante', 11)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()

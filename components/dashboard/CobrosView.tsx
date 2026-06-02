@@ -13,10 +13,15 @@ import {
 } from '@/components/ui/tooltip';
 import { fetchLiquidacionesFromAPI, type LiquidacionesAPIResponse } from '@/lib/history';
 import { loadHistoryWithFallback } from '@/lib/history';
+import { cobroCentroDtoToCobroItem, type CobroCentroResponse } from '@/lib/cobros-centro-types';
 import { getCobrosDelMes, PREPAGAS, type CobroItem } from '@/lib/dashboard-data';
 import { formatCurrency } from '@/lib/utils';
-import { Proyeccion } from '@/components/dashboard/Proyeccion';
-import { Calendario } from '@/components/dashboard/Calendario';
+import { CobrosCentroResumen } from '@/components/dashboard/CobrosCentroResumen';
+import {
+  cobrosMesDefaultKey,
+  cobrosMesesOpciones,
+  monthFromCobrosKey,
+} from '@/lib/cobros-mes-opciones';
 import type { FileEntry } from '@/lib/types';
 import { markAsPaid } from '@/lib/tracking';
 import { useMounted } from '@/lib/use-mounted';
@@ -104,6 +109,25 @@ export function CobrosView({
   const { files: fallbackFiles } = loadHistoryWithFallback();
   const [dbLiquidaciones, setDbLiquidaciones] = useState<LiquidacionesAPIResponse[]>([]);
   const [dbLoaded, setDbLoaded] = useState(false);
+  const [centroItems, setCentroItems] = useState<CobroItem[]>([]);
+  const [centroLoaded, setCentroLoaded] = useState(false);
+
+  const loadCentro = React.useCallback(async (key: string) => {
+    setCentroLoaded(false);
+    try {
+      const r = await fetch(`/api/cobros/centro?mes=${encodeURIComponent(key)}`);
+      const j = (await r.json()) as CobroCentroResponse & { error?: string };
+      if (!r.ok) {
+        setCentroItems([]);
+        return;
+      }
+      setCentroItems((j.items ?? []).map(cobroCentroDtoToCobroItem));
+    } catch {
+      setCentroItems([]);
+    } finally {
+      setCentroLoaded(true);
+    }
+  }, []);
 
   useEffect(() => {
     fetchLiquidacionesFromAPI()
@@ -172,8 +196,19 @@ export function CobrosView({
     : null;
   const files = ((filesProp && filesProp.length > 0) ? filesProp : dbFiles ?? fallbackFiles) as any;
 
-  const [mesKey, setMesKey] = React.useState<string>(() => monthKey(new Date()));
-  const mes = React.useMemo(() => monthFromKey(mesKey), [mesKey]);
+  const [mesKey, setMesKey] = React.useState<string>(() => cobrosMesDefaultKey());
+  const mes = React.useMemo(() => monthFromCobrosKey(mesKey), [mesKey]);
+  const mesesOpciones = React.useMemo(() => cobrosMesesOpciones(), []);
+
+  useEffect(() => {
+    void loadCentro(mesKey);
+  }, [mesKey, loadCentro]);
+
+  useEffect(() => {
+    const onReload = () => void loadCentro(mesKey);
+    window.addEventListener('traza:swiss-cobros-reload', onReload);
+    return () => window.removeEventListener('traza:swiss-cobros-reload', onReload);
+  }, [mesKey, loadCentro]);
 
   const [prepagaSel, setPrepagaSel] = React.useState<Set<PrepagaFiltro>>(
     () => new Set<PrepagaFiltro>(['OSDE', 'Swiss Medical', 'Desconocida']),
@@ -197,7 +232,18 @@ export function CobrosView({
     rechazados: false,
   }));
 
-  const all = React.useMemo(() => getCobrosDelMes(files as any, mes), [files, mes]);
+  const estimadosDelMes = React.useMemo(
+    () =>
+      getCobrosDelMes(files as any, mes).filter(
+        (it) => it.prepaga !== 'Swiss Medical' && it.prepaga !== 'OSDE',
+      ),
+    [files, mes],
+  );
+
+  const all = React.useMemo(
+    () => [...centroItems, ...estimadosDelMes],
+    [centroItems, estimadosDelMes],
+  );
 
   const filtered = React.useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -266,20 +312,14 @@ export function CobrosView({
     [cobradosSorted],
   );
 
-  const mesesOpciones = React.useMemo(() => {
-    const base = new Date();
-    base.setDate(1);
-    base.setHours(12, 0, 0, 0);
-    const out: Array<{ key: string; label: string }> = [];
-    for (let delta = -12; delta <= 3; delta++) {
-      const d = new Date(base.getFullYear(), base.getMonth() + delta, 1, 12, 0, 0, 0);
-      out.push({ key: monthKey(d), label: format(d, 'MMMM yyyy', { locale: es }) });
-    }
-    return out;
-  }, []);
+  /** KPIs y resumen del mes (sin filtros de tabla; excluye rechazados). */
+  const itemsParaResumen = React.useMemo(
+    () => all.filter((it) => it.estado !== 'rechazado'),
+    [all],
+  );
 
   React.useEffect(() => {
-    if (autoSelectedCobroMonth.current || all.length > 0 || !files?.length) return;
+    if (autoSelectedCobroMonth.current || all.length > 0 || (!files?.length && centroLoaded)) return;
 
     const current = monthKey(new Date());
     const sortedOptions = [...mesesOpciones].sort((a, b) => {
@@ -287,13 +327,16 @@ export function CobrosView({
       const db = Math.abs(monthFromKey(b.key).getTime() - monthFromKey(current).getTime());
       return da - db;
     });
-    const monthWithCobros = sortedOptions.find((opt) => getCobrosDelMes(files as any, monthFromKey(opt.key)).length > 0);
+    const monthWithCobros = sortedOptions.find((opt) => {
+      const fromFiles = getCobrosDelMes(files as any, monthFromKey(opt.key)).length > 0;
+      return fromFiles;
+    });
 
     if (monthWithCobros && monthWithCobros.key !== mesKey) {
       autoSelectedCobroMonth.current = true;
       setMesKey(monthWithCobros.key);
     }
-  }, [all.length, files, mesKey, mesesOpciones]);
+  }, [all.length, files, mesKey, mesesOpciones, centroLoaded]);
 
   const prepagaBadge = (obra: CobroItem['prepaga']) => {
     const info =
@@ -441,17 +484,75 @@ export function CobrosView({
   const sectionTitleStyle: React.CSSProperties = { fontWeight: 900, fontSize: 13, color: 'var(--text)' };
   const sectionMetaStyle: React.CSSProperties = { fontSize: 12, color: 'var(--text-muted)' };
 
-  const renderTable = (rows: CobroItem[], opts: { mode: 'pendientes' | 'cobrados' | 'rechazados' }) => {
+  const renderCompactList = (rows: CobroItem[], mode: 'cobrados' | 'rechazados') => {
     if (rows.length === 0) {
       return (
-        <div className="empty" style={{ border: 'none', padding: 18 }}>
-          <div className="empty-title">{emptyMessage}</div>
+        <div className="cobros-centro-section__body">
+          <div className="empty" style={{ border: 'none', padding: 18 }}>
+            <div className="empty-title">{emptyMessage}</div>
+          </div>
         </div>
       );
     }
     return (
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 980 }}>
+      <div className="cobros-centro-section__body">
+        <div className="cobros-compact-list">
+          {rows.map((it) => (
+            <div key={it.id} className="cobros-compact-row">
+              <div className="cobros-compact-row__main">
+                <div className="cobros-compact-row__title">{it.paciente}</div>
+                <div className="cobros-compact-row__meta">{it.practica}</div>
+                <div style={{ marginTop: 6 }}>{prepagaBadge(it.prepaga)}</div>
+                {mode === 'rechazados' && it.motivoRechazo ? (
+                  <div className="cobros-compact-row__rechazo">{it.motivoRechazo}</div>
+                ) : null}
+              </div>
+              <div className="cobros-compact-row__side">
+                <div className="cobros-compact-row__monto tabular">
+                  {it.monto == null ? 'A confirmar' : formatCurrency(it.monto)}
+                  {it.fuenteDatos === 'wizard' && it.monto != null ? (
+                    <span className="cobros-resumen-row__real"> real</span>
+                  ) : null}
+                </div>
+                <div className="cobros-compact-row__fecha">
+                  {mode === 'cobrados'
+                    ? it.fechaCobroReal
+                      ? `✓ ${formatDDMMYYYY(it.fechaCobroReal)}`
+                      : formatDDMMYYYY(it.fechaCobroEstimada)
+                    : formatDDMMYYYY(it.fechaCobroEstimada)}
+                </div>
+                <div style={{ marginTop: 8, display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                  {estadoBadge(it)}
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-ghost"
+                    onClick={() => setOpenDetailId(it.id)}
+                  >
+                    Ver detalle
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderPendientesTable = (rows: CobroItem[]) => {
+    if (rows.length === 0) {
+      return (
+        <div className="cobros-centro-section__body">
+          <div className="empty" style={{ border: 'none', padding: 18 }}>
+            <div className="empty-title">{emptyMessage}</div>
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div className="cobros-centro-section__body">
+        <div className="cobros-table-scroll">
+        <table className="cobros-centro-table">
           <thead>
             <tr style={{ background: 'var(--bg-sunken)' }}>
               <th style={{ textAlign: 'left', padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
@@ -470,25 +571,25 @@ export function CobrosView({
                 {sortHeader('Fecha práctica', 'fechaPractica')}
               </th>
               <th style={{ textAlign: 'right', padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
-                {opts.mode === 'cobrados' ? 'Fecha cobro real' : 'Fecha cobro estimada'}
+                Fecha cobro estimada
               </th>
               <th style={{ textAlign: 'left', padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
                 {sortHeader('Estado', 'estado')}
               </th>
-              {opts.mode === 'pendientes' ? (
-                <th style={{ textAlign: 'right', padding: '12px 16px', borderBottom: '1px solid var(--border)' }} />
-              ) : null}
-              {opts.mode === 'rechazados' ? (
-                <th style={{ textAlign: 'left', padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
-                  Motivo
-                </th>
-              ) : null}
+              <th
+                style={{
+                  textAlign: 'right',
+                  padding: '12px 16px',
+                  borderBottom: '1px solid var(--border)',
+                  width: 220,
+                }}
+              />
             </tr>
           </thead>
           <tbody>
             {rows.map((it) => {
               const isConfirmar = it.monto === null;
-              const fechaCobro = opts.mode === 'cobrados' ? it.fechaCobroReal : it.fechaCobroEstimada;
+              const fechaCobro = it.fechaCobroEstimada;
               const canBreakdown = Boolean(it.desglose?.desglose && it.desglose.desglose.total !== null);
               const isExpanded = expanded.has(it.id);
               const breakdown = it.desglose?.desglose ?? null;
@@ -566,11 +667,11 @@ export function CobrosView({
                         color: isConfirmar ? 'var(--text-soft)' : 'var(--accent-ink)',
                         fontWeight: 900,
                         whiteSpace: 'nowrap',
-                        cursor: canBreakdown && opts.mode !== 'rechazados' ? 'pointer' : undefined,
+                        cursor: canBreakdown ? 'pointer' : undefined,
                       }}
                       className="tabular"
                       onClick={() => {
-                        if (!canBreakdown || opts.mode === 'rechazados') return;
+                        if (!canBreakdown) return;
                         setExpanded((s) => {
                           const next = new Set(s);
                           if (next.has(it.id)) next.delete(it.id);
@@ -578,9 +679,31 @@ export function CobrosView({
                           return next;
                         });
                       }}
-                      title={canBreakdown ? (isExpanded ? 'Ocultar desglose' : 'Ver desglose') : undefined}
+                      title={
+                        it.montoHint ??
+                        (canBreakdown ? (isExpanded ? 'Ocultar desglose' : 'Ver desglose') : undefined)
+                      }
                     >
-                      {it.monto === null ? 'A confirmar' : formatCurrency(it.monto)}
+                      {it.monto === null ? (
+                        'A confirmar'
+                      ) : (
+                        <>
+                          {formatCurrency(it.monto)}
+                          {it.fuenteDatos === 'wizard' ? (
+                            <span
+                              style={{
+                                marginLeft: 6,
+                                fontSize: 10,
+                                fontWeight: 700,
+                                color: 'var(--accent-ink)',
+                                verticalAlign: 'middle',
+                              }}
+                            >
+                              real
+                            </span>
+                          ) : null}
+                        </>
+                      )}
                     </td>
                     <td
                       style={{
@@ -602,28 +725,20 @@ export function CobrosView({
                         whiteSpace: 'nowrap',
                       }}
                     >
-                      {opts.mode === 'cobrados' && it.fechaCobroReal ? (
-                        <span title="Cobro real">✓ {formatDDMMYYYY(fechaCobro)}</span>
-                      ) : (
-                        formatDDMMYYYY(fechaCobro)
-                      )}
+                      {formatDDMMYYYY(fechaCobro)}
                     </td>
                     <td style={{ padding: '12px 16px', borderBottom: '1px solid rgba(148,163,184,0.25)' }}>
                       {estadoBadge(it)}
                     </td>
-                    {opts.mode === 'pendientes' ? (
-                      <td
-                        style={{
-                          padding: '12px 16px',
-                          borderBottom: '1px solid rgba(148,163,184,0.25)',
-                          textAlign: 'right',
-                          whiteSpace: 'nowrap',
-                          display: 'flex',
-                          justifyContent: 'flex-end',
-                          gap: 8,
-                          alignItems: 'center',
-                        }}
-                      >
+                    <td
+                      style={{
+                        padding: '12px 16px',
+                        borderBottom: '1px solid rgba(148,163,184,0.25)',
+                        textAlign: 'right',
+                        verticalAlign: 'middle',
+                      }}
+                    >
+                      <div className="cobros-table-actions">
                         <button
                           type="button"
                           className="btn btn-sm btn-ghost"
@@ -649,43 +764,13 @@ export function CobrosView({
                         >
                           Marcar cobrado
                         </button>
-                      </td>
-                    ) : null}
-                    {opts.mode === 'cobrados' ? (
-                      <td
-                        style={{
-                          padding: '12px 16px',
-                          borderBottom: '1px solid rgba(148,163,184,0.25)',
-                          textAlign: 'right',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        <button type="button" className="btn btn-sm btn-ghost" onClick={() => setOpenDetailId(it.id)}>
-                          Ver detalle
-                        </button>
-                      </td>
-                    ) : null}
-                    {opts.mode === 'rechazados' ? (
-                      <td
-                        style={{
-                          padding: '12px 16px',
-                          borderBottom: '1px solid rgba(148,163,184,0.25)',
-                          color: 'var(--error)',
-                          fontWeight: 700,
-                        }}
-                      >
-                        {it.motivoRechazo ? (
-                          it.motivoRechazo
-                        ) : (
-                          <span style={{ color: 'var(--text-soft)', fontWeight: 600 }}>—</span>
-                        )}
-                      </td>
-                    ) : null}
+                      </div>
+                    </td>
                   </tr>
 
-                  {canBreakdown && isExpanded && opts.mode !== 'rechazados' ? (
+                  {canBreakdown && isExpanded ? (
                     <tr>
-                      <td colSpan={opts.mode === 'pendientes' ? 8 : 8} style={{ padding: 0, borderBottom: '1px solid rgba(148,163,184,0.25)' }}>
+                      <td colSpan={8} style={{ padding: 0, borderBottom: '1px solid rgba(148,163,184,0.25)' }}>
                         <div
                           style={{
                             padding: '10px 16px 14px',
@@ -749,6 +834,7 @@ export function CobrosView({
             })}
           </tbody>
         </table>
+        </div>
       </div>
     );
   };
@@ -760,11 +846,15 @@ export function CobrosView({
           <div className="page-head mb-10">
             <div>
               <h1 className="page-title">Centro de cobros</h1>
-              <p className="page-subtitle">Detalle de todos los cobros estimados y registrados</p>
+              <p className="page-subtitle">
+              Swiss y OSDE con montos del wizard; otras prepagas con estimación del nomenclador.
+            </p>
             </div>
           </div>
           <div className="panel" style={{ padding: 24 }}>
-            <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.45 }}>Cargando información…</div>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.45 }}>
+              Cargando información…
+            </div>
           </div>
         </div>
       </TooltipProvider>
@@ -777,15 +867,14 @@ export function CobrosView({
         <div className="page-head mb-10">
           <div>
             <h1 className="page-title">Centro de cobros</h1>
-            <p className="page-subtitle">Detalle de todos los cobros estimados y registrados</p>
+            <p className="page-subtitle">
+              Swiss y OSDE con montos del wizard; otras prepagas con estimación del nomenclador.
+            </p>
           </div>
         </div>
 
-        <div style={{ display: 'grid', gap: 18 }}>
-          <div style={{ display: 'grid', gap: 18 }}>
-            <Proyeccion showMoreLink={false} files={files as any} mes={mes} />
-            <Calendario files={files as any} mes={mes} />
-          </div>
+        <div style={{ display: 'grid', gap: 18, minWidth: 0, maxWidth: '100%' }}>
+          <CobrosCentroResumen items={itemsParaResumen} mes={mes} highlightMes={mesKey} />
 
           {/* Controles */}
           <section className="panel" style={{ padding: 18, background: 'var(--bg-panel)' }}>
@@ -878,7 +967,7 @@ export function CobrosView({
           </div>
 
           {/* Secciones */}
-          <section className="panel" style={{ padding: 0, overflow: 'hidden' }}>
+          <section className="panel cobros-centro-section">
             <div style={{ ...sectionHeaderStyle, cursor: 'default' }}>
               <div>
                 <div style={sectionTitleStyle}>
@@ -887,13 +976,20 @@ export function CobrosView({
                 <div style={sectionMetaStyle}>Presentados y listos para presentar</div>
               </div>
             </div>
-            {renderTable(pendientesSorted, { mode: 'pendientes' })}
+            {renderPendientesTable(pendientesSorted)}
           </section>
 
-          <section className="panel" style={{ padding: 0, overflow: 'hidden', opacity: openSection.cobrados ? 1 : 0.92 }}>
+          <section
+            className="panel cobros-centro-section"
+            style={{ opacity: openSection.cobrados ? 1 : 0.92 }}
+          >
             <div
               style={sectionHeaderStyle}
-              onClick={() => setOpenSection((s) => ({ ...s, cobrados: !s.cobrados }))}
+              onClick={() =>
+                React.startTransition(() =>
+                  setOpenSection((s) => ({ ...s, cobrados: !s.cobrados })),
+                )
+              }
               role="button"
               tabIndex={0}
               onKeyDown={(e) => {
@@ -910,13 +1006,20 @@ export function CobrosView({
                 {openSection.cobrados ? 'Ocultar' : 'Ver'}
               </div>
             </div>
-            {openSection.cobrados ? renderTable(cobradosSorted, { mode: 'cobrados' }) : null}
+            {openSection.cobrados ? renderCompactList(cobradosSorted, 'cobrados') : null}
           </section>
 
-          <section className="panel" style={{ padding: 0, overflow: 'hidden', opacity: openSection.rechazados ? 1 : 0.92 }}>
+          <section
+            className="panel cobros-centro-section"
+            style={{ opacity: openSection.rechazados ? 1 : 0.92 }}
+          >
             <div
               style={sectionHeaderStyle}
-              onClick={() => setOpenSection((s) => ({ ...s, rechazados: !s.rechazados }))}
+              onClick={() =>
+                React.startTransition(() =>
+                  setOpenSection((s) => ({ ...s, rechazados: !s.rechazados })),
+                )
+              }
               role="button"
               tabIndex={0}
               onKeyDown={(e) => {
@@ -931,7 +1034,7 @@ export function CobrosView({
                 {openSection.rechazados ? 'Ocultar' : 'Ver'}
               </div>
             </div>
-            {openSection.rechazados ? renderTable(rechazadosSorted, { mode: 'rechazados' }) : null}
+            {openSection.rechazados ? renderCompactList(rechazadosSorted, 'rechazados') : null}
           </section>
         </div>
 

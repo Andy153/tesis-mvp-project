@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { FacturaARCA } from '@/components/arca/FacturaARCA';
+import { montoFiscalPrincipal, montoParaFacturar } from '@/lib/cobros-montos';
 import { isDemoUser } from '@/lib/demo-user';
 
 type Submission = {
@@ -15,6 +16,9 @@ type Submission = {
   enviado_en: string;
   cantidad_partes: number | null;
   monto_total: number | null;
+  monto_comprobante?: number | null;
+  monto_facturado?: number | null;
+  monto_cobrado?: number | null;
   comprobante_smg_path: string | null;
   factura_path: string | null;
   cae_numero: string | null;
@@ -189,6 +193,9 @@ export function CobrosWizard({
                 // Persistencia efímera demo (sin DB): reenviar estado relevante
                 comprobante_smg_path: sub.comprobante_smg_path,
                 monto_total: sub.monto_total,
+                monto_comprobante: sub.monto_comprobante,
+                monto_facturado: sub.monto_facturado,
+                monto_cobrado: sub.monto_cobrado,
                 factura_path: sub.factura_path,
                 cae_numero: sub.cae_numero,
                 cae_vencimiento: sub.cae_vencimiento,
@@ -492,8 +499,8 @@ export function CobrosWizard({
           <div className="cobros-wizard__panel cobros-wizard__panel--ok">
             <p className="cobros-wizard__text cobros-wizard__text--tight" style={{ marginBottom: 10 }}>
               ✓ Comprobante SMG disponible {demoUser ? '— DEMO' : ''}
-              {sub.monto_total != null && sub.monto_total > 0
-                ? ` · monto $${sub.monto_total.toLocaleString('es-AR', { minimumFractionDigits: 2 })}`
+              {montoFiscalPrincipal(sub) != null && montoFiscalPrincipal(sub)! > 0
+                ? ` · monto $${montoFiscalPrincipal(sub)!.toLocaleString('es-AR', { minimumFractionDigits: 2 })}`
                 : ''}
             </p>
             <div className="cobros-wizard__step-actions">
@@ -551,7 +558,7 @@ export function CobrosWizard({
       <Step numero={4} titulo="Emitir factura en ARCA" activo={paso === 4} completado={paso > 4}>
         <FacturaARCA
           submissionId={sub.id}
-          monto={sub.monto_total ?? 0}
+          monto={montoParaFacturar(sub)}
           periodo={sub.periodo}
           facturaYaEmitida={
             sub.cae_numero
@@ -563,8 +570,8 @@ export function CobrosWizard({
                 }
               : undefined
           }
-          onExito={async () => {
-            await patch('factura_emitida', {});
+          onExito={async (_cae, _vto, _nro, montoFacturado) => {
+            await patch('factura_emitida', { monto_facturado: montoFacturado });
           }}
           onNotaCreditoEmitida={async () => {
             await load();

@@ -489,7 +489,7 @@ export function DocumentsView({
         </div>
       )}
 
-      {(validCobroDocuments.length > 0 || (demoUser && demoSwissSent)) && <CobrosBanner key={refreshKey} />}
+      {(validCobroDocuments.length > 0 || (demoUser && demoSwissSent)) && <CobrosBanner />}
       <CobrosOsdeBanner />
       <div style={{ marginBottom: 16 }}>
         <SwissMedicalCloseButton

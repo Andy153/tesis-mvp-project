@@ -7,6 +7,7 @@
 
 import type { ReactNode } from 'react'
 import { FacturaARCA } from '@/components/arca/FacturaARCA'
+import { montoParaFacturar } from '@/lib/cobros-montos'
 import { useEffect, useState } from 'react'
 
 type OsdeCirugia = {
@@ -20,6 +21,9 @@ type OsdeCirugia = {
   numero_registracion_protocolo: string | null
   resultado_consulta: 'aprobado' | 'rechazado' | null
   monto_extranet: number | null
+  monto_comprobante?: number | null
+  monto_facturado?: number | null
+  monto_cobrado?: number | null
   nro_tramite_osde: string | null
   fecha_corte_estimada: string | null
   factura_emitida_en: string | null
@@ -39,6 +43,7 @@ type OsdeCirugiaPatch = Partial<{
   nro_tramite_osde: string
   fecha_corte_estimada: string | null
   factura_emitida_en: string | null
+  monto_facturado: number
   comprobante_cargado_en: string | null
   cobrado_en: string | null
   tiene_debito: boolean
@@ -430,11 +435,15 @@ export function CobrosWizardOsde({ cirugiaId, onUpdate, onCollapse }: Props) {
           <FacturaARCA
             receptorOverride={{ cuit: '30687313272', razonSocial: 'OSDE' }}
             submissionId={cir.monthly_submission_id ?? ''}
-            monto={cir.monto_extranet ?? 0}
+            monto={montoParaFacturar(cir)}
             periodo={cir.fecha_cirugia ? cir.fecha_cirugia.slice(0, 7) : new Date().toISOString().slice(0, 7)}
             facturaYaEmitida={undefined}
-            onExito={async () => {
-              await save({ wizard_paso: 6, factura_emitida_en: new Date().toISOString() })
+            onExito={async (_cae, _vto, _nro, montoFacturado) => {
+              await save({
+                wizard_paso: 6,
+                factura_emitida_en: new Date().toISOString(),
+                monto_facturado: montoFacturado,
+              })
             }}
             onError={(mensaje) => {
               console.error('Error emitiendo factura OSDE:', mensaje)

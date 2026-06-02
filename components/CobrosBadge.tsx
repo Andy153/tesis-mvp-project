@@ -103,6 +103,12 @@ export function useCobrosPendientes() {
     load();
   }, [demoUser]);
 
+  useEffect(() => {
+    const onReload = () => void load();
+    window.addEventListener('traza:swiss-cobros-reload', onReload);
+    return () => window.removeEventListener('traza:swiss-cobros-reload', onReload);
+  }, [demoUser]);
+
   return { submissions, loading, reload: load };
 }
 
@@ -129,62 +135,120 @@ export function CobrosSidebarBadge({ count }: { count: number }) {
   );
 }
 
+function CobrosBannerCard({
+  sub,
+  expanded,
+  onToggle,
+  onReload,
+}: {
+  sub: ActiveSubmission;
+  expanded: boolean;
+  onToggle: () => void;
+  onReload: () => void;
+}) {
+  return (
+    <div className="cobros-banner">
+      <div
+        className="cobros-banner__head"
+        onClick={onToggle}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onToggle();
+          }
+        }}
+        role="button"
+        tabIndex={0}
+      >
+        <div className="cobros-banner__head-inner">
+          <img src="/swiss-medical-logo.png" alt="Swiss Medical" className="cobros-banner__logo" />
+          <div>
+            <div className="cobros-banner__title">Cobro Swiss Medical — {periodoLabel(sub.periodo)}</div>
+            <div className="cobros-banner__meta">
+              Paso {sub.wizard_paso ?? 1}/6 · {pasoLabel(sub.wizard_estado)}
+              {' · '}
+              Enviado el {new Date(sub.enviado_en).toLocaleDateString('es-AR')}
+            </div>
+          </div>
+        </div>
+        <div className="cobros-banner__actions">
+          <span className="cobros-banner__badge">Acción requerida</span>
+          <span className="cobros-banner__chevron" aria-hidden>
+            {expanded ? '▲' : '▼'}
+          </span>
+        </div>
+      </div>
+
+      {expanded ? (
+        <div className="cobros-banner__body">
+          <CobrosWizard
+            submissionId={sub.id}
+            onUpdate={onReload}
+            onCollapse={onToggle}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function CobrosBanner() {
   const { submissions, reload } = useCobrosPendientes();
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const onFocus = (e: Event) => {
+      const submissionId = (e as CustomEvent<{ submissionId?: string }>).detail?.submissionId;
+      if (submissionId) setExpandedId(submissionId);
+    };
+    window.addEventListener('traza:swiss-cobro-focus', onFocus);
+    return () => window.removeEventListener('traza:swiss-cobro-focus', onFocus);
+  }, []);
+
+  useEffect(() => {
+    if (submissions.length === 0) {
+      setExpandedId(null);
+      return;
+    }
+    setExpandedId((prev) => {
+      if (prev && submissions.some((s) => s.id === prev)) return prev;
+      return submissions[0].id;
+    });
+  }, [submissions]);
+
+  const toggleExpanded = (id: string) => {
+    setExpandedId((current) => (current === id ? null : id));
+  };
 
   if (submissions.length === 0) return null;
 
+  const [primary, ...older] = submissions;
+
   return (
     <div style={{ marginBottom: 16 }}>
-      {submissions.map((sub) => (
-        <div key={sub.id} className="cobros-banner">
-          <div
-            className="cobros-banner__head"
-            onClick={() => setExpanded(expanded === sub.id ? null : sub.id)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                setExpanded(expanded === sub.id ? null : sub.id);
-              }
-            }}
-            role="button"
-            tabIndex={0}
-          >
-            <div className="cobros-banner__head-inner">
-              <img
-                src="/swiss-medical-logo.png"
-                alt="Swiss Medical"
-                className="cobros-banner__logo"
-              />
-              <div>
-                <div className="cobros-banner__title">
-                  Cobro Swiss Medical — {periodoLabel(sub.periodo)}
-                </div>
-                <div className="cobros-banner__meta">
-                  Paso {sub.wizard_paso ?? 1}/6 · {pasoLabel(sub.wizard_estado)}
-                </div>
-              </div>
-            </div>
-            <div className="cobros-banner__actions">
-              <span className="cobros-banner__badge">Acción requerida</span>
-              <span className="cobros-banner__chevron" aria-hidden>
-                {expanded === sub.id ? '▲' : '▼'}
-              </span>
-            </div>
-          </div>
+      <CobrosBannerCard
+        sub={primary}
+        expanded={expandedId === primary.id}
+        onToggle={() => toggleExpanded(primary.id)}
+        onReload={reload}
+      />
 
-          {expanded === sub.id ? (
-            <div className="cobros-banner__body">
-              <CobrosWizard
-                submissionId={sub.id}
-                onUpdate={reload}
-                onCollapse={() => setExpanded(null)}
-              />
-            </div>
-          ) : null}
+      {older.length > 0 ? (
+        <div className="cobros-banner cobros-banner--secondary" style={{ marginTop: 12 }}>
+          <p className="cobros-banner__meta" style={{ margin: '0 0 8px', padding: '0 4px' }}>
+            También tenés cobros pendientes de otros períodos. Abrí solo el que estés gestionando ahora.
+          </p>
+          {older.map((sub) => (
+            <CobrosBannerCard
+              key={sub.id}
+              sub={sub}
+              expanded={expandedId === sub.id}
+              onToggle={() => toggleExpanded(sub.id)}
+              onReload={reload}
+            />
+          ))}
         </div>
-      ))}
+      ) : null}
     </div>
   );
 }

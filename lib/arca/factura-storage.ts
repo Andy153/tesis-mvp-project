@@ -1,3 +1,5 @@
+import { applyFacturadoMontos } from '@/lib/cobros-montos'
+import { syncOsdeCirugiaMontosFromSubmission } from '@/lib/osde-cirugias-montos'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 
 export const BUCKET_SUBMISSIONS = 'submissions'
@@ -67,6 +69,7 @@ export interface ReceptorPersistible {
 export async function persistFacturaEmitidaToSubmission(params: {
   submissionId: string
   clerkUserId: string
+  montoFacturado: number
   facturaPath: string
   caeNumero: string
   caeVencimiento: string
@@ -106,26 +109,33 @@ export async function persistFacturaEmitidaToSubmission(params: {
     )
   }
 
+  const montosUpdate: Record<string, unknown> = {
+    factura_path: params.facturaPath,
+    cae_numero: params.caeNumero,
+    cae_vencimiento: params.caeVencimiento,
+    numero_comprobante: params.numeroComprobante,
+    receptor_cuit: params.receptor.cuit,
+    receptor_razon_social: params.receptor.razonSocial,
+    receptor_condicion_iva_id: params.receptor.condicionIVAId,
+    wizard_estado: 'factura_instrucciones',
+    wizard_paso: 5,
+    updated_at: new Date().toISOString(),
+  }
+  applyFacturadoMontos(montosUpdate, params.montoFacturado)
+
   const { error } = await supabaseAdmin
     .from('monthly_submissions')
-    .update({
-      factura_path: params.facturaPath,
-      cae_numero: params.caeNumero,
-      cae_vencimiento: params.caeVencimiento,
-      numero_comprobante: params.numeroComprobante,
-      receptor_cuit: params.receptor.cuit,
-      receptor_razon_social: params.receptor.razonSocial,
-      receptor_condicion_iva_id: params.receptor.condicionIVAId,
-      wizard_estado: 'factura_instrucciones',
-      wizard_paso: 5,
-      updated_at: new Date().toISOString(),
-    })
+    .update(montosUpdate)
     .eq('id', params.submissionId)
     .eq('clerk_user_id', params.clerkUserId)
 
   if (error) {
     throw new Error(`No se pudo actualizar la liquidación: ${error.message}`)
   }
+
+  await syncOsdeCirugiaMontosFromSubmission(params.submissionId, params.clerkUserId, {
+    monto_facturado: params.montoFacturado,
+  })
 }
 
 /**

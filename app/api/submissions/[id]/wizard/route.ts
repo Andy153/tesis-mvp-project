@@ -16,6 +16,13 @@ import {
   applyDemoWizardPatch,
   fetchDemoWizardSubmission,
 } from '@/lib/demo-swiss-cobros';
+import {
+  applyComprobanteMontos,
+  applyCobradoMontos,
+  applyFacturadoMontos,
+  clearMontosCobro,
+  montoFiscalPrincipal,
+} from '@/lib/cobros-montos';
 import { syncAccionCobros } from '@/lib/notifications-generate';
 
 export const runtime = 'nodejs';
@@ -48,7 +55,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       `
       id, periodo, obra_social, status,
       wizard_estado, wizard_paso,
-      enviado_en, cantidad_partes, monto_total,
+      enviado_en, cantidad_partes,
+      monto_total, monto_comprobante, monto_facturado, monto_cobrado,
       comprobante_smg_path, factura_path,
       cae_numero, cae_vencimiento, numero_comprobante,
       factura_adjuntada_en, wizard_completado_en,
@@ -107,7 +115,9 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   // Verificar que el submission pertenece al usuario
   const { data: sub, error: subErr } = await supabaseAdmin
     .from('monthly_submissions')
-    .select('id, wizard_estado, periodo, wizard_paso, comprobante_smg_path, monto_total')
+    .select(
+      'id, wizard_estado, periodo, wizard_paso, comprobante_smg_path, monto_total, monto_comprobante, monto_facturado, monto_cobrado',
+    )
     .eq('id', params.id)
     .eq('clerk_user_id', userId)
     .maybeSingle();
@@ -218,12 +228,14 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
       const montoExtraido = await extractMontoFromComprobante(buffer);
       if (montoExtraido !== null) {
-        update.monto_total = montoExtraido;
+        applyComprobanteMontos(update, montoExtraido);
       }
     } else if (sub.comprobante_smg_path) {
       // Ya había comprobante (p. ej. subido en una visita anterior): avanzar sin re-subir.
-      if (sub.monto_total != null) {
-        update.monto_total = sub.monto_total;
+      const prev =
+        sub.monto_comprobante ?? sub.monto_total;
+      if (prev != null) {
+        applyComprobanteMontos(update, Number(prev));
       }
     } else {
       return NextResponse.json({ error: 'Falta el archivo del comprobante' }, { status: 400 });
@@ -235,9 +247,16 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     update.wizard_estado = 'factura_instrucciones';
     update.wizard_paso = 5;
   } else if (action === 'factura_emitida') {
-    // CAE, PDF y factura_path ya se persisten al emitir (POST /api/arca/factura).
+    // CAE, PDF y montos ya se persisten al emitir (POST /api/arca/factura). Demo puede enviar monto_facturado.
     update.wizard_estado = 'factura_instrucciones';
     update.wizard_paso = 5;
+    const montoEmitido =
+      body.monto_facturado != null && body.monto_facturado !== ''
+        ? Number(body.monto_facturado)
+        : null;
+    if (montoEmitido != null && !Number.isNaN(montoEmitido) && montoEmitido > 0) {
+      applyFacturadoMontos(update, montoEmitido);
+    }
   } else if (action === 'adjuntar_factura') {
     const caeNumero = body.cae_numero as string | null;
     const caeVencimiento = body.cae_vencimiento as string | null;
@@ -258,6 +277,10 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     update.wizard_estado = 'aprobado';
     update.wizard_paso = 6;
     update.wizard_completado_en = new Date().toISOString();
+    const montoCobrado = montoFiscalPrincipal(sub);
+    if (montoCobrado != null) {
+      applyCobradoMontos(update, montoCobrado);
+    }
   } else if (action === 'descartar_seguimiento') {
     update.wizard_estado = 'descartado';
     update.wizard_completado_en = new Date().toISOString();
@@ -271,7 +294,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     update.cae_numero = null;
     update.cae_vencimiento = null;
     update.factura_adjuntada_en = null;
-    update.monto_total = null;
+    clearMontosCobro(update);
     update.numero_comprobante = null;
   } else if (action === 'go_back') {
     const nuevoPaso = Math.max(1, (sub.wizard_paso ?? 1) - 1);

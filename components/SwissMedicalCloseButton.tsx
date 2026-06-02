@@ -113,6 +113,14 @@ export function SwissMedicalCloseButton({ onSent, disabled }: { onSent?: () => v
           }
         }
         await loadPeriods()
+        window.dispatchEvent(new CustomEvent('traza:swiss-cobros-reload'))
+        if (j.submission_id) {
+          window.dispatchEvent(
+            new CustomEvent('traza:swiss-cobro-focus', {
+              detail: { submissionId: String(j.submission_id) },
+            }),
+          )
+        }
         onSent?.()
       } else if (r.status === 409) {
         setFeedback({

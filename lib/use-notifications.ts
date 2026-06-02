@@ -27,7 +27,7 @@ export function useNotificationsUnreadCount(): number {
       const res = await fetchApiJson<{ unread_count?: number }>(
         '/api/notifications?leidas=false',
       );
-      if (!res.ok) return;
+      if (res.ok === false) return;
       setCount(typeof res.data.unread_count === 'number' ? res.data.unread_count : 0);
     } catch {
       /* ignore */
@@ -69,7 +69,7 @@ export function useNotificationsList() {
         notifications?: NotificationRow[];
         unread_count?: number;
       }>('/api/notifications');
-      if (!res.ok) throw new Error(res.message);
+      if (res.ok === false) throw new Error(res.message);
       setNotifications(res.data.notifications ?? []);
       setUnreadCount(
         typeof res.data.unread_count === 'number' ? res.data.unread_count : 0,

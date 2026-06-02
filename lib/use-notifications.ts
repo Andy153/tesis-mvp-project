@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useAuth, useUser } from '@clerk/nextjs';
 import { isDemoUser } from '@/lib/demo-user';
 import type { NotificationRow } from '@/lib/notifications';
-import { fetchApiJson } from '@/lib/safe-api-json';
+import { apiFetch, fetchApiJson } from '@/lib/safe-api-json';
 
 export const NOTIFICATIONS_UPDATED_EVENT = 'traza:notifications-updated';
 
@@ -26,7 +26,7 @@ export function useNotificationsUnreadCount(): number {
     }
     try {
       const res = await fetchApiJson<{ unread_count?: number }>(
-        '/api/notifications?leidas=false',
+        '/api/notifications/unread-count',
       );
       if (res.ok === false) return;
       setCount(typeof res.data.unread_count === 'number' ? res.data.unread_count : 0);
@@ -48,6 +48,15 @@ export function useNotificationsUnreadCount(): number {
   return count;
 }
 
+async function syncCobrosInBackground(): Promise<boolean> {
+  try {
+    const r = await apiFetch('/api/notifications/sync-cobros', { method: 'POST' });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
+
 export function useNotificationsList() {
   const { user } = useUser();
   const { isLoaded, isSignedIn } = useAuth();
@@ -57,37 +66,64 @@ export function useNotificationsList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    if (!isLoaded) return;
-
-    if (!isSignedIn || demoUser || !user?.id) {
-      setNotifications([]);
-      setUnreadCount(0);
-      setLoading(false);
-      setError(null);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetchApiJson<{
-        notifications?: NotificationRow[];
-        unread_count?: number;
-      }>('/api/notifications');
-      if (res.ok === false) throw new Error(res.message);
-      setNotifications(res.data.notifications ?? []);
-      setUnreadCount(
+  const fetchList = useCallback(async () => {
+    const res = await fetchApiJson<{
+      notifications?: NotificationRow[];
+      unread_count?: number;
+    }>('/api/notifications');
+    if (res.ok === false) throw new Error(res.message);
+    return {
+      notifications: res.data.notifications ?? [],
+      unreadCount:
         typeof res.data.unread_count === 'number' ? res.data.unread_count : 0,
-      );
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Error al cargar avisos');
-    } finally {
-      setLoading(false);
-    }
-  }, [isLoaded, isSignedIn, demoUser, user?.id]);
+    };
+  }, []);
+
+  const applyList = useCallback((data: { notifications: NotificationRow[]; unreadCount: number }) => {
+    setNotifications(data.notifications);
+    setUnreadCount(data.unreadCount);
+  }, []);
+
+  const load = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      if (!isLoaded) return;
+
+      if (!isSignedIn || demoUser || !user?.id) {
+        setNotifications([]);
+        setUnreadCount(0);
+        setLoading(false);
+        setError(null);
+        return;
+      }
+
+      if (!opts?.silent) {
+        setLoading(true);
+        setError(null);
+      }
+
+      try {
+        const data = await fetchList();
+        applyList(data);
+      } catch (e: unknown) {
+        if (!opts?.silent) {
+          setError(e instanceof Error ? e.message : 'Error al cargar avisos');
+        }
+      } finally {
+        if (!opts?.silent) setLoading(false);
+      }
+    },
+    [isLoaded, isSignedIn, demoUser, user?.id, fetchList, applyList],
+  );
 
   useEffect(() => {
-    void load();
+    void (async () => {
+      await load();
+      const synced = await syncCobrosInBackground();
+      if (synced) {
+        await load({ silent: true });
+        dispatchNotificationsUpdated();
+      }
+    })();
   }, [load]);
 
   const markRead = useCallback(

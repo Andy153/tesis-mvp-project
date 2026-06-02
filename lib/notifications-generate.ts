@@ -519,7 +519,7 @@ export async function notifyFacturaError(input: {
   });
 }
 
-/** Sync-on-read y cron diario por usuario. */
+/** Cron diario: genera avisos con push (sin accion_cobros; ese va por sync-cobros en la app). */
 export async function syncAllNotificationsForUser(
   clerkUserId: string,
 ): Promise<PushSendSummary> {
@@ -562,9 +562,6 @@ export async function syncAllNotificationsForUser(
 
   syncDebug(clerkUserId, 'syncAllNotificationsForUser', { running: 'sync48hCumplidas' });
   await sync48hCumplidas(clerkUserId);
-
-  syncDebug(clerkUserId, 'syncAllNotificationsForUser', { running: 'syncAccionCobros' });
-  await syncAccionCobros(clerkUserId);
 
   syncDebug(clerkUserId, 'syncAllNotificationsForUser', { running: 'deliverCronPushes' });
   const pushDelivery = await deliverCronPushesForUser(clerkUserId);

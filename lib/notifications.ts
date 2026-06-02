@@ -143,6 +143,22 @@ export async function upsertOrInsertNotificationWithPushOnFirst(
   }
 }
 
+export async function countUnreadNotifications(clerkUserId: string): Promise<number> {
+  if (!isNotificationsEnabledForUser(clerkUserId)) return 0;
+
+  const { count, error } = await supabaseAdmin
+    .from('notifications')
+    .select('id', { count: 'exact', head: true })
+    .eq('clerk_user_id', clerkUserId)
+    .eq('leida', false);
+
+  if (error) {
+    console.warn('[TRAZA] notifications:count_error', error.message);
+    return 0;
+  }
+  return count ?? 0;
+}
+
 export async function listNotifications(
   clerkUserId: string,
   opts?: { soloNoLeidas?: boolean; limit?: number },

@@ -2,7 +2,6 @@ import { auth } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { isDemoUser } from '@/lib/demo-user';
 import { listNotifications } from '@/lib/notifications';
-import { syncAllNotificationsForUser } from '@/lib/notifications-generate';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -15,15 +14,6 @@ export async function GET(req: NextRequest) {
 
   if (isDemoUser(userId)) {
     return NextResponse.json({ notifications: [], unread_count: 0 });
-  }
-
-  try {
-    await syncAllNotificationsForUser(userId);
-  } catch (err) {
-    console.warn(
-      '[TRAZA] notifications:sync_failed',
-      err instanceof Error ? err.message : err,
-    );
   }
 
   const leidasParam = req.nextUrl.searchParams.get('leidas');

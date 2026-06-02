@@ -3651,6 +3651,17 @@ html[data-theme='dark'] .notifications-item--unread {
   flex-wrap: wrap;
   gap: 8px;
 }
+.push-opt-in__activate-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.push-opt-in__slow-hint {
+  font-size: 0.875rem;
+  color: var(--muted, #5c6b62);
+  line-height: 1.3;
+}
 .push-opt-in__btn {
   margin-top: 4px;
 }

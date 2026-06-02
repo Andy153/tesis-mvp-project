@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { isDemoUser } from '@/lib/demo-user';
 import { usePushSubscription } from '@/lib/use-push-subscription';
@@ -32,13 +32,24 @@ export function PushOptInBanner({ onNavigateSettings }: PushOptInBannerProps) {
   const [debugLog, setDebugLog] = useState<string | null>(null);
   const [showDebug, setShowDebug] = useState(false);
   const [permission, setPermission] = useState(getNotificationPermission());
+  const [activateSlowHint, setActivateSlowHint] = useState(false);
+  const activateSlowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearActivateSlowTimer = useCallback(() => {
+    if (activateSlowTimerRef.current) {
+      clearTimeout(activateSlowTimerRef.current);
+      activateSlowTimerRef.current = null;
+    }
+    setActivateSlowHint(false);
+  }, []);
 
   useEffect(() => {
     syncPushPromptWithBrowserPermission();
     setDismissed(getPushPromptStatus() === 'dismissed');
     setPermission(getNotificationPermission());
     setShowDebug(isPushDebugEnabled());
-  }, []);
+    return () => clearActivateSlowTimer();
+  }, [clearActivateSlowTimer]);
 
   useEffect(() => {
     if (demoUser || !showDebug) return;
@@ -48,9 +59,11 @@ export function PushOptInBanner({ onNavigateSettings }: PushOptInBannerProps) {
   }, [demoUser, showDebug]);
 
   const handleActivate = useCallback(async () => {
+    clearActivateSlowTimer();
     setPushPromptStatus(null);
     setDismissed(false);
     setDebugLog('Iniciando activación…');
+    activateSlowTimerRef.current = setTimeout(() => setActivateSlowHint(true), 4000);
 
     try {
       const result = await subscribe();
@@ -66,8 +79,10 @@ export function PushOptInBanner({ onNavigateSettings }: PushOptInBannerProps) {
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       setDebugLog(`Excepción inesperada:\n${message}`);
+    } finally {
+      clearActivateSlowTimer();
     }
-  }, [subscribe]);
+  }, [subscribe, clearActivateSlowTimer]);
 
   const handleDeactivate = useCallback(async () => {
     setDebugLog('Desactivando…');
@@ -162,14 +177,19 @@ export function PushOptInBanner({ onNavigateSettings }: PushOptInBannerProps) {
             : 'Activá las notificaciones para recibir avisos aunque no estés en la app.'}
       </p>
       <div className="push-opt-in__actions">
-        <button
-          type="button"
-          className="btn btn-primary"
-          disabled={loading || busy}
-          onClick={() => void handleActivate()}
-        >
-          {busy ? 'Activando…' : 'Activar'}
-        </button>
+        <div className="push-opt-in__activate-row">
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={loading || busy}
+            onClick={() => void handleActivate()}
+          >
+            {busy ? 'Activando…' : 'Activar'}
+          </button>
+          {busy && activateSlowHint ? (
+            <span className="push-opt-in__slow-hint">Solo unos segundos más…</span>
+          ) : null}
+        </div>
         <button
           type="button"
           className="btn"

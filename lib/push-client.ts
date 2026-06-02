@@ -120,9 +120,28 @@ export function urlBase64ToUint8Array(base64String: string): Uint8Array {
   return outputArray;
 }
 
+/** Clave pública VAPID URL-safe (salida de `npx web-push generate-vapid-keys`). */
+const VAPID_PUBLIC_KEY_RE = /^[A-Za-z0-9_-]{80,88}$/;
+
 export function getVapidPublicKey(): string | null {
   const key = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.trim();
-  return key || null;
+  if (!key) return null;
+  if (!VAPID_PUBLIC_KEY_RE.test(key)) return null;
+  return key;
+}
+
+async function readJsonResponse<T>(r: Response): Promise<T | null> {
+  const ct = r.headers.get('content-type') ?? '';
+  if (!ct.includes('application/json')) return null;
+  try {
+    return (await r.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
+function pushFetch(input: string, init?: RequestInit): Promise<Response> {
+  return fetch(input, { credentials: 'same-origin', ...init });
 }
 
 function fail(step: string, message: string): PushSubscribeResult {
@@ -161,9 +180,16 @@ export async function subscribeToPushOnServer(): Promise<PushSubscribeResult> {
 
   const vapidKey = getVapidPublicKey();
   if (!vapidKey) {
+    const raw = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.trim();
+    if (raw) {
+      return fail(
+        'vapid',
+        'NEXT_PUBLIC_VAPID_PUBLIC_KEY inválida (usá la clave pública URL-safe de web-push, sin PEM ni comillas). Revisá Vercel → Environment Variables y redeploy.',
+      );
+    }
     return fail(
       'vapid',
-      'Falta NEXT_PUBLIC_VAPID_PUBLIC_KEY. Reiniciá npm run dev después de agregarla al .env.local.',
+      'Falta NEXT_PUBLIC_VAPID_PUBLIC_KEY. Agregala en Vercel (build) o .env.local y redeploy.',
     );
   }
 
@@ -226,7 +252,7 @@ export async function subscribeToPushOnServer(): Promise<PushSubscribeResult> {
 
   try {
     console.log('[TRAZA push] POST /api/push/subscribe…');
-    const r = await fetch('/api/push/subscribe', {
+    const r = await pushFetch('/api/push/subscribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ subscription: subscription.toJSON() }),
@@ -259,7 +285,7 @@ export async function unsubscribeFromPushOnServer(): Promise<boolean> {
   if (!subscription) return true;
 
   const endpoint = subscription.endpoint;
-  await fetch('/api/push/unsubscribe', {
+  await pushFetch('/api/push/unsubscribe', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ endpoint }),
@@ -271,10 +297,10 @@ export async function unsubscribeFromPushOnServer(): Promise<boolean> {
 
 export async function fetchPushSubscriptionStatus(): Promise<boolean> {
   try {
-    const r = await fetch('/api/push/status');
-    if (!r.ok) return false;
-    const j = await r.json();
-    return Boolean(j.subscribed);
+    const r = await pushFetch('/api/push/status');
+    if (r.redirected || !r.ok) return false;
+    const j = await readJsonResponse<{ subscribed?: boolean }>(r);
+    return Boolean(j?.subscribed);
   } catch {
     return false;
   }

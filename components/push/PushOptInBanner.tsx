@@ -48,23 +48,17 @@ export function PushOptInBanner({ onNavigateSettings }: PushOptInBannerProps) {
       console.log('[TRAZA push] resultado subscribe:', result);
 
       if (!result.ok) {
-        const msg = `Paso: ${result.step}\n\n${result.message}`;
-        setDebugLog(msg);
-        window.alert(`Error push (${result.step}):\n\n${result.message}`);
+        setDebugLog(`Paso: ${result.step}\n\n${result.message}`);
       } else {
         const endpointPreview = result.endpoint
           ? `${result.endpoint.slice(0, 60)}…`
           : '(sin endpoint)';
-        const msg = `OK — Push activado.\n\nEndpoint (inicio):\n${endpointPreview}`;
-        setDebugLog(msg);
-        window.alert('OK: notificaciones push activadas.');
+        setDebugLog(`OK — Push activado.\n\nEndpoint (inicio):\n${endpointPreview}`);
       }
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       console.error('[TRAZA push] handleActivate catch:', e);
-      const msg = `Excepción inesperada:\n${message}`;
-      setDebugLog(msg);
-      window.alert(`Error push:\n\n${message}`);
+      setDebugLog(`Excepción inesperada:\n${message}`);
     }
   }, [subscribe]);
 

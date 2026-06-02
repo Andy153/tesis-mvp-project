@@ -17,7 +17,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ notifications: [], unread_count: 0 });
   }
 
-  await syncAllNotificationsForUser(userId);
+  try {
+    await syncAllNotificationsForUser(userId);
+  } catch (err) {
+    console.warn(
+      '[TRAZA] notifications:sync_failed',
+      err instanceof Error ? err.message : err,
+    );
+  }
 
   const leidasParam = req.nextUrl.searchParams.get('leidas');
   const soloNoLeidas = leidasParam === 'false';

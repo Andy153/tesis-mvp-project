@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { isDemoUser } from '@/lib/demo-user';
 import type { NotificationRow } from '@/lib/notifications';
+import { fetchApiJson } from '@/lib/safe-api-json';
 
 export const NOTIFICATIONS_UPDATED_EVENT = 'traza:notifications-updated';
 
@@ -23,10 +24,11 @@ export function useNotificationsUnreadCount(): number {
       return;
     }
     try {
-      const r = await fetch('/api/notifications?leidas=false');
-      const j = await r.json();
-      if (!r.ok) return;
-      setCount(typeof j.unread_count === 'number' ? j.unread_count : 0);
+      const res = await fetchApiJson<{ unread_count?: number }>(
+        '/api/notifications?leidas=false',
+      );
+      if (!res.ok) return;
+      setCount(typeof res.data.unread_count === 'number' ? res.data.unread_count : 0);
     } catch {
       /* ignore */
     }
@@ -63,13 +65,17 @@ export function useNotificationsList() {
     setLoading(true);
     setError(null);
     try {
-      const r = await fetch('/api/notifications');
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.error ?? 'Error al cargar avisos');
-      setNotifications(j.notifications ?? []);
-      setUnreadCount(typeof j.unread_count === 'number' ? j.unread_count : 0);
+      const res = await fetchApiJson<{
+        notifications?: NotificationRow[];
+        unread_count?: number;
+      }>('/api/notifications');
+      if (!res.ok) throw new Error(res.message);
+      setNotifications(res.data.notifications ?? []);
+      setUnreadCount(
+        typeof res.data.unread_count === 'number' ? res.data.unread_count : 0,
+      );
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Error');
+      setError(e instanceof Error ? e.message : 'Error al cargar avisos');
     } finally {
       setLoading(false);
     }

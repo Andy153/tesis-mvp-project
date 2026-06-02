@@ -15,6 +15,16 @@ function navigateTarget(n: NotificationRow): string {
   return resolveNotificationView(n.metadata?.navigate_to, 'documents');
 }
 
+function safeFormatDistance(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  try {
+    return formatDistanceToNow(d, { addSuffix: true, locale: es });
+  } catch {
+    return '';
+  }
+}
+
 export function NotificationsView({ onNavigate }: NotificationsViewProps) {
   const { notifications, unreadCount, loading, error, markRead, markAllRead } = useNotificationsList();
 
@@ -66,7 +76,7 @@ export function NotificationsView({ onNavigate }: NotificationsViewProps) {
                 <div className="notifications-item__top">
                   <span className="notifications-item__title">{n.titulo}</span>
                   <time className="notifications-item__time" dateTime={n.created_at}>
-                    {formatDistanceToNow(new Date(n.created_at), { addSuffix: true, locale: es })}
+                    {safeFormatDistance(n.created_at)}
                   </time>
                 </div>
                 <p className="notifications-item__message">{n.mensaje}</p>

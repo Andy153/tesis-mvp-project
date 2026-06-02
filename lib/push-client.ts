@@ -1,5 +1,7 @@
 'use client';
 
+import { apiFetch, readJsonResponse } from '@/lib/safe-api-json';
+
 const PROMPT_STORAGE_KEY = 'traza.push.prompt_status';
 
 export type PushPromptStatus = 'dismissed' | 'denied' | null;
@@ -130,20 +132,6 @@ export function getVapidPublicKey(): string | null {
   return key;
 }
 
-async function readJsonResponse<T>(r: Response): Promise<T | null> {
-  const ct = r.headers.get('content-type') ?? '';
-  if (!ct.includes('application/json')) return null;
-  try {
-    return (await r.json()) as T;
-  } catch {
-    return null;
-  }
-}
-
-function pushFetch(input: string, init?: RequestInit): Promise<Response> {
-  return fetch(input, { credentials: 'same-origin', ...init });
-}
-
 function fail(step: string, message: string): PushSubscribeResult {
   console.error('[TRAZA push]', step, message);
   return { ok: false, step, message };
@@ -252,7 +240,7 @@ export async function subscribeToPushOnServer(): Promise<PushSubscribeResult> {
 
   try {
     console.log('[TRAZA push] POST /api/push/subscribe…');
-    const r = await pushFetch('/api/push/subscribe', {
+    const r = await apiFetch('/api/push/subscribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ subscription: subscription.toJSON() }),
@@ -285,7 +273,7 @@ export async function unsubscribeFromPushOnServer(): Promise<boolean> {
   if (!subscription) return true;
 
   const endpoint = subscription.endpoint;
-  await pushFetch('/api/push/unsubscribe', {
+  await apiFetch('/api/push/unsubscribe', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ endpoint }),
@@ -297,7 +285,7 @@ export async function unsubscribeFromPushOnServer(): Promise<boolean> {
 
 export async function fetchPushSubscriptionStatus(): Promise<boolean> {
   try {
-    const r = await pushFetch('/api/push/status');
+    const r = await apiFetch('/api/push/status');
     if (r.redirected || !r.ok) return false;
     const j = await readJsonResponse<{ subscribed?: boolean }>(r);
     return Boolean(j?.subscribed);

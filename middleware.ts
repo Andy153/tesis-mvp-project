@@ -34,12 +34,27 @@ export default clerkMiddleware(async (auth, request) => {
     await auth.protect();
   }
 
+  console.log('[MIDDLEWARE ENTRY]', {
+    path: request.nextUrl.pathname,
+    isPublic: isPublicRoute(request),
+    skipSub: skipSubscriptionCheck(request),
+  });
+
   if (!isPublicRoute(request) && !skipSubscriptionCheck(request)) {
     const { userId } = await auth();
     if (userId) {
       let allowed = true;
       try {
-        ({ allowed } = await checkSubscriptionStatus(userId));
+        const result = await checkSubscriptionStatus(userId);
+        allowed = result.allowed;
+        console.log('[MIDDLEWARE DEBUG]', {
+          path: request.nextUrl.pathname,
+          userId,
+          allowed: result.allowed,
+          status: result.status,
+          isPublic: isPublicRoute(request),
+          skipSub: skipSubscriptionCheck(request),
+        });
       } catch (err) {
         console.warn(
           '[TRAZA] middleware:subscription_check_failed',

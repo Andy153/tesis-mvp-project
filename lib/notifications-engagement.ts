@@ -2,6 +2,7 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { isDemoUser } from '@/lib/demo-user';
 import { isEngagementTipSendWindowAR } from '@/lib/dates-ar';
 import { insertNotificationOnce, isNotificationsEnabledForUser } from '@/lib/notifications';
+import { deliverCronPushesForUser } from '@/lib/notifications-push';
 import {
   ENGAGEMENT_TIP_COUNT,
   ENGAGEMENT_TIP_INTERVAL_MS,
@@ -64,13 +65,16 @@ export async function syncEngagementTipForUser(clerkUserId: string): Promise<boo
 }
 
 /** Cron diario: tips de engagement para todos los usuarios con perfil (excluye demo). */
-export async function syncEngagementTipsForAllUsers(): Promise<{
+export async function syncEngagementTipsForAllUsers(opts?: {
+  /** El cron de Vercel ya corre en horario fijo; no aplicar ventana 9–20. */
+  fromCron?: boolean;
+}): Promise<{
   sent: number;
   skipped: number;
   errors: number;
   skippedOutsideWindow: boolean;
 }> {
-  if (!isEngagementTipSendWindowAR()) {
+  if (!opts?.fromCron && !isEngagementTipSendWindowAR()) {
     return { sent: 0, skipped: 0, errors: 0, skippedOutsideWindow: true };
   }
 
@@ -91,8 +95,12 @@ export async function syncEngagementTipsForAllUsers(): Promise<{
 
     try {
       const inserted = await syncEngagementTipForUser(clerkUserId);
-      if (inserted) sent += 1;
-      else skipped += 1;
+      if (inserted) {
+        sent += 1;
+        await deliverCronPushesForUser(clerkUserId);
+      } else {
+        skipped += 1;
+      }
     } catch (e) {
       errors += 1;
       console.warn('[TRAZA] notifications:engagement_tip_user_error', clerkUserId, e);

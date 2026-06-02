@@ -1,6 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { isDemoUser } from '@/lib/demo-user';
-import { buildPushUrlFromMetadata, sendPushToUser } from '@/lib/push';
+import { deliverPushForNotification } from '@/lib/notifications-push';
 
 export type NotificationTipo =
   | 'recordatorio_envio'
@@ -57,14 +57,20 @@ export function isNotificationsEnabledForUser(userId: string | null | undefined)
   return Boolean(userId) && !isDemoUser(userId);
 }
 
-async function maybeSendPushForNotification(input: UpsertNotificationInput): Promise<void> {
+async function maybeSendPushForNotification(
+  input: UpsertNotificationInput,
+  notificationId: string,
+): Promise<void> {
   if (!PUSH_ON_INSERT_TIPOS.includes(input.tipo)) return;
 
-  await sendPushToUser(input.clerkUserId, {
-    title: input.titulo,
-    body: input.mensaje,
-    url: buildPushUrlFromMetadata(input.metadata),
-    tag: input.dedupeKey,
+  await deliverPushForNotification({
+    id: notificationId,
+    clerk_user_id: input.clerkUserId,
+    tipo: input.tipo,
+    titulo: input.titulo,
+    mensaje: input.mensaje,
+    dedupe_key: input.dedupeKey,
+    metadata: input.metadata ?? {},
   });
 }
 
@@ -100,14 +106,18 @@ export async function insertNotificationOnce(
     return { inserted: false, blockedBy: 'disabled' };
   }
 
-  const { error } = await supabaseAdmin.from('notifications').insert({
-    clerk_user_id: input.clerkUserId,
-    tipo: input.tipo,
-    titulo: input.titulo,
-    mensaje: input.mensaje,
-    dedupe_key: input.dedupeKey,
-    metadata: input.metadata ?? {},
-  });
+  const { data: insertedRow, error } = await supabaseAdmin
+    .from('notifications')
+    .insert({
+      clerk_user_id: input.clerkUserId,
+      tipo: input.tipo,
+      titulo: input.titulo,
+      mensaje: input.mensaje,
+      dedupe_key: input.dedupeKey,
+      metadata: input.metadata ?? {},
+    })
+    .select('id')
+    .single();
 
   if (error) {
     if (error.code === '23505') {
@@ -117,7 +127,9 @@ export async function insertNotificationOnce(
     return { inserted: false, blockedBy: 'db_error', errorMessage: error.message };
   }
 
-  await maybeSendPushForNotification(input);
+  if (insertedRow?.id) {
+    await maybeSendPushForNotification(input, insertedRow.id);
+  }
   return { inserted: true };
 }
 

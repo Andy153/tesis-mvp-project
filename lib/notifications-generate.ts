@@ -23,6 +23,8 @@ import { userHasArcaCerts } from '@/lib/arca/profile-certs';
 import { fetchActiveSubmissions } from '@/lib/active-submissions';
 import { filterSubmissionsWithLiveLiquidaciones } from '@/lib/monthlySubmissions';
 import type { NotificationTipo } from '@/lib/notifications';
+import { deliverCronPushesForUser } from '@/lib/notifications-push';
+import type { PushSendSummary } from '@/lib/push';
 
 const OBRA_SOCIAL = 'swiss_medical';
 const HOURS_24_MS = 24 * 60 * 60 * 1000;
@@ -517,8 +519,10 @@ export async function notifyFacturaError(input: {
   });
 }
 
-/** Sync-on-read: ejecutar antes de listar avisos. */
-export async function syncAllNotificationsForUser(clerkUserId: string): Promise<void> {
+/** Sync-on-read y cron diario por usuario. */
+export async function syncAllNotificationsForUser(
+  clerkUserId: string,
+): Promise<PushSendSummary> {
   syncDebug(clerkUserId, 'syncAllNotificationsForUser', {
     entered: true,
     enabled: isNotificationsEnabledForUser(clerkUserId),
@@ -526,9 +530,16 @@ export async function syncAllNotificationsForUser(clerkUserId: string): Promise<
     periodoActual: currentPeriodoAR(),
   });
 
+  const emptyPush: PushSendSummary = {
+    attempted: 0,
+    sent: 0,
+    failed: 0,
+    noSubscriptions: false,
+  };
+
   if (!isNotificationsEnabledForUser(clerkUserId)) {
     syncDebug(clerkUserId, 'syncAllNotificationsForUser', { skipped: 'demo_or_disabled' });
-    return;
+    return emptyPush;
   }
 
   const planillaActualEnviada = await hasPlanillaEnviadaSwiss(clerkUserId, currentPeriodoAR());
@@ -555,30 +566,52 @@ export async function syncAllNotificationsForUser(clerkUserId: string): Promise<
   syncDebug(clerkUserId, 'syncAllNotificationsForUser', { running: 'syncAccionCobros' });
   await syncAccionCobros(clerkUserId);
 
-  syncDebug(clerkUserId, 'syncAllNotificationsForUser', { done: true });
+  syncDebug(clerkUserId, 'syncAllNotificationsForUser', { running: 'deliverCronPushes' });
+  const pushDelivery = await deliverCronPushesForUser(clerkUserId);
+  syncDebug(clerkUserId, 'syncAllNotificationsForUser', { pushDelivery, done: true });
+  return pushDelivery;
+}
+
+function mergePushSummaries(target: PushSendSummary, add: PushSendSummary): void {
+  target.attempted += add.attempted;
+  target.sent += add.sent;
+  target.failed += add.failed;
+  if (add.noSubscriptions) target.noSubscriptions = true;
 }
 
 /** Cron diario: sync para todos los usuarios con perfil (excluye demo). */
 export async function syncAllNotificationsForAllUsers(): Promise<{
   processed: number;
   errors: number;
+  push: PushSendSummary;
+  usersWithoutPushSubscription: number;
 }> {
   const { data, error } = await supabaseAdmin.from('profiles').select('clerk_user_id');
 
+  const pushTotals: PushSendSummary = {
+    attempted: 0,
+    sent: 0,
+    failed: 0,
+    noSubscriptions: false,
+  };
+
   if (error) {
     console.warn('[TRAZA] notifications:profiles_list_error', error.message);
-    return { processed: 0, errors: 1 };
+    return { processed: 0, errors: 1, push: pushTotals, usersWithoutPushSubscription: 0 };
   }
 
   let processed = 0;
   let errors = 0;
+  let usersWithoutPushSubscription = 0;
 
   for (const row of data ?? []) {
     const clerkUserId = row.clerk_user_id;
     if (!clerkUserId || isDemoUser(clerkUserId)) continue;
 
     try {
-      await syncAllNotificationsForUser(clerkUserId);
+      const pushResult = await syncAllNotificationsForUser(clerkUserId);
+      mergePushSummaries(pushTotals, pushResult);
+      if (pushResult.noSubscriptions) usersWithoutPushSubscription += 1;
       processed += 1;
     } catch (e) {
       errors += 1;
@@ -586,5 +619,12 @@ export async function syncAllNotificationsForAllUsers(): Promise<{
     }
   }
 
-  return { processed, errors };
+  console.log('[TRAZA] notifications:sync_all_done', {
+    processed,
+    errors,
+    push: pushTotals,
+    usersWithoutPushSubscription,
+  });
+
+  return { processed, errors, push: pushTotals, usersWithoutPushSubscription };
 }

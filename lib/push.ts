@@ -78,19 +78,48 @@ export async function sendPushToSubscription(
   }
 }
 
+export type PushSendSummary = {
+  attempted: number;
+  sent: number;
+  failed: number;
+  noSubscriptions: boolean;
+  skipped?: boolean;
+};
+
 export async function sendPushToUser(
   clerkUserId: string,
   payload: PushPayload,
-): Promise<void> {
-  if (!pushEnabledForUser(clerkUserId)) return;
-  if (!configureVapid()) return;
+): Promise<PushSendSummary> {
+  const empty: PushSendSummary = {
+    attempted: 0,
+    sent: 0,
+    failed: 0,
+    noSubscriptions: false,
+  };
+
+  if (!pushEnabledForUser(clerkUserId)) return empty;
+  if (!configureVapid()) {
+    console.warn('[TRAZA] push:send_skipped_vapid', { clerkUserId: clerkUserId.slice(0, 12) });
+    return empty;
+  }
 
   const { data: rows, error } = await supabaseAdmin
     .from('push_subscriptions')
     .select('id, endpoint, subscription')
     .eq('clerk_user_id', clerkUserId);
 
-  if (error || !rows?.length) return;
+  if (error) {
+    console.warn('[TRAZA] push:subscriptions_load_error', error.message);
+    return empty;
+  }
+
+  if (!rows?.length) {
+    console.log('[TRAZA] push:no_subscriptions', { clerkUserId: clerkUserId.slice(0, 12) });
+    return { ...empty, noSubscriptions: true };
+  }
+
+  let sent = 0;
+  let failed = 0;
 
   await Promise.all(
     rows.map(async (row) => {
@@ -98,6 +127,11 @@ export async function sendPushToUser(
       if (!sub?.endpoint) return;
 
       const result = await sendPushToSubscription(sub, payload);
+      if (result.ok) {
+        sent += 1;
+      } else {
+        failed += 1;
+      }
       if (result.statusCode === 410 || result.statusCode === 404) {
         await supabaseAdmin
           .from('push_subscriptions')
@@ -106,6 +140,25 @@ export async function sendPushToUser(
       }
     }),
   );
+
+  console.log('[TRAZA] push:send_user', {
+    clerkUserId: clerkUserId.slice(0, 12),
+    subscriptions: rows.length,
+    sent,
+    failed,
+    tag: payload.tag,
+  });
+
+  return {
+    attempted: rows.length,
+    sent,
+    failed,
+    noSubscriptions: false,
+  };
+}
+
+export function isVapidConfigured(): boolean {
+  return configureVapid();
 }
 
 export async function savePushSubscription(

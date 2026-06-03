@@ -39,10 +39,25 @@ export default function TrazaApp() {
   const [userProfile, setUserProfile] = useState(DEFAULT_PROFILE);
 
   useEffect(() => {
+    if (!user?.id) return;
+
+    try {
+      const lastUserId = window.localStorage.getItem('traza.last_user_id');
+      if (lastUserId !== user.id) {
+        window.localStorage.removeItem('traza.profile.v1');
+        window.localStorage.removeItem('traza.history.v1');
+        window.localStorage.setItem('traza.last_user_id', user.id);
+        setFiles([]);
+        setAuthStates({});
+      }
+    } catch {
+      /* ignore */
+    }
+
     const p = loadProfile();
     setUserProfile(p);
     applyThemeMode(p.theme);
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     // Limpieza defensiva: si quedó un "cobro demo" persistido en localStorage,

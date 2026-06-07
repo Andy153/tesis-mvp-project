@@ -25,6 +25,8 @@ const ALLOWED: ReadonlyArray<string> = [
   'cobrado_en',
   'tiene_debito',
   'pdf_anexo_id',
+  'nro_autorizacion_osde',
+  'cod_prestacion',
 ];
 
 function sanitize(body: unknown): Record<string, unknown> {
@@ -193,42 +195,68 @@ export async function PATCH(
           return NextResponse.json({ error: 'update_submission_failed: ' + upErr.message }, { status: 500 });
         }
       } else {
-        const { data: sub, error: insErr } = await supabase
+        const { data: existingSub } = await supabase
           .from('monthly_submissions')
-          .insert({
-            clerk_user_id: userId,
-            obra_social: 'osde',
-            periodo,
-            tipo_comprobante: 11,
-            status: 'enviado',
-            cantidad_partes: 1,
-            ...buildSubmissionMontosFromComprobante(finalMonto),
-            nro_tramite_osde: finalTramite,
-            receptor_cuit: '30687313272',
-            receptor_razon_social: 'OSDE',
-            partes_incluidos: [
-              {
-                paciente: existing.paciente,
-                document_id: existing.document_id,
-                fecha_practica: existing.fecha_cirugia,
-                nro_tramite_osde: finalTramite,
-                monto: finalMonto,
-              },
-            ],
-            wizard_estado: 'esperando_comprobante',
-          })
           .select('id')
-          .single();
+          .eq('clerk_user_id', userId)
+          .eq('obra_social', 'osde')
+          .eq('periodo', periodo)
+          .maybeSingle();
 
-        if (insErr) console.error('[OSDE] insert_submission_failed:', insErr);
-        if (insErr || !sub) {
-          return NextResponse.json(
-            { error: 'create_submission_failed: ' + (insErr?.message ?? 'unknown') },
-            { status: 500 }
-          );
+        if (existingSub) {
+          const { error: upExistErr } = await supabase
+            .from('monthly_submissions')
+            .update({
+              ...buildSubmissionMontosFromComprobante(finalMonto),
+              nro_tramite_osde: finalTramite,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', existingSub.id)
+            .eq('clerk_user_id', userId);
+
+          if (upExistErr) {
+            console.error('[OSDE] update_existing_submission_failed:', upExistErr);
+            return NextResponse.json({ error: 'update_submission_failed: ' + upExistErr.message }, { status: 500 });
+          }
+          (patch as Record<string, unknown>).monthly_submission_id = existingSub.id;
+
+        } else {
+          const { data: sub, error: insErr } = await supabase
+            .from('monthly_submissions')
+            .insert({
+              clerk_user_id: userId,
+              obra_social: 'osde',
+              periodo,
+              tipo_comprobante: 11,
+              status: 'enviado',
+              cantidad_partes: 1,
+              ...buildSubmissionMontosFromComprobante(finalMonto),
+              nro_tramite_osde: finalTramite,
+              receptor_cuit: '30687313272',
+              receptor_razon_social: 'OSDE',
+              partes_incluidos: [
+                {
+                  paciente: existing.paciente,
+                  document_id: existing.document_id,
+                  fecha_practica: existing.fecha_cirugia,
+                  nro_tramite_osde: finalTramite,
+                  monto: finalMonto,
+                },
+              ],
+              wizard_estado: 'esperando_comprobante',
+            })
+            .select('id')
+            .single();
+
+          if (insErr) console.error('[OSDE] insert_submission_failed:', insErr);
+          if (insErr || !sub) {
+            return NextResponse.json(
+              { error: 'create_submission_failed: ' + (insErr?.message ?? 'unknown') },
+              { status: 500 }
+            );
+          }
+          (patch as Record<string, unknown>).monthly_submission_id = sub.id;
         }
-
-        (patch as Record<string, unknown>).monthly_submission_id = sub.id;
       }
     }
   }

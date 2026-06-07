@@ -1,7 +1,20 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { useAuth } from '@clerk/nextjs'
 import { CobrosWizardOsde } from './CobrosWizardOsde'
+import { CobrosWizardOsdeV2 } from './CobrosWizardOsdeV2'
+import { hasActiviaIntegration } from '@/lib/feature-flags'
+
+type WizardProps = { cirugiaId: string; onUpdate?: () => void; onCollapse?: () => void }
+
+function WizardRouter(props: WizardProps) {
+  const { userId, isLoaded } = useAuth()
+  console.log('[WizardRouter] isLoaded:', isLoaded, '| userId:', userId, '| hasActivia:', userId ? hasActiviaIntegration(userId) : false)
+  if (!isLoaded) return <p style={{ padding: 16, color: 'var(--text-soft)' }}>Cargando...</p>
+  const Wizard = userId && hasActiviaIntegration(userId) ? CobrosWizardOsdeV2 : CobrosWizardOsde
+  return <Wizard {...props} />
+}
 
 type OsdeCirugia = {
   id: string
@@ -26,6 +39,8 @@ function pasoLabel(estado: string | null): string {
 export function CobrosOsdeBanner() {
   const [cirugias, setCirugias] = useState<OsdeCirugia[]>([])
   const [expanded, setExpanded] = useState<string | null>(null)
+  const { userId } = useAuth()
+  const usaActivia = userId ? hasActiviaIntegration(userId) : false
 
   const load = useCallback(async () => {
     try {
@@ -67,7 +82,7 @@ export function CobrosOsdeBanner() {
                   Cobro OSDE — {cir.paciente ?? 'Cirugía'}{cir.fecha_cirugia ? ` · ${cir.fecha_cirugia}` : ''}
                 </div>
                 <div className="cobros-banner__meta">
-                  Paso {cir.wizard_paso}/7 · {pasoLabel(cir.wizard_estado)}
+                  Paso {cir.wizard_paso}/{usaActivia ? 5 : 7} · {pasoLabel(cir.wizard_estado)}
                 </div>
               </div>
             </div>
@@ -81,7 +96,7 @@ export function CobrosOsdeBanner() {
 
           {expanded === cir.id ? (
             <div className="cobros-banner__body">
-              <CobrosWizardOsde
+              <WizardRouter
                 cirugiaId={cir.id}
                 onUpdate={load}
                 onCollapse={() => setExpanded(null)}

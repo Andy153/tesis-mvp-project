@@ -418,6 +418,7 @@ export default function TrazaApp() {
                 paciente: ext?.paciente?.apellido_nombre ?? null,
                 afiliado: ext?.cobertura?.numero_afiliado ?? null,
                 fecha_cirugia: ext?.cirugia?.fecha ?? null,
+                cod_prestacion: ext?.procedimiento?.codigo_nomenclador ?? null,
               }),
             });
           } catch (e) {

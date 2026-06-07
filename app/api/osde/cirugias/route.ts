@@ -70,9 +70,10 @@ export async function POST(req: Request) {
     afiliado: str(body.afiliado),
     fecha_cirugia: parseDate(body.fecha_cirugia), // 'YYYY-MM-DD'
     monto_estimado: num(body.monto_estimado),
+    nro_autorizacion_osde: str(body.nro_autorizacion_osde),
+    cod_prestacion: str(body.cod_prestacion),
     wizard_paso: 1,
     wizard_estado: 'en_curso',
-    
   };
 
   const { data, error } = await supabaseAdmin

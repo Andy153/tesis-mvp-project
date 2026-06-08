@@ -10,7 +10,6 @@ type WizardProps = { cirugiaId: string; onUpdate?: () => void; onCollapse?: () =
 
 function WizardRouter(props: WizardProps) {
   const { userId, isLoaded } = useAuth()
-  console.log('[WizardRouter] isLoaded:', isLoaded, '| userId:', userId, '| hasActivia:', userId ? hasActiviaIntegration(userId) : false)
   if (!isLoaded) return <p style={{ padding: 16, color: 'var(--text-soft)' }}>Cargando...</p>
   const Wizard = userId && hasActiviaIntegration(userId) ? CobrosWizardOsdeV2 : CobrosWizardOsde
   return <Wizard {...props} />

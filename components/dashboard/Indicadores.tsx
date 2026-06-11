@@ -64,7 +64,7 @@ export function Indicadores({
         },
       }));
     }
-    return (localFiles || []).filter((f) => f.status !== 'analyzing');
+    return [];
   }, [hasDbData, dbLiquidaciones, localFiles]);
   const analyzed = useMemo(() => ready.filter((f) => Boolean(f.analysis)), [ready]);
 

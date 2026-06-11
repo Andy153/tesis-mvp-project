@@ -15,7 +15,7 @@ import { FacturaARCA } from '@/components/arca/FacturaARCA'
 import { montoParaFacturar } from '@/lib/cobros-montos'
 import { useEffect, useState } from 'react'
 
-type OsdeCirugia = {
+export type OsdeCirugia = {
   id: string
   document_id: string | null
   paciente: string | null

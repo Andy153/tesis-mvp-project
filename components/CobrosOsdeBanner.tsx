@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '@clerk/nextjs'
 import { CobrosWizardOsde } from './CobrosWizardOsde'
-import { CobrosWizardOsdeV2, getV2Step } from '@/components/CobrosWizardOsdeV2'
+import { CobrosWizardOsdeV2, getV2Step, OsdeCirugia } from '@/components/CobrosWizardOsdeV2'
 import { hasActiviaIntegration } from '@/lib/feature-flags'
 
 type WizardProps = { cirugiaId: string; onUpdate?: () => void; onCollapse?: () => void }
@@ -13,22 +13,6 @@ function WizardRouter(props: WizardProps) {
   if (!isLoaded) return <p style={{ padding: 16, color: 'var(--text-soft)' }}>Cargando...</p>
   const Wizard = userId && hasActiviaIntegration(userId) ? CobrosWizardOsdeV2 : CobrosWizardOsde
   return <Wizard {...props} />
-}
-
-type OsdeCirugia = {
-  id: string
-  paciente: string | null
-  afiliado: string | null
-  fecha_cirugia: string | null
-  monto_estimado: number | null
-  wizard_paso: number
-  wizard_estado: string
-  resultado_consulta?: 'aprobado' | 'rechazado' | null
-  numero_tramite_apligem?: string | null
-  nro_tramite_osde?: string | null
-  monto_extranet?: number | null
-  factura_emitida_en?: string | null
-  comprobante_cargado_en?: string | null
 }
 
 function pasoLabel(estado: string | null): string {

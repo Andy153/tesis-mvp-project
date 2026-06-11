@@ -88,7 +88,7 @@ export async function PATCH(
   if (patch.wizard_paso !== undefined && (Number(patch.wizard_paso) < 1 || Number(patch.wizard_paso) > 7)) {
     return NextResponse.json({ error: 'invalid_step' }, { status: 400 });
   }
-  if (patch.nro_tramite_osde !== undefined && !/^\d{10}$/.test(String(patch.nro_tramite_osde))) {
+  if (patch.nro_tramite_osde !== undefined && patch.nro_tramite_osde !== null && !/^\d{10}$/.test(String(patch.nro_tramite_osde))) {
     return NextResponse.json({ error: 'invalid_nro_tramite_osde' }, { status: 400 });
   }
   if (

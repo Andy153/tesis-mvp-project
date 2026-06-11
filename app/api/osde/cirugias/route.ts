@@ -15,7 +15,10 @@ export const dynamic = 'force-dynamic';
 
 const COLUMNS = `
   id, document_id, paciente, afiliado, fecha_cirugia, monto_estimado,
-  wizard_paso, wizard_estado, resultado_consulta, created_at, updated_at
+  wizard_paso, wizard_estado, resultado_consulta, 
+  numero_tramite_apligem, monto_extranet, nro_tramite_osde,
+  factura_emitida_en, comprobante_cargado_en, cobrado_en,
+  created_at, updated_at
 `;
 
 export async function GET() {

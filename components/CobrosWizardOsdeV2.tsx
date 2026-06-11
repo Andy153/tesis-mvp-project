@@ -60,7 +60,7 @@ type Props = {
 }
 
 /** Deriva el paso actual del V2 a partir de los datos, no del wizard_paso. */
-function getV2Step(cir: OsdeCirugia): number {
+export function getV2Step(cir: OsdeCirugia): number {
   if (!cir.numero_tramite_apligem || cir.resultado_consulta !== 'aprobado') return 1
   if (!cir.nro_tramite_osde || !cir.monto_extranet) return 2
   if (!cir.factura_emitida_en) return 3
@@ -97,6 +97,8 @@ export function CobrosWizardOsdeV2({ cirugiaId, onUpdate, onCollapse }: Props) {
   const [codPrestacion, setCodPrestacion] = useState('')
   const [registrando, setRegistrando] = useState(false)
   const [registradoRef, setRegistradoRef] = useState<string | null>(null)
+  const [enviandoProtocolo, setEnviandoProtocolo] = useState(false)
+  const [protocoloWarning, setProtocoloWarning] = useState(false)
 
   // Step 2 — EXTRANET
   const [montoExtranet, setMontoExtranet] = useState('')
@@ -150,7 +152,7 @@ export function CobrosWizardOsdeV2({ cirugiaId, onUpdate, onCollapse }: Props) {
       setError('Completá número de credencial y código de prestación')
       return
     }
-    setRegistrando(true); setError(null)
+    setRegistrando(true); setError(null); setProtocoloWarning(false)
     try {
       const r = await fetch('/api/osde/activia/registrar', {
         method: 'POST',
@@ -167,7 +169,36 @@ export function CobrosWizardOsdeV2({ cirugiaId, onUpdate, onCollapse }: Props) {
         const cod = j.codigoRtaAdicional ? ` (código ${j.codigoRtaAdicional})` : ''
         throw new Error((j.descripcion ?? j.message ?? 'Error de OSDE') + cod)
       }
-      setRegistradoRef(j.nroReferencia ?? '—')
+      const nroReferencia = j.nroReferencia ?? '—'
+      setRegistradoRef(nroReferencia)
+      setCir((prev) =>
+        prev
+          ? {
+              ...prev,
+              numero_tramite_apligem: j.nroReferencia ?? prev.numero_tramite_apligem,
+              resultado_consulta: 'aprobado',
+            }
+          : prev,
+      )
+
+      setRegistrando(false)
+      setEnviandoProtocolo(true)
+      try {
+        const protocoloRes = await fetch('/api/osde/activia/protocolo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cirugiaId }),
+        })
+        const protocoloJson = await protocoloRes.json()
+        if (!protocoloRes.ok || protocoloJson.ok === false) {
+          setProtocoloWarning(true)
+        }
+      } catch {
+        setProtocoloWarning(true)
+      } finally {
+        setEnviandoProtocolo(false)
+      }
+
       // Guardar en DB para futuros accesos
       if (nroAutorizacion.trim()) {
         await save({ nro_autorizacion_osde: nroAutorizacion.trim() } as any)
@@ -175,6 +206,7 @@ export function CobrosWizardOsdeV2({ cirugiaId, onUpdate, onCollapse }: Props) {
       if (codPrestacion.trim()) {
         await save({ cod_prestacion: codPrestacion.trim() } as any)
       }
+
       await load(); onUpdate?.()
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error al conectar con OSDE')
@@ -238,6 +270,15 @@ export function CobrosWizardOsdeV2({ cirugiaId, onUpdate, onCollapse }: Props) {
 
       {error ? <div className="cobros-wizard__error-inline">{error}</div> : null}
 
+      {protocoloWarning && getV2Step(cir) === 1 ? (
+        <div className="cobros-wizard__panel cobros-wizard__panel--warn" style={{ marginBottom: 12 }}>
+          <p className="cobros-wizard__text" style={{ margin: 0 }}>
+            ⚠️ El protocolo se enviará cuando Activia procese la respuesta.
+            Podés continuar.
+          </p>
+        </div>
+      ) : null}
+
       <div className="cobros-wizard__toolbar">
         {paso > 1 && (
           <button type="button" className="btn" style={{ fontSize: 12 }} disabled={saving}
@@ -287,9 +328,24 @@ export function CobrosWizardOsdeV2({ cirugiaId, onUpdate, onCollapse }: Props) {
           <div className="cobros-wizard__panel" style={{ textAlign: 'center', padding: 24 }}>
             <p className="cobros-wizard__text" style={{ margin: 0 }}>⏳ Conectando con OSDE... (puede tardar hasta 30s)</p>
           </div>
-        ) : registradoRef ? (
+        ) : registradoRef || enviandoProtocolo ? (
           <div className="cobros-wizard__panel" style={{ background: 'var(--green-50)', border: '1px solid var(--green-200)', textAlign: 'center', padding: 16 }}>
-            <p className="cobros-wizard__text" style={{ margin: 0 }}>✅ Registración exitosa · Ref. Activia: <strong>{registradoRef}</strong></p>
+            {registradoRef ? (
+              <p className="cobros-wizard__text" style={{ margin: 0 }}>
+                ✅ Registración exitosa · Ref. Activia: <strong>{registradoRef}</strong>
+              </p>
+            ) : null}
+            {enviandoProtocolo ? (
+              <p className="cobros-wizard__text" style={{ margin: registradoRef ? '8px 0 0' : 0 }}>
+                ⏳ Enviando protocolo a OSDE...
+              </p>
+            ) : null}
+            {protocoloWarning && !enviandoProtocolo ? (
+              <p className="cobros-wizard__text" style={{ margin: '8px 0 0', color: 'var(--text-muted)' }}>
+                ⚠️ El protocolo se enviará cuando Activia procese la respuesta.
+                Podés continuar.
+              </p>
+            ) : null}
           </div>
         ) : (
           <button type="button" className="btn btn-primary" disabled={registrando || saving} onClick={registrarEnOsde}>
@@ -302,6 +358,9 @@ export function CobrosWizardOsdeV2({ cirugiaId, onUpdate, onCollapse }: Props) {
       <Step numero={2} titulo="Registrá el trámite en la EXTRANET de OSDE" activo={paso === 2} completado={paso > 2}>
         <p className="cobros-wizard__text">
           En la EXTRANET de OSDE, cargá el monto y anotá el número de trámite de 10 dígitos que devuelve el sistema.
+        </p>
+        <p className="cobros-wizard__text" style={{ marginBottom: 12 }}>
+          📋 Referencia Activia: {cir.numero_tramite_apligem ?? registradoRef ?? '—'}
         </p>
         <div className="cobros-wizard__file-input-wrap">
           <label className="cobros-wizard__label">Monto en EXTRANET</label>
@@ -356,7 +415,7 @@ export function CobrosWizardOsdeV2({ cirugiaId, onUpdate, onCollapse }: Props) {
           {saving ? 'Guardando...' : 'Comprobante cargado →'}
         </button>
         <button type="button" className="btn cobros-wizard__btn-muted" style={{ marginTop: 12, fontSize: 13 }} disabled={saving}
-          onClick={() => save({ wizard_paso: 6 })}>
+          onClick={() => save({ wizard_paso: 6, factura_emitida_en: null })}>
           ← Volver al paso anterior
         </button>
       </Step>
@@ -389,7 +448,7 @@ export function CobrosWizardOsdeV2({ cirugiaId, onUpdate, onCollapse }: Props) {
           </button>
         </div>
         <button type="button" className="btn cobros-wizard__btn-muted" style={{ marginTop: 12, fontSize: 13 }} disabled={saving}
-          onClick={() => save({ wizard_paso: 6 })}>
+          onClick={() => save({ wizard_paso: 7, comprobante_cargado_en: null })}>
           ← Volver al paso anterior
         </button>
       </Step>

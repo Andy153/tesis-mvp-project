@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '@clerk/nextjs'
 import { CobrosWizardOsde } from './CobrosWizardOsde'
-import { CobrosWizardOsdeV2 } from './CobrosWizardOsdeV2'
+import { CobrosWizardOsdeV2, getV2Step } from '@/components/CobrosWizardOsdeV2'
 import { hasActiviaIntegration } from '@/lib/feature-flags'
 
 type WizardProps = { cirugiaId: string; onUpdate?: () => void; onCollapse?: () => void }
@@ -23,6 +23,12 @@ type OsdeCirugia = {
   monto_estimado: number | null
   wizard_paso: number
   wizard_estado: string
+  resultado_consulta?: 'aprobado' | 'rechazado' | null
+  numero_tramite_apligem?: string | null
+  nro_tramite_osde?: string | null
+  monto_extranet?: number | null
+  factura_emitida_en?: string | null
+  comprobante_cargado_en?: string | null
 }
 
 function pasoLabel(estado: string | null): string {
@@ -81,7 +87,7 @@ export function CobrosOsdeBanner() {
                   Cobro OSDE — {cir.paciente ?? 'Cirugía'}{cir.fecha_cirugia ? ` · ${cir.fecha_cirugia}` : ''}
                 </div>
                 <div className="cobros-banner__meta">
-                  Paso {cir.wizard_paso}/{usaActivia ? 5 : 7} · {pasoLabel(cir.wizard_estado)}
+                  Paso {usaActivia ? getV2Step(cir) : cir.wizard_paso}/{usaActivia ? 5 : 7} · {pasoLabel(cir.wizard_estado)}
                 </div>
               </div>
             </div>

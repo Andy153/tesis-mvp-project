@@ -242,3 +242,66 @@ export async function registrarPrestacion02A(params: {
     return { success: false, error: e instanceof Error ? e.message : 'Error de comunicación' }
   }
 }
+
+export async function enviarProtocolo02P(params: {
+  nroReferencia: string
+  pdfBase64: string
+  fechaCirugia: string
+  credencialAfiliado: string
+}): Promise<{ ok: boolean; codigoRta: string; descripcion: string }> {
+  const now = new Date()
+  const hora = now.toISOString().slice(11, 19).replace(/:/g, '')
+  const terminal = process.env.ACTIVIA_NUMERO_TERMINAL ?? '60001396'
+  const cuit = process.env.ACTIVIA_CUIT_PRESTADOR ?? '20043646274'
+
+  const xml = `<?xml version="1.0" encoding="ISO-8859-1" standalone="yes"?>
+<Mensaje>
+  <EncabezadoMensaje>
+    <VersionMsj>ACT20</VersionMsj>
+    <TipoMsj>OL</TipoMsj>
+    <TipoTransaccion>02P</TipoTransaccion>
+    <IdMsj></IdMsj>
+    <InicioTrx>
+      <FechaTrx>${params.fechaCirugia}</FechaTrx>
+      <HoraTrx>${hora}</HoraTrx>
+    </InicioTrx>
+    <Terminal>
+      <TipoTerminal>PC</TipoTerminal>
+      <NumeroTerminal>${terminal}</NumeroTerminal>
+    </Terminal>
+    <Financiador>
+      <CodigoFinanciador>OSDE</CodigoFinanciador>
+    </Financiador>
+    <Prestador>
+      <CuitPrestador>${cuit}</CuitPrestador>
+    </Prestador>
+  </EncabezadoMensaje>
+  <EncabezadoAtencion>
+    <Credencial>
+      <NumeroCredencial>${params.credencialAfiliado}</NumeroCredencial>
+      <ModoIngreso>M</ModoIngreso>
+    </Credencial>
+    <Preautorizacion>
+      <CodigoPreautorizacion>${params.nroReferencia}</CodigoPreautorizacion>
+    </Preautorizacion>
+    <Documentacion>
+      <Archivo>${params.pdfBase64}</Archivo>
+      <NombreArchivo>protocolo.pdf</NombreArchivo>
+      <TipoArchivo>P</TipoArchivo>
+    </Documentacion>
+  </EncabezadoAtencion>
+</Mensaje>`
+
+  try {
+    const r = await callActivia(xml)
+    const codigoRta = r.codRtaGeneral
+    const descripcion = r.descripcionRtaGeneral
+    return { ok: codigoRta === '00', codigoRta, descripcion }
+  } catch (e) {
+    return {
+      ok: false,
+      codigoRta: 'EX',
+      descripcion: e instanceof Error ? e.message : 'Error de comunicación',
+    }
+  }
+}

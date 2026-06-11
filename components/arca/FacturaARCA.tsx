@@ -230,6 +230,7 @@ export function FacturaARCA({
           periodoHasta: lastDayOfMonth(periodo),
           periodo,
           submissionId,
+          ...(receptorOverride ? { receptorCuit: receptorOverride.cuit, receptorRazonSocial: receptorOverride.razonSocial } : {}),
         }),
       });
       const j = await r.json();

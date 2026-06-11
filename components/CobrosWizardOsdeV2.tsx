@@ -384,11 +384,11 @@ export function CobrosWizardOsdeV2({ cirugiaId, onUpdate, onCollapse }: Props) {
         {cir.factura_emitida_en ? (
           <div>
             <p className="cobros-wizard__text">Ya emitiste la factura para esta cirugía.</p>
-            <button type="button" className="btn btn-primary" disabled={saving} onClick={() => save({ wizard_paso: 6 })}>Continuar →</button>
+            <button type="button" className="btn btn-primary" disabled={saving} onClick={() => save({ wizard_paso: 7, comprobante_cargado_en: null })}>Continuar →</button>
           </div>
         ) : (
           <FacturaARCA
-            receptorOverride={{ cuit: '30687313272', razonSocial: 'OSDE' }}
+            receptorOverride={undefined}
             submissionId={cir.monthly_submission_id ?? ''}
             monto={montoParaFacturar(cir)}
             periodo={cir.fecha_cirugia ? cir.fecha_cirugia.slice(0, 7) : new Date().toISOString().slice(0, 7)}
@@ -400,7 +400,7 @@ export function CobrosWizardOsdeV2({ cirugiaId, onUpdate, onCollapse }: Props) {
           />
         )}
         <button type="button" className="btn cobros-wizard__btn-muted" style={{ marginTop: 12, fontSize: 13 }} disabled={saving}
-          onClick={() => save({ wizard_paso: 4 })}>
+          onClick={() => save({ wizard_paso: 5, nro_tramite_osde: null, monto_extranet: null })}>
           ← Volver al paso anterior
         </button>
       </Step>

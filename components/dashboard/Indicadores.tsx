@@ -28,7 +28,7 @@ export function Indicadores({
   }, []);
 
   const { files: localFiles } = loadHistory();
-  const hasDbData = dbLoaded && dbLiquidaciones.length > 0;
+  const hasDbData = dbLoaded;
 
   const ready = useMemo(() => {
     if (hasDbData) {
